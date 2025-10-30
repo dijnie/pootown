@@ -10,6 +10,5 @@ test-ledger-magicblock
 .next
 # env files
 .env
-.env.*
+.env
 web/.env
-web/.env.*
