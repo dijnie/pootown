@@ -1,0 +1,15 @@
+.anchor
+.DS_Store
+target
+**/*.rs.bk
+node_modules
+test-ledger
+test-ledger-magicblock
+.yarn
+.trae
+.next
+# env files
+.env
+.env.*
+web/.env
+web/.env.*

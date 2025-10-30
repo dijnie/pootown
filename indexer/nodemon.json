@@ -1,0 +1,7 @@
+{
+  "watch": ["src"],
+  "ignore": [".env", "migrations", "node_modules", "**/*.log", "**/*.tmp"],
+  "ext": ".ts,.js",
+  "exec": "tsx ./src/index.ts",
+  "signal": "SIGTERM"
+}

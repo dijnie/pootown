@@ -1,0 +1,337 @@
+:root {
+  --dice-size: 32px;
+  --dice-depth: 16px;
+  --dice-gap: 24px;
+
+  --dice-transition: 0.5s cubic-bezier(0.42, 1.57, 0.62, 0.86);
+  --dice-roll-duration: 2s;
+  --dice-throw-duration: 1s;
+
+  --dice-face-color: #f6f3f0;
+  --dice-border-color: white;
+  --dice-dot-color: #131210;
+  --dice-special-dot-color: #f63330;
+  --dice-shadow-color: rgba(0, 0, 0, 0.2);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --dice-size: 40px;
+    --dice-depth: 20px;
+    --dice-gap: 32px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --dice-size: 48px;
+    --dice-depth: 24px;
+    --dice-gap: 32px;
+  }
+}
+
+@media (min-width: 1536px) {
+  :root {
+    --dice-size: 60px;
+    --dice-depth: 30px;
+    --dice-gap: 48px;
+  }
+}
+
+.dice-wrapper {
+  position: relative;
+  width: var(--dice-size);
+  height: var(--dice-size);
+  perspective: 500px;
+}
+
+.dice-wrapper::before {
+  position: absolute;
+  content: "";
+  width: 70%;
+  height: 10%;
+  top: 90%;
+  left: 15%;
+  background: var(--dice-shadow-color);
+  border-radius: 100%;
+  filter: blur(5px);
+}
+
+.dice-3d {
+  position: relative;
+  width: var(--dice-size);
+  height: var(--dice-size);
+  transform-style: preserve-3d;
+  transform: rotate3d(0, 0.9, 0.9, 90deg);
+  transition: var(--dice-transition);
+}
+
+/* Rolling animations */
+.dice-3d.dice-rolling.dice-1 {
+  animation: rotatePerFace var(--dice-roll-duration)
+    cubic-bezier(0.42, 1.57, 0.62, 0.86) infinite;
+}
+
+.dice-3d.dice-rolling.dice-2 {
+  animation: rotatePerFaceReverse var(--dice-roll-duration)
+    cubic-bezier(0.42, 1.57, 0.62, 0.86) infinite;
+}
+
+/* Throw animations */
+.dice-3d.dice-throw {
+  animation: rotateDice 0.7s ease-in reverse,
+    throwDice var(--dice-throw-duration) linear;
+}
+
+.dice-3d.dice-throw.dice-2 {
+  animation: rotateDiceReverse 0.7s ease-in reverse,
+    throwDiceReverse var(--dice-throw-duration) linear;
+}
+
+.dice-face {
+  box-sizing: border-box;
+  position: absolute;
+  width: var(--dice-size);
+  height: var(--dice-size);
+  background-color: var(--dice-face-color);
+  border: 1px solid var(--dice-border-color);
+  border-radius: calc(var(--dice-size) * 0.2);
+  transform-style: preserve-3d;
+  transition: 0.5s;
+}
+
+.dice-face::before {
+  position: absolute;
+  content: "";
+  width: 100%;
+  height: 100%;
+  background-color: white;
+  border-radius: calc(var(--dice-size) * 0.2);
+  transform: translateZ(-0.5px);
+}
+
+.dice-face::after {
+  position: absolute;
+  content: "";
+  width: calc(var(--dice-size) * 0.2);
+  height: calc(var(--dice-size) * 0.2);
+  top: 50%;
+  left: 50%;
+  margin: calc(var(--dice-size) * -0.1) 0 0 calc(var(--dice-size) * -0.1);
+  background-color: var(--dice-dot-color);
+  border-radius: 100%;
+  transform: translateZ(0.5px);
+}
+
+/* Face positions */
+.dice-front {
+  transform: translateZ(var(--dice-depth));
+}
+
+.dice-back {
+  transform: rotateX(180deg) translateZ(var(--dice-depth));
+}
+
+.dice-right {
+  transform: rotateY(90deg) translateZ(var(--dice-depth));
+}
+
+.dice-left {
+  transform: rotateY(-90deg) translateZ(var(--dice-depth));
+}
+
+.dice-top {
+  transform: rotateX(90deg) translateZ(var(--dice-depth));
+}
+
+.dice-bottom {
+  transform: rotateX(-90deg) translateZ(var(--dice-depth));
+}
+
+/* Dice face dots - using CSS custom properties for better maintainability */
+.dice-front::after {
+  width: calc(var(--dice-size) * 0.4);
+  height: calc(var(--dice-size) * 0.4);
+  margin: calc(var(--dice-size) * -0.2) 0 0 calc(var(--dice-size) * -0.2);
+  background-color: var(--dice-special-dot-color);
+}
+
+.dice-top::after {
+  margin: calc(var(--dice-size) * -0.3) 0 0 calc(var(--dice-size) * -0.3);
+  box-shadow: calc(var(--dice-size) * 0.4) calc(var(--dice-size) * 0.4)
+    var(--dice-dot-color);
+}
+
+.dice-left::after {
+  margin: calc(var(--dice-size) * -0.4) 0 0 calc(var(--dice-size) * -0.4);
+  box-shadow: calc(var(--dice-size) * 0.3) calc(var(--dice-size) * 0.3)
+      var(--dice-dot-color),
+    calc(var(--dice-size) * 0.6) calc(var(--dice-size) * 0.6)
+      var(--dice-dot-color);
+}
+
+.dice-right::after {
+  margin: calc(var(--dice-size) * -0.3) 0 0 calc(var(--dice-size) * -0.3);
+  background-color: var(--dice-special-dot-color);
+  box-shadow: calc(var(--dice-size) * 0.4) 0px var(--dice-special-dot-color),
+    0px calc(var(--dice-size) * 0.4) var(--dice-special-dot-color),
+    calc(var(--dice-size) * 0.4) calc(var(--dice-size) * 0.4)
+      var(--dice-special-dot-color);
+}
+
+.dice-bottom::after {
+  margin: calc(var(--dice-size) * -0.36) 0 0 calc(var(--dice-size) * -0.36);
+  box-shadow: calc(var(--dice-size) * 0.26) calc(var(--dice-size) * 0.26)
+      var(--dice-dot-color),
+    calc(var(--dice-size) * 0.52) calc(var(--dice-size) * 0.52)
+      var(--dice-dot-color),
+    calc(var(--dice-size) * 0.52) 0px var(--dice-dot-color),
+    0px calc(var(--dice-size) * 0.52) var(--dice-dot-color);
+}
+
+.dice-back::after {
+  margin: calc(var(--dice-size) * -0.4) 0 0 calc(var(--dice-size) * -0.3);
+  box-shadow: calc(var(--dice-size) * 0.4) 0px var(--dice-dot-color),
+    0px calc(var(--dice-size) * 0.3) var(--dice-dot-color),
+    calc(var(--dice-size) * 0.4) calc(var(--dice-size) * 0.3)
+      var(--dice-dot-color),
+    0px calc(var(--dice-size) * 0.6) var(--dice-dot-color),
+    calc(var(--dice-size) * 0.4) calc(var(--dice-size) * 0.6)
+      var(--dice-dot-color);
+}
+
+/* Animations - keeping the existing keyframes but making them more maintainable */
+@keyframes rotateDice {
+  30% {
+    transform: rotate3d(1, 1, 1, 0deg);
+  }
+  100% {
+    transform: rotate3d(1, 1, 1, 720deg);
+  }
+}
+
+@keyframes rotatePerFace {
+  16% {
+    transform: rotate3d(-0.1, 0.6, -0.4, 180deg);
+  }
+  32% {
+    transform: rotate3d(-0.85, -0.42, 0.73, 180deg);
+  }
+  48% {
+    transform: rotate3d(-0.8, 0.3, -0.75, 180deg);
+  }
+  64% {
+    transform: rotate3d(0.3, 0.45, 0.9, 180deg);
+  }
+  80% {
+    transform: rotate3d(-0.16, 0.6, 0.18, 180deg);
+  }
+  100% {
+    transform: rotate3d(-0.1, 0.3, -1, 180deg);
+  }
+}
+
+@keyframes throwDice {
+  20% {
+    margin-top: calc(var(--dice-size) * -1);
+  }
+  40% {
+    margin-top: 0px;
+  }
+  60% {
+    margin-top: calc(var(--dice-size) * -0.3);
+  }
+  80% {
+    margin-top: 0px;
+  }
+  85% {
+    margin-top: calc(var(--dice-size) * -0.1);
+  }
+  90% {
+    margin-top: 0px;
+  }
+  95% {
+    margin-top: calc(var(--dice-size) * -0.03);
+  }
+  100% {
+    margin-top: 0px;
+  }
+}
+
+/* Reverse animations for second dice */
+@keyframes rotateDiceReverse {
+  30% {
+    transform: rotate3d(-1, -1, -1, 0deg);
+  }
+  100% {
+    transform: rotate3d(-1, -1, -1, 720deg);
+  }
+}
+
+@keyframes rotatePerFaceReverse {
+  16% {
+    transform: rotate3d(0.1, -0.6, 0.4, 180deg);
+  }
+  32% {
+    transform: rotate3d(0.85, 0.42, -0.73, 180deg);
+  }
+  48% {
+    transform: rotate3d(0.8, -0.3, 0.75, 180deg);
+  }
+  64% {
+    transform: rotate3d(-0.3, -0.45, -0.9, 180deg);
+  }
+  80% {
+    transform: rotate3d(0.16, -0.6, -0.18, 180deg);
+  }
+  100% {
+    transform: rotate3d(0.1, -0.3, 1, 180deg);
+  }
+}
+
+@keyframes throwDiceReverse {
+  20% {
+    margin-top: calc(var(--dice-size) * -1);
+    margin-left: calc(var(--dice-size) * 0.2);
+  }
+  40% {
+    margin-top: 0px;
+    margin-left: 0px;
+  }
+  60% {
+    margin-top: calc(var(--dice-size) * -0.3);
+    margin-left: calc(var(--dice-size) * -0.1);
+  }
+  80% {
+    margin-top: 0px;
+    margin-left: 0px;
+  }
+  85% {
+    margin-top: calc(var(--dice-size) * -0.1);
+    margin-left: calc(var(--dice-size) * 0.04);
+  }
+  90% {
+    margin-top: 0px;
+    margin-left: 0px;
+  }
+  95% {
+    margin-top: calc(var(--dice-size) * -0.03);
+    margin-left: calc(var(--dice-size) * -0.02);
+  }
+  100% {
+    margin-top: 0px;
+    margin-left: 0px;
+  }
+}
+
+/* Accessibility - reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .dice-3d {
+    transition: none;
+  }
+
+  .dice-3d.dice-rolling,
+  .dice-3d.dice-throw {
+    animation: none;
+  }
+}

@@ -1,0 +1,92 @@
+.board-space-container {
+  container-type: inline-size;
+  container-name: space;
+
+  /* Design tokens that scale with the tile size */
+  --space-font-xs: clamp(10px, 1.2cqi, 12px);
+  --space-font-sm: clamp(11px, 1.6cqi, 13px);
+  --space-font-md: clamp(12px, 2cqi, 16px);
+  --space-font-lg: clamp(13px, 2.4cqi, 18px);
+
+  --space-icon-size: clamp(18px, 6cqi, 40px);
+  --space-gap: clamp(2px, 1.2cqi, 8px);
+
+  /* Thickness for color bar, uses container block/height */
+  --bar-thickness-inline: clamp(2px, 1cqh, 16px);
+
+  /* Owner indicator sizes */
+  --avatar-size: 30cqw;
+  --badge-size: clamp(24px, 6cqi, 32px);
+}
+
+/* Shared element styles inside tiles */
+.space-name {
+  font-size: var(--space-font-md);
+  line-height: 1.1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2; /* max 2 lines for readability */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.space-price {
+  gap: var(--space-gap);
+}
+
+.space-price-icon {
+  font-size: var(--space-font-xs);
+}
+
+.space-price-value {
+  font-size: var(--space-font-sm);
+  font-weight: 600;
+}
+
+.space-icon {
+  width: var(--space-icon-size);
+  height: var(--space-icon-size);
+  font-size: var(--space-icon-size); /* for emoji icons */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.owner-avatar {
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+}
+
+/* Density tiers via container queries */
+
+/* XS: icon-only, price/name hidden, avatar becomes small badge */
+@container space (max-width: 72px) {
+  .space-name,
+  .space-price {
+    display: none;
+  }
+  .owner-avatar {
+    width: 30cqw;
+    height: 30cqw;
+  }
+}
+
+/* S: icon + price, name hidden */
+@container space (min-width: 73px) and (max-width: 110px) {
+  .space-name {
+    display: none;
+  }
+  .space-price {
+    display: inline-flex;
+  }
+}
+
+/* M+: full details */
+@container space (min-width: 111px) {
+  .space-name {
+    display: -webkit-box;
+  }
+  .space-price {
+    display: inline-flex;
+  }
+}

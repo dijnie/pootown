@@ -1,0 +1,46 @@
+"use client"
+
+import * as CheckboxPrimitive from "@radix-ui/react-checkbox"
+import { Check } from "lucide-react"
+
+import * as React from "react"
+
+import { cn } from "@/lib/utils"
+import { playSound, SOUND_CONFIG } from "@/lib/soundUtil"
+
+function Checkbox({
+  className,
+  onCheckedChange,
+  ...props
+}: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
+  const handleCheckedChange = (checked: boolean | "indeterminate") => {
+    playSound("button-click", SOUND_CONFIG.volumes.buttonClick);
+    onCheckedChange?.(checked);
+  };
+
+  const handleMouseEnter = () => {
+    playSound("button-hover", SOUND_CONFIG.volumes.buttonHover);
+  };
+
+  return (
+    <CheckboxPrimitive.Root
+      data-slot="checkbox"
+      className={cn(
+        "peer size-4 shrink-0 outline-2 outline-border ring-offset-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-main data-[state=checked]:text-white",
+        className,
+      )}
+      onCheckedChange={handleCheckedChange}
+      onMouseEnter={handleMouseEnter}
+      {...props}
+    >
+      <CheckboxPrimitive.Indicator
+        data-slot="checkbox-indicator"
+        className={cn("flex items-center justify-center text-current")}
+      >
+        <Check className="size-4 text-main-foreground" />
+      </CheckboxPrimitive.Indicator>
+    </CheckboxPrimitive.Root>
+  )
+}
+
+export { Checkbox }

@@ -1,0 +1,26 @@
+[package]
+name = "panda-monopoly"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "panda_monopoly"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+local = []
+
+
+[dependencies]
+anchor-lang = {version = "0.31.1", features = ["init-if-needed"]}
+anchor-spl = "0.31.1"
+ephemeral-rollups-sdk = { version = "0.2.12", features = ["anchor"] }
+bytemuck = { version = "1.20.0", features = ["derive", "min_const_generics"] }
+ephemeral-vrf-sdk = {version = "0.1.2", features = ["anchor"]}
