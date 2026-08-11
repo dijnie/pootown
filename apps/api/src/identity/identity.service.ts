@@ -30,7 +30,7 @@ export class IdentityService {
         INSERT INTO identity.users (id, privy_did, created_at, updated_at, last_seen_at)
         VALUES ($1, $2, $3, $3, $3)
         ON CONFLICT (privy_did) DO UPDATE
-        SET updated_at = EXCLUDED.updated_at,
+        SET updated_at = GREATEST(identity.users.updated_at, EXCLUDED.updated_at),
             last_seen_at = GREATEST(identity.users.last_seen_at, EXCLUDED.last_seen_at)
         RETURNING id, privy_did, created_at, last_seen_at
       `,

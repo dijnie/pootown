@@ -9,6 +9,7 @@ import { PrivyAuthGuard } from "./auth/privy-auth.guard";
 import { parseApiEnvironment } from "./config/api-config";
 import { DatabaseModule } from "./database/database.module";
 import { EconomyModule } from "./economy/economy.module";
+import { GameSessionsModule } from "./game-sessions/game-sessions.module";
 import { HealthModule } from "./health/health.module";
 import { loggerConfig } from "./observability/logger.config";
 
@@ -20,6 +21,7 @@ import { loggerConfig } from "./observability/logger.config";
     AuthModule,
     DatabaseModule,
     EconomyModule,
+    GameSessionsModule,
     HealthModule,
   ],
   providers: [

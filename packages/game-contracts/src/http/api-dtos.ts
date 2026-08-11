@@ -253,5 +253,6 @@ export type RescueGrantResponse = z.infer<typeof RescueGrantResponseSchema>;
 export type GameDefinitionView = z.infer<typeof GameDefinitionViewSchema>;
 export type SessionView = z.infer<typeof SessionViewSchema>;
 export type SessionDetail = z.infer<typeof SessionDetailSchema>;
+export type SessionListResponse = z.infer<typeof SessionListResponseSchema>;
 export type TicketGrant = z.infer<typeof TicketGrantSchema>;
 export type AdmissionResponse = z.infer<typeof AdmissionResponseSchema>;

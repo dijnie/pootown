@@ -41,7 +41,7 @@ interface OperationRow {
 
 interface OperationViewRow {
   readonly id: string;
-  readonly operation_scope: "initialGrant" | "rescueGrant" | "reserve" | "release" | "capture" | "payout";
+  readonly operation_kind: "initialGrant" | "rescueGrant" | "reserve" | "release" | "capture" | "payout";
   readonly created_at: Date;
   readonly available_delta: string;
   readonly reserved_delta: string;
@@ -205,7 +205,10 @@ export class EconomyService {
       `
         SELECT
           operation.id,
-          operation.operation_scope,
+          CASE
+            WHEN operation.operation_scope IN ('createSession', 'joinIntent') THEN 'reserve'
+            ELSE operation.operation_scope
+          END AS operation_kind,
           operation.created_at,
           COALESCE(sum(entry.amount) FILTER (WHERE ledger.kind = 'user_available'), 0)::text AS available_delta,
           COALESCE(sum(entry.amount) FILTER (WHERE ledger.kind = 'user_reserved'), 0)::text AS reserved_delta
@@ -214,7 +217,9 @@ export class EconomyService {
         JOIN economy.ledger_accounts ledger ON ledger.id = entry.ledger_account_id
         WHERE operation.actor_user_id = $1
           AND operation.status = 'committed'
-          AND operation.operation_scope IN ('initialGrant', 'rescueGrant', 'reserve', 'release', 'capture', 'payout')
+          AND operation.operation_scope IN (
+            'initialGrant', 'rescueGrant', 'createSession', 'joinIntent', 'reserve', 'release', 'capture', 'payout'
+          )
           AND ($2::timestamptz IS NULL OR (operation.created_at, operation.id) < ($2::timestamptz, $3::varchar))
         GROUP BY operation.id
         ORDER BY operation.created_at DESC, operation.id DESC
@@ -228,7 +233,7 @@ export class EconomyService {
       contractVersion: CONTRACT_VERSION,
       items: page.map((row) => ({
         operationId: row.id,
-        kind: row.operation_scope,
+        kind: row.operation_kind,
         availableDelta: row.available_delta,
         reservedDelta: row.reserved_delta,
         createdAtMs: row.created_at.getTime(),

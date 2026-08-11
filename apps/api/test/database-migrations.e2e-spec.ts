@@ -71,6 +71,7 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
     assert.deepEqual(applied.rows, [
       { name: "0001-initial-authority.sql", checksum_length: 64 },
       { name: "0002-idempotent-operation-outcomes.sql", checksum_length: 64 },
+      { name: "0003-session-admission-invariants.sql", checksum_length: 64 },
     ]);
     const owners = await pool.query<{ tableowner: string }>(`
       SELECT DISTINCT tableowner
@@ -320,12 +321,12 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       await cp(resolve(process.cwd(), "src/database/roles/provision.sql"), rolesFile);
       const options = { migrationsDirectory, rolesFile };
 
-      await writeFile(join(migrationsDirectory, "0003-noop.sql"), "SELECT 1;\n");
+      await writeFile(join(migrationsDirectory, "0004-noop.sql"), "SELECT 1;\n");
       await runMigrations(databaseUrl, options);
-      await rm(join(migrationsDirectory, "0003-noop.sql"));
+      await rm(join(migrationsDirectory, "0004-noop.sql"));
       await assert.rejects(runMigrations(databaseUrl, options), /Applied migration files are missing/);
 
-      await writeFile(join(migrationsDirectory, "0003-noop.sql"), "SELECT 1;\n");
+      await writeFile(join(migrationsDirectory, "0004-noop.sql"), "SELECT 1;\n");
       await writeFile(join(migrationsDirectory, "0000-retroactive.sql"), "SELECT 1;\n");
       await assert.rejects(runMigrations(databaseUrl, options), /Retroactive migrations are not allowed/);
       await rm(join(migrationsDirectory, "0000-retroactive.sql"));
