@@ -9,6 +9,7 @@ import {
   LeaderboardResponseSchema,
   MutationHeadersSchema,
   PublicMutationContractSchemas,
+  RescueGrantResponseSchema,
   SessionHistoryEntrySchema,
   TicketGrantSchema,
   UserViewSchema,
@@ -119,6 +120,7 @@ describe("HTTP API contracts", () => {
       "joinIntent",
       "reconnectTicket",
       "releaseJoinIntent",
+      "rescueGrant",
     ]);
     assert.deepEqual(Object.keys(InternalMutationContractSchemas).sort(), [
       "abortSession",
@@ -133,6 +135,26 @@ describe("HTTP API contracts", () => {
       assert.equal(contract.headers.safeParse({ contractVersion: 1 }).success, false);
       assert.equal(contract.headers.safeParse({ contractVersion: 1, idempotencyKey: "operation:1" }).success, true);
     }
+  });
+
+  it("keeps rescue policy and identity server-owned", () => {
+    const response = {
+      contractVersion: 1,
+      availableCoin: "100",
+      reservedCoin: "0",
+      version: 3,
+      granted: true,
+      operationId: "operation_1",
+    };
+    assert.equal(RescueGrantResponseSchema.safeParse(response).success, true);
+    assert.equal(RescueGrantResponseSchema.safeParse({ ...response, amount: "100" }).success, false);
+    assert.equal(RescueGrantResponseSchema.safeParse({ ...response, operationId: null }).success, false);
+    assert.equal(RescueGrantResponseSchema.safeParse({ ...response, granted: false }).success, false);
+    assert.equal(RescueGrantResponseSchema.safeParse({ ...response, granted: false, operationId: null }).success, true);
+    assert.equal(
+      PublicMutationContractSchemas.rescueGrant.body.safeParse({ contractVersion: 1, userId: "user_2" }).success,
+      false,
+    );
   });
 
   it("preserves only the useful legacy leaderboard envelope without wallet or SOL fields", () => {

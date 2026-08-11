@@ -68,7 +68,10 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
 
   it("applies once without drift and keeps migration_owner as DDL owner", async () => {
     const applied = await pool.query("SELECT name, length(checksum) AS checksum_length FROM infra.schema_migrations");
-    assert.deepEqual(applied.rows, [{ name: "0001-initial-authority.sql", checksum_length: 64 }]);
+    assert.deepEqual(applied.rows, [
+      { name: "0001-initial-authority.sql", checksum_length: 64 },
+      { name: "0002-idempotent-operation-outcomes.sql", checksum_length: 64 },
+    ]);
     const owners = await pool.query<{ tableowner: string }>(`
       SELECT DISTINCT tableowner
       FROM pg_tables
@@ -258,6 +261,34 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       await client.query("SELECT * FROM identity.users");
       await client.query("SELECT * FROM economy.coin_account_reconciliation");
       await client.query("SELECT * FROM realtime.api_settlement_proofs");
+      await client.query("BEGIN");
+      try {
+        await client.query(`
+          INSERT INTO economy.coin_operations
+            (id, actor_user_id, operation_scope, idempotency_key, request_hash)
+          VALUES ('op_api_grant', 'user_1', 'rescueGrant', 'api:grant', decode(repeat('66', 32), 'hex'))
+        `);
+        await client.query(`
+          UPDATE economy.coin_accounts
+          SET available_coin = available_coin + 10, version = version + 1, updated_at = now()
+          WHERE user_id = 'user_1'
+        `);
+        await client.query(`
+          INSERT INTO economy.coin_ledger_entries (operation_id, ledger_account_id, amount) VALUES
+            ('op_api_grant', 'user_1_available', 10),
+            ('op_api_grant', 'system_issuance', -10)
+        `);
+        await client.query(`
+          UPDATE economy.coin_operations
+          SET status = 'committed', response_snapshot = '{}', committed_at = now()
+          WHERE id = 'op_api_grant'
+        `);
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
+      await denied(() => client.query("UPDATE identity.users SET privy_did = 'did:privy:other' WHERE id = 'user_1'"));
       await denied(() => client.query("SELECT * FROM realtime.room_checkpoints"));
       await denied(() => client.query("CREATE TABLE identity.forbidden (id integer)"));
     });
@@ -289,12 +320,12 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       await cp(resolve(process.cwd(), "src/database/roles/provision.sql"), rolesFile);
       const options = { migrationsDirectory, rolesFile };
 
-      await writeFile(join(migrationsDirectory, "0002-noop.sql"), "SELECT 1;\n");
+      await writeFile(join(migrationsDirectory, "0003-noop.sql"), "SELECT 1;\n");
       await runMigrations(databaseUrl, options);
-      await rm(join(migrationsDirectory, "0002-noop.sql"));
+      await rm(join(migrationsDirectory, "0003-noop.sql"));
       await assert.rejects(runMigrations(databaseUrl, options), /Applied migration files are missing/);
 
-      await writeFile(join(migrationsDirectory, "0002-noop.sql"), "SELECT 1;\n");
+      await writeFile(join(migrationsDirectory, "0003-noop.sql"), "SELECT 1;\n");
       await writeFile(join(migrationsDirectory, "0000-retroactive.sql"), "SELECT 1;\n");
       await assert.rejects(runMigrations(databaseUrl, options), /Retroactive migrations are not allowed/);
       await rm(join(migrationsDirectory, "0000-retroactive.sql"));

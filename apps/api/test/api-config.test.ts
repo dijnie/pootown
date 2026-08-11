@@ -52,6 +52,23 @@ describe("API configuration", () => {
     }
   });
 
+  it("requires positive canonical server-owned grant values", () => {
+    for (const value of ["0", "01", "-1", "1.0"]) {
+      assert.throws(() => parseApiEnvironment({ ...validEnvironment, INITIAL_GRANT_COIN: value }));
+      assert.throws(() => parseApiEnvironment({ ...validEnvironment, RESCUE_BALANCE_COIN: value }));
+    }
+    assert.equal(parseApiEnvironment({
+      ...validEnvironment,
+      INITIAL_GRANT_COIN: "1",
+      RESCUE_BALANCE_COIN: "1",
+    }).INITIAL_GRANT_COIN, "1");
+    assert.throws(() => parseApiEnvironment({
+      ...validEnvironment,
+      INITIAL_GRANT_COIN: "99",
+      RESCUE_BALANCE_COIN: "100",
+    }));
+  });
+
   it("ignores unrelated process environment variables", () => {
     assert.doesNotThrow(() =>
       parseApiEnvironment({

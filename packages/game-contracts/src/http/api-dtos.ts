@@ -63,6 +63,21 @@ export const CoinOperationsResponseSchema = z.strictObject({
   nextCursor: z.string().min(1).max(512).nullable(),
 });
 
+export const RescueGrantRequestSchema = z.strictObject({
+  contractVersion: ContractVersionSchema,
+});
+
+export const RescueGrantResponseSchema = z.discriminatedUnion("granted", [
+  CoinBalanceResponseSchema.extend({
+    granted: z.literal(true),
+    operationId: OperationIdSchema,
+  }).strict(),
+  CoinBalanceResponseSchema.extend({
+    granted: z.literal(false),
+    operationId: z.null(),
+  }).strict(),
+]);
+
 export const GameDefinitionViewSchema = z.strictObject({
   contractVersion: ContractVersionSchema,
   gameDefinitionId: GameDefinitionIdSchema,
@@ -173,6 +188,7 @@ export const ReconnectTicketRequestSchema = z.strictObject({
 });
 
 export const PublicMutationContractSchemas = {
+  rescueGrant: { headers: MutationHeadersSchema, body: RescueGrantRequestSchema },
   createSession: { headers: MutationHeadersSchema, body: CreateSessionRequestSchema },
   joinIntent: { headers: MutationHeadersSchema, body: JoinIntentRequestSchema },
   releaseJoinIntent: { headers: MutationHeadersSchema, body: ReleaseJoinIntentRequestSchema },
@@ -232,6 +248,8 @@ export const ReadyHealthResponseSchema = z.strictObject({
 export type MutationHeaders = z.infer<typeof MutationHeadersSchema>;
 export type UserView = z.infer<typeof UserViewSchema>;
 export type CoinBalanceResponse = z.infer<typeof CoinBalanceResponseSchema>;
+export type CoinOperationsResponse = z.infer<typeof CoinOperationsResponseSchema>;
+export type RescueGrantResponse = z.infer<typeof RescueGrantResponseSchema>;
 export type GameDefinitionView = z.infer<typeof GameDefinitionViewSchema>;
 export type SessionView = z.infer<typeof SessionViewSchema>;
 export type SessionDetail = z.infer<typeof SessionDetailSchema>;

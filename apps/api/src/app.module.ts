@@ -8,6 +8,7 @@ import { AuthModule } from "./auth/auth.module";
 import { PrivyAuthGuard } from "./auth/privy-auth.guard";
 import { parseApiEnvironment } from "./config/api-config";
 import { DatabaseModule } from "./database/database.module";
+import { EconomyModule } from "./economy/economy.module";
 import { HealthModule } from "./health/health.module";
 import { loggerConfig } from "./observability/logger.config";
 
@@ -18,6 +19,7 @@ import { loggerConfig } from "./observability/logger.config";
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     AuthModule,
     DatabaseModule,
+    EconomyModule,
     HealthModule,
   ],
   providers: [
