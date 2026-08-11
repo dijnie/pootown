@@ -7,7 +7,9 @@ import {
   type OperationResponse,
 } from "@pootown/game-contracts";
 import {
+  SessionBootstrapResponseSchema,
   TicketConsumeResponseSchema,
+  type SessionBootstrapResponse,
   type TicketConsumeRequest,
   type TicketConsumeResponse,
 } from "@pootown/game-contracts/internal";
@@ -50,6 +52,26 @@ interface SeatRow {
   readonly seat_index: number;
 }
 
+interface BootstrapSessionRow {
+  readonly id: string;
+  readonly room_id: string;
+  readonly game_definition_id: string;
+  readonly game_definition_version: number;
+  readonly lifecycle: "open" | "cancelling" | "cancelled" | "active" | "settling" | "settled" | "recovery_required";
+  readonly state_version: string;
+  readonly maximum_players: number;
+  readonly time_limit_ms: number | null;
+  readonly created_at: Date;
+  readonly started_at: Date | null;
+}
+
+interface BootstrapPlayerRow {
+  readonly player_id: string;
+  readonly seat_index: number;
+  readonly joined_at: Date;
+  readonly is_creator: boolean;
+}
+
 function requestHash(value: unknown): Buffer {
   return createHash("sha256").update(JSON.stringify(value)).digest();
 }
@@ -57,6 +79,60 @@ function requestHash(value: unknown): Buffer {
 @Injectable()
 export class InternalSessionService {
   public constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
+
+  public async bootstrap(gameId: string): Promise<SessionBootstrapResponse> {
+    return withTransaction(this.pool, async (client) => {
+      await this.advisoryLockSession(client, gameId);
+      const sessionResult = await client.query<BootstrapSessionRow>(
+        `
+          SELECT id, room_id, game_definition_id, game_definition_version, lifecycle,
+                 state_version::text, maximum_players, time_limit_ms, created_at, started_at
+          FROM game.game_sessions WHERE id = $1
+          FOR SHARE
+        `,
+        [gameId],
+      );
+      const session = sessionResult.rows[0];
+      if (session === undefined) throw new ApiHttpException("SESSION_NOT_FOUND", 404, "Session was not found");
+      if (session.lifecycle === "cancelling" || session.lifecycle === "cancelled") {
+        throw new ApiHttpException("SESSION_NOT_OPEN", 409, "Cancelled session cannot be materialized");
+      }
+      const players = await client.query<BootstrapPlayerRow>(
+        `
+          SELECT player.player_id, player.seat_index, player.joined_at,
+                 (player.user_id = session.creator_user_id) AS is_creator
+          FROM game.session_players player
+          JOIN game.game_sessions session ON session.id = player.game_session_id
+          WHERE player.game_session_id = $1 AND player.active = true
+          ORDER BY player.seat_index
+        `,
+        [gameId],
+      );
+      const creator = players.rows.find((player) => player.is_creator);
+      if (creator === undefined) throw new Error("Session creator seat is missing");
+      const lifecycle = session.lifecycle === "recovery_required" ? "recoveryRequired" : session.lifecycle;
+      return SessionBootstrapResponseSchema.parse({
+        contractVersion: CONTRACT_VERSION,
+        gameId: session.id,
+        gameDefinitionId: session.game_definition_id,
+        gameDefinitionVersion: session.game_definition_version,
+        rulesetId: "pootown-rust-source-v1",
+        roomId: session.room_id,
+        lifecycle,
+        stateVersion: Number(session.state_version),
+        creatorPlayerId: creator.player_id,
+        maximumPlayers: session.maximum_players,
+        timeLimitMs: session.time_limit_ms,
+        createdAtMs: session.created_at.getTime(),
+        startedAtMs: session.started_at?.getTime() ?? null,
+        players: players.rows.map((player) => ({
+          playerId: player.player_id,
+          seatIndex: player.seat_index,
+          joinedAtMs: player.joined_at.getTime(),
+        })),
+      });
+    });
+  }
 
   public async consumeTicket(
     request: TicketConsumeRequest,

@@ -137,6 +137,29 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
     assert.equal(replay.admission.playerId, first.admission.playerId);
     assert.notEqual(replay.admission.ticket, first.admission.ticket);
     assert.deepEqual(replay.session.players, [{ playerId: first.admission.playerId, seatIndex: 0 }]);
+    const bootstrap = await internalSessions.bootstrap(first.session.gameId);
+    assert.deepEqual(bootstrap, {
+      contractVersion: 1,
+      gameId: first.session.gameId,
+      gameDefinitionId: "classic_100",
+      gameDefinitionVersion: 1,
+      rulesetId: "pootown-rust-source-v1",
+      roomId: first.session.roomId,
+      lifecycle: "open",
+      stateVersion: 0,
+      creatorPlayerId: first.admission.playerId,
+      maximumPlayers: 4,
+      timeLimitMs: 3_600_000,
+      createdAtMs: new Date("2026-08-11T14:00:00.000Z").getTime(),
+      startedAtMs: null,
+      players: [{
+        playerId: first.admission.playerId,
+        seatIndex: 0,
+        joinedAtMs: new Date("2026-08-11T14:00:00.000Z").getTime(),
+      }],
+    });
+    assert.equal(JSON.stringify(bootstrap).includes("user"), false);
+    assert.equal(JSON.stringify(bootstrap).includes("coin"), false);
 
     const state = await pool.query(`
       SELECT
@@ -687,6 +710,70 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
     );
   });
 
+  it("materializes one coherent bootstrap snapshot across a concurrent lifecycle transition", async () => {
+    const created = await sessions.createSession(
+      principal("bootstrap-race-owner"),
+      "classic_100",
+      "create:bootstrap-race-owner",
+      new Date("2026-08-11T20:00:00.000Z"),
+    );
+    const joined = await sessions.joinSession(
+      principal("bootstrap-race-player"),
+      created.session.gameId,
+      "join:bootstrap-race-player",
+      new Date("2026-08-11T20:00:01.000Z"),
+    );
+    const transitionClient = await pool.connect();
+    let transactionOpen = false;
+    let bootstrapCompleted = false;
+    let bootstrapPromise: Promise<Awaited<ReturnType<InternalSessionService["bootstrap"]>>> | undefined;
+    try {
+      await transitionClient.query("BEGIN");
+      transactionOpen = true;
+      await transitionClient.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+        [created.session.gameId],
+      );
+      await transitionClient.query(
+        `
+          UPDATE game.game_sessions
+          SET lifecycle = 'active', state_version = 1, started_at = $2
+          WHERE id = $1
+        `,
+        [created.session.gameId, new Date("2026-08-11T20:00:02.000Z")],
+      );
+
+      bootstrapPromise = internalSessions.bootstrap(created.session.gameId).finally(() => {
+        bootstrapCompleted = true;
+      });
+      await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+      assert.equal(bootstrapCompleted, false);
+
+      await transitionClient.query("COMMIT");
+      transactionOpen = false;
+      const bootstrap = await bootstrapPromise;
+      assert.equal(bootstrap.lifecycle, "active");
+      assert.equal(bootstrap.stateVersion, 1);
+      assert.equal(bootstrap.startedAtMs, Date.parse("2026-08-11T20:00:02.000Z"));
+      assert.deepEqual(bootstrap.players, [
+        {
+          playerId: created.admission.playerId,
+          seatIndex: 0,
+          joinedAtMs: Date.parse("2026-08-11T20:00:00.000Z"),
+        },
+        {
+          playerId: joined.admission.playerId,
+          seatIndex: 1,
+          joinedAtMs: Date.parse("2026-08-11T20:00:01.000Z"),
+        },
+      ]);
+    } finally {
+      if (transactionOpen) await transitionClient.query("ROLLBACK");
+      transitionClient.release();
+      if (bootstrapPromise !== undefined) await bootstrapPromise.catch(() => undefined);
+    }
+  });
+
   it("starts only after every admitted player consumed a ticket and supports active reconnect", async () => {
     const created = await sessions.createSession(
       principal("start-owner"),
@@ -748,6 +835,14 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
     assert.equal(state.rows[0]?.lifecycle, "active");
     assert.equal(state.rows[0]?.state_version, "1");
     assert.equal(new Date(state.rows[0]?.started_at as string).getTime(), Date.parse("2026-08-11T21:00:03.000Z"));
+    const activeBootstrap = await internalSessions.bootstrap(created.session.gameId);
+    assert.equal(activeBootstrap.lifecycle, "active");
+    assert.equal(activeBootstrap.stateVersion, 1);
+    assert.equal(activeBootstrap.startedAtMs, Date.parse("2026-08-11T21:00:03.000Z"));
+    assert.deepEqual(activeBootstrap.players, [
+      { playerId: created.admission.playerId, seatIndex: 0, joinedAtMs: Date.parse("2026-08-11T21:00:00.000Z") },
+      { playerId: joined.admission.playerId, seatIndex: 1, joinedAtMs: Date.parse("2026-08-11T21:00:01.000Z") },
+    ]);
 
     const reconnect = await sessions.reconnectTicket(
       principal("start-player"),

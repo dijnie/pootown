@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Headers, Param, Post } from "@nestjs/common";
 import { GameIdSchema, type OperationResponse } from "@pootown/game-contracts";
 import {
   AbortSessionRequestSchema,
@@ -8,6 +8,7 @@ import {
   TicketConsumeRequestSchema,
   type AbortSessionRequest,
   type ReconciliationResponse,
+  type SessionBootstrapResponse,
   type SettlementRequest,
   type TicketConsumeRequest,
   type TicketConsumeResponse,
@@ -18,7 +19,7 @@ import { InternalSessionService } from "./internal-session.service";
 import { ReconciliationService } from "./reconciliation.service";
 import { InternalRoute } from "../auth/internal-route.decorator";
 import { ApiHttpException } from "../platform/http/api-http.exception";
-import { requireMutationHeaders, type HttpHeaders } from "../platform/http/contract-headers";
+import { requireContractVersion, requireMutationHeaders, type HttpHeaders } from "../platform/http/contract-headers";
 import { ZodValidationPipe } from "../platform/http/zod-validation.pipe";
 
 @InternalRoute()
@@ -29,6 +30,17 @@ export class InternalController {
     private readonly settlements: InternalSettlementService,
     private readonly reconciliation: ReconciliationService,
   ) {}
+
+  @Get("game-sessions/:gameId/bootstrap")
+  public bootstrapSession(
+    @Headers() headers: HttpHeaders,
+    @Param("gameId") rawGameId: string,
+  ): Promise<SessionBootstrapResponse> {
+    requireContractVersion(headers);
+    const gameId = GameIdSchema.safeParse(rawGameId);
+    if (!gameId.success) throw new ApiHttpException("REQUEST_INVALID", 400, "Game ID is invalid");
+    return this.sessions.bootstrap(gameId.data);
+  }
 
   @Post("tickets/consume")
   public consumeTicket(

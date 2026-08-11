@@ -17,6 +17,7 @@ import {
 import {
   InternalMutationContractSchemas,
   ReconciliationResponseSchema,
+  SessionBootstrapResponseSchema,
   SessionStartedRequestSchema,
   SettlementRequestSchema,
   TicketConsumeRequestSchema,
@@ -163,6 +164,51 @@ describe("HTTP API contracts", () => {
     assert.equal(ReconciliationResponseSchema.safeParse(response).success, true);
     assert.equal(ReconciliationResponseSchema.safeParse({ ...response, sessionsMarkedForRecovery: -1 }).success, false);
     assert.equal(ReconciliationResponseSchema.safeParse({ ...response, privateCheckpoint: {} }).success, false);
+  });
+
+  it("binds realtime bootstrap policy to stable seats without account identity", () => {
+    const bootstrap = {
+      contractVersion: 1,
+      gameId: "game_1",
+      gameDefinitionId: "classic_100",
+      gameDefinitionVersion: 1,
+      rulesetId: "pootown-rust-source-v1",
+      roomId: "room_1",
+      lifecycle: "open",
+      stateVersion: 0,
+      creatorPlayerId: "player_1",
+      maximumPlayers: 4,
+      timeLimitMs: 3_600_000,
+      createdAtMs: 1,
+      startedAtMs: null,
+      players: [{ playerId: "player_1", seatIndex: 0, joinedAtMs: 1 }],
+    };
+    assert.equal(SessionBootstrapResponseSchema.safeParse(bootstrap).success, true);
+    assert.equal(SessionBootstrapResponseSchema.safeParse({ ...bootstrap, userId: "private" }).success, false);
+    assert.equal(SessionBootstrapResponseSchema.safeParse({ ...bootstrap, entryCoin: "100" }).success, false);
+    assert.equal(SessionBootstrapResponseSchema.safeParse({ ...bootstrap, creatorPlayerId: "player_2" }).success, false);
+    assert.equal(SessionBootstrapResponseSchema.safeParse({ ...bootstrap, stateVersion: 1 }).success, false);
+    assert.equal(SessionBootstrapResponseSchema.safeParse({ ...bootstrap, lifecycle: "cancelled" }).success, false);
+    assert.equal(SessionBootstrapResponseSchema.safeParse({
+      ...bootstrap,
+      players: [{ playerId: "player_1", seatIndex: 0, joinedAtMs: 0 }],
+    }).success, false);
+    assert.equal(SessionBootstrapResponseSchema.safeParse({
+      ...bootstrap,
+      lifecycle: "active",
+      stateVersion: 1,
+      startedAtMs: 2,
+    }).success, false);
+    assert.equal(SessionBootstrapResponseSchema.safeParse({
+      ...bootstrap,
+      lifecycle: "active",
+      stateVersion: 1,
+      startedAtMs: 2,
+      players: [
+        bootstrap.players[0],
+        { playerId: "player_2", seatIndex: 2, joinedAtMs: 2 },
+      ],
+    }).success, true);
   });
 
   it("keeps rescue policy and identity server-owned", () => {
