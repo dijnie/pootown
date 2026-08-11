@@ -48,6 +48,11 @@ export interface CommandCommitResult {
   readonly duplicate: boolean;
 }
 
+export interface CommandPersistenceHooks {
+  readonly afterCommit?: () => void | Promise<void>;
+  readonly beforeCommit?: () => void | Promise<void>;
+}
+
 export class CommandCommitConflictError extends Error {
   public constructor(message: string) {
     super(message);
@@ -99,6 +104,7 @@ export class CommandRepository {
   public constructor(
     private readonly pool: Pool,
     private readonly leases: RoomLeaseRepository,
+    private readonly hooks: CommandPersistenceHooks = {},
   ) {}
 
   public async findReplay(
@@ -147,7 +153,7 @@ export class CommandRepository {
       throw new CommandCommitConflictError("Command result versions or events are inconsistent");
     }
     validateCheckpointSnapshot(value.serializedState, value.stateVersion);
-    return withTransaction(this.pool, async (client) => {
+    const result = await withTransaction(this.pool, async (client) => {
       await this.leases.assertOwned(client, lease, now);
       const existing = await client.query<StoredCommandRow>(
         `
@@ -249,7 +255,10 @@ export class CommandRepository {
           now ?? null,
         ],
       );
+      await this.hooks.beforeCommit?.();
       return { acknowledgement, duplicate: false };
     });
+    if (!result.duplicate) await this.hooks.afterCommit?.();
+    return result;
   }
 }

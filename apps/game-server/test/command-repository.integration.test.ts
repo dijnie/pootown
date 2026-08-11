@@ -27,6 +27,8 @@ describe("atomic room command persistence", { timeout: 120_000 }, () => {
     await seedGameSession(database.pool, "game_command_race", "room_command_race");
     await seedGameSession(database.pool, "game_command_duplicate", "room_command_duplicate");
     await seedGameSession(database.pool, "game_command_timer", "room_command_timer");
+    await seedGameSession(database.pool, "game_command_precommit", "room_command_precommit");
+    await seedGameSession(database.pool, "game_command_postcommit", "room_command_postcommit");
   });
 
   after(async () => stopTestDatabase(database));
@@ -220,5 +222,86 @@ describe("atomic room command persistence", { timeout: 120_000 }, () => {
       [lease.roomId],
     );
     assert.deepEqual(stored.rows, [{ player_id: "system_timer", state_version: 3, proofs: 1 }]);
+  });
+
+  it("rolls back every durable artifact when interrupted before commit", async () => {
+    const now = new Date("2026-08-11T20:10:00.000Z");
+    const leases = new RoomLeaseRepository(database.pool, "precommit-instance", 30_000);
+    const lease = await leases.acquire("room_command_precommit", "game_command_precommit", now);
+    await new CheckpointRepository(database.pool, leases).initialize(
+      lease,
+      1,
+      lifecycleSnapshot("game_command_precommit", 1),
+      now,
+    );
+    let interrupt = true;
+    const commands = new CommandRepository(database.pool, leases, {
+      beforeCommit() {
+        if (interrupt) throw new Error("simulated pre-commit crash");
+      },
+    });
+    const requestId = "00000000-0000-4000-8000-000000000106";
+    const value = {
+      playerId: "player_checkpoint",
+      command: { requestId, expectedStateVersion: 1, type: "joinGame", payload: {} },
+      stateVersion: 2,
+      serializedState: lifecycleSnapshot("game_command_precommit", 2),
+      acknowledgement: { type: "command.ack", requestId, stateVersion: 2, eventIds: [] },
+      events: [],
+    } as const;
+
+    await assert.rejects(commands.commit(lease, value, now), /simulated pre-commit crash/);
+    const rolledBack = await database.pool.query(
+      `
+        SELECT
+          (SELECT count(*)::int FROM realtime.room_commands WHERE room_id = $1) AS commands,
+          (SELECT count(*)::int FROM realtime.room_events WHERE room_id = $1) AS events,
+          (SELECT state_version::int FROM realtime.room_checkpoints WHERE room_id = $1) AS state_version
+      `,
+      [lease.roomId],
+    );
+    assert.deepEqual(rolledBack.rows, [{ commands: 0, events: 0, state_version: 1 }]);
+
+    interrupt = false;
+    assert.equal((await commands.commit(lease, value, now)).duplicate, false);
+  });
+
+  it("returns the stored acknowledgement after interruption following commit", async () => {
+    const now = new Date("2026-08-11T20:20:00.000Z");
+    const leases = new RoomLeaseRepository(database.pool, "postcommit-instance", 30_000);
+    const lease = await leases.acquire("room_command_postcommit", "game_command_postcommit", now);
+    await new CheckpointRepository(database.pool, leases).initialize(
+      lease,
+      1,
+      lifecycleSnapshot("game_command_postcommit", 1),
+      now,
+    );
+    const commands = new CommandRepository(database.pool, leases, {
+      afterCommit() { throw new Error("simulated post-commit crash"); },
+    });
+    const requestId = "00000000-0000-4000-8000-000000000107";
+    const value = {
+      playerId: "player_checkpoint",
+      command: { requestId, expectedStateVersion: 1, type: "joinGame", payload: {} },
+      stateVersion: 2,
+      serializedState: lifecycleSnapshot("game_command_postcommit", 2),
+      acknowledgement: { type: "command.ack", requestId, stateVersion: 2, eventIds: [] },
+      events: [],
+    } as const;
+
+    await assert.rejects(commands.commit(lease, value, now), /simulated post-commit crash/);
+    assert.deepEqual(await commands.findReplay(lease, value.playerId, value.command, now), value.acknowledgement);
+    const replay = await commands.commit(lease, value, now);
+    assert.equal(replay.duplicate, true);
+    const stored = await database.pool.query(
+      `
+        SELECT
+          (SELECT count(*)::int FROM realtime.room_commands WHERE room_id = $1) AS commands,
+          (SELECT count(*)::int FROM realtime.room_events WHERE room_id = $1) AS events,
+          (SELECT state_version::int FROM realtime.room_checkpoints WHERE room_id = $1) AS state_version
+      `,
+      [lease.roomId],
+    );
+    assert.deepEqual(stored.rows, [{ commands: 1, events: 0, state_version: 2 }]);
   });
 });

@@ -80,6 +80,9 @@ export interface GameRoomDependencies {
   };
   readonly checkpoints: CheckpointRepository;
   readonly commands: CommandRepository;
+  readonly crashHooks?: {
+    readonly afterAcknowledgement?: () => void | Promise<void>;
+  };
   readonly leaseRenewMs: number;
   readonly leases: RoomLeaseRepository;
   readonly onLeaseLost?: (error: unknown) => void;
@@ -398,6 +401,7 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
           this.pendingStartPublication = undefined;
         }
         client.send(result.acknowledgement.type, result.acknowledgement);
+        await dependencies.crashHooks?.afterAcknowledgement?.();
         for (const event of events) this.broadcast(event.type, event);
       } catch (error) {
         if (error instanceof RoomLeaseUnavailableError) {
