@@ -46,7 +46,7 @@ export const SessionStartedRequestSchema = z.strictObject({
 export const SettlementRequestSchema = z.strictObject({
   contractVersion: ContractVersionSchema,
   roomId: RoomIdSchema,
-  terminalStateVersion: StateVersionSchema,
+  terminalStateVersion: StateVersionSchema.refine((value) => value > 0, "must be positive"),
   checkpointChecksum: sha256Hex,
 });
 
@@ -65,4 +65,5 @@ export const InternalMutationContractSchemas = {
 export type TicketConsumeRequest = z.infer<typeof TicketConsumeRequestSchema>;
 export type TicketConsumeResponse = z.infer<typeof TicketConsumeResponseSchema>;
 export type SettlementRequest = z.infer<typeof SettlementRequestSchema>;
+export type AbortSessionRequest = z.infer<typeof AbortSessionRequestSchema>;
 export type InternalOperationResponse = z.infer<typeof OperationResponseSchema>;

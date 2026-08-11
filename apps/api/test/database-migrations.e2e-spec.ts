@@ -74,6 +74,7 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       { name: "0003-session-admission-invariants.sql", checksum_length: 64 },
       { name: "0004-session-release-and-cancellation.sql", checksum_length: 64 },
       { name: "0005-internal-session-transitions.sql", checksum_length: 64 },
+      { name: "0006-terminal-settlement-invariants.sql", checksum_length: 64 },
     ]);
     const owners = await pool.query<{ tableowner: string }>(`
       SELECT DISTINCT tableowner
@@ -406,6 +407,181 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
     });
   });
 
+  it("rejects fabricated terminal settlements that do not commit exact financial facts", async () => {
+    const setup = await pool.connect();
+    try {
+      await setup.query("BEGIN");
+      await setup.query(`
+        INSERT INTO identity.users (id, privy_did) VALUES
+          ('settlement_user_1', 'did:privy:settlement_user_1'),
+          ('settlement_user_2', 'did:privy:settlement_user_2')
+      `);
+      await setup.query(`
+        INSERT INTO economy.coin_accounts (user_id, available_coin, reserved_coin) VALUES
+          ('settlement_user_1', 900, 100), ('settlement_user_2', 900, 100)
+      `);
+      await setup.query(`
+        INSERT INTO economy.ledger_accounts (id, owner_user_id, kind) VALUES
+          ('settlement_user_1_available', 'settlement_user_1', 'user_available'),
+          ('settlement_user_1_reserved', 'settlement_user_1', 'user_reserved'),
+          ('settlement_user_2_available', 'settlement_user_2', 'user_available'),
+          ('settlement_user_2_reserved', 'settlement_user_2', 'user_reserved')
+      `);
+      await setup.query(`
+        INSERT INTO game.game_sessions
+          (id, room_id, game_definition_id, game_definition_version, creator_user_id, lifecycle,
+           policy_snapshot, policy_hash, maximum_players, entry_coin)
+        VALUES ('settlement_game', 'settlement_room', 'standard', 1, 'settlement_user_1', 'open', '{}',
+                decode(repeat('10', 32), 'hex'), 4, 100)
+      `);
+      await setup.query(`
+        INSERT INTO economy.coin_operations
+          (id, actor_user_id, operation_scope, idempotency_key, request_hash)
+        VALUES
+          ('settlement_reserve_1', 'settlement_user_1', 'createSession', 'settlement:reserve:1', decode(repeat('81', 32), 'hex')),
+          ('settlement_reserve_2', 'settlement_user_2', 'joinIntent', 'settlement:reserve:2', decode(repeat('82', 32), 'hex'))
+      `);
+      await setup.query(`
+        INSERT INTO economy.coin_reservations
+          (id, operation_id, user_id, game_session_id, amount, status)
+        VALUES
+          ('settlement_reservation_1', 'settlement_reserve_1', 'settlement_user_1', 'settlement_game', 100, 'reserved'),
+          ('settlement_reservation_2', 'settlement_reserve_2', 'settlement_user_2', 'settlement_game', 100, 'reserved')
+      `);
+      await setup.query(`
+        INSERT INTO game.session_players
+          (game_session_id, player_id, user_id, seat_index, reservation_id)
+        VALUES
+          ('settlement_game', 'settlement_player_1', 'settlement_user_1', 0, 'settlement_reservation_1'),
+          ('settlement_game', 'settlement_player_2', 'settlement_user_2', 1, 'settlement_reservation_2')
+      `);
+      await setup.query(`
+        INSERT INTO economy.coin_ledger_entries (operation_id, ledger_account_id, amount) VALUES
+          ('settlement_reserve_1', 'settlement_user_1_available', 900),
+          ('settlement_reserve_1', 'settlement_user_1_reserved', 100),
+          ('settlement_reserve_1', 'system_issuance', -1000),
+          ('settlement_reserve_2', 'settlement_user_2_available', 900),
+          ('settlement_reserve_2', 'settlement_user_2_reserved', 100),
+          ('settlement_reserve_2', 'system_issuance', -1000)
+      `);
+      await setup.query(`
+        UPDATE economy.coin_operations
+        SET status = 'committed', response_snapshot = '{}', committed_at = now()
+        WHERE id IN ('settlement_reserve_1', 'settlement_reserve_2')
+      `);
+      await setup.query(`
+        UPDATE game.game_sessions
+        SET lifecycle = 'active', state_version = 1, started_at = clock_timestamp()
+        WHERE id = 'settlement_game'
+      `);
+      await setup.query(`
+        INSERT INTO realtime.room_leases
+          (room_id, game_session_id, instance_id, lease_until, fencing_token)
+        VALUES ('settlement_room', 'settlement_game', 'settlement_instance', now() + interval '1 minute', 1)
+      `);
+      await setup.query(`
+        INSERT INTO realtime.terminal_proofs
+          (game_session_id, room_id, state_version, checkpoint_checksum, winner_player_id, end_reason)
+        VALUES ('settlement_game', 'settlement_room', 9, decode(repeat('83', 32), 'hex'),
+                'settlement_player_2', 'lastPlayerStanding')
+      `);
+      await setup.query("COMMIT");
+    } catch (error) {
+      await setup.query("ROLLBACK");
+      throw error;
+    } finally {
+      setup.release();
+    }
+
+    await asRole("api_runtime", async (client) => {
+      for (const mode of ["pending", "unreconciled"] as const) {
+        await client.query("BEGIN");
+        try {
+          const operationId = `fabricated_${mode}`;
+          await client.query(
+            `
+              INSERT INTO economy.coin_operations
+                (id, actor_user_id, operation_scope, idempotency_key, request_hash)
+              VALUES ($1, 'settlement_user_1', 'settleSession', $1, decode(repeat('84', 32), 'hex'))
+            `,
+            [operationId],
+          );
+          await client.query(
+            `
+              UPDATE economy.coin_reservations
+              SET status = 'captured', terminal_at = now(), terminal_operation_id = $1
+              WHERE game_session_id = 'settlement_game' AND status = 'reserved'
+            `,
+            [operationId],
+          );
+          if (mode === "unreconciled") {
+            await client.query(
+              `
+                INSERT INTO economy.coin_ledger_entries (operation_id, ledger_account_id, amount) VALUES
+                  ($1, 'settlement_user_1_reserved', -100),
+                  ($1, 'settlement_user_2_reserved', -100),
+                  ($1, 'settlement_user_2_available', 200)
+              `,
+              [operationId],
+            );
+          }
+          await client.query(
+            `
+              INSERT INTO readmodel.session_history
+                (game_session_id, user_id, player_id, result, account_coin_delta, finished_at)
+              VALUES
+                ('settlement_game', 'settlement_user_1', 'settlement_player_1', 'lost', -100, now()),
+                ('settlement_game', 'settlement_user_2', 'settlement_player_2', 'won', 100, now())
+            `,
+          );
+          await client.query(
+            `
+              INSERT INTO economy.game_settlements
+                (id, game_session_id, kind, operation_id, terminal_state_version,
+                 checkpoint_checksum, winner_user_id)
+              VALUES ($1, 'settlement_game', 'completed', $2, 9,
+                      decode(repeat('83', 32), 'hex'), 'settlement_user_2')
+            `,
+            [`settlement_${mode}`, operationId],
+          );
+          await client.query(
+            "UPDATE game.game_sessions SET lifecycle = 'settling', state_version = 9 WHERE id = 'settlement_game'",
+          );
+          await client.query(
+            "UPDATE game.game_sessions SET lifecycle = 'settled', finished_at = now() WHERE id = 'settlement_game'",
+          );
+          if (mode === "unreconciled") {
+            await client.query(
+              "UPDATE economy.coin_operations SET status = 'committed', response_snapshot = '{}', committed_at = now() WHERE id = $1",
+              [operationId],
+            );
+          }
+          await assert.rejects(client.query("COMMIT"), (error: unknown) => {
+            return typeof error === "object" && error !== null && "code" in error && error.code === "23514";
+          });
+        } finally {
+          await client.query("ROLLBACK");
+        }
+      }
+    });
+
+    const unchanged = await pool.query(`
+      SELECT
+        (SELECT lifecycle FROM game.game_sessions WHERE id = 'settlement_game') AS lifecycle,
+        (SELECT count(*)::int FROM economy.game_settlements WHERE game_session_id = 'settlement_game') AS settlements,
+        (SELECT count(*)::int FROM economy.coin_reservations WHERE game_session_id = 'settlement_game' AND status = 'reserved') AS reserved,
+        (SELECT sum(available_coin)::text FROM economy.coin_accounts WHERE user_id LIKE 'settlement_user_%') AS available,
+        (SELECT sum(reserved_coin)::text FROM economy.coin_accounts WHERE user_id LIKE 'settlement_user_%') AS reserved_coin
+    `);
+    assert.deepEqual(unchanged.rows, [{
+      lifecycle: "active",
+      settlements: 0,
+      reserved: 2,
+      available: "1800",
+      reserved_coin: "200",
+    }]);
+  });
+
   it("serializes direct admission inserts with lifecycle cancellation", async () => {
     await pool.query(`
       INSERT INTO game.game_sessions
@@ -504,12 +680,12 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       await cp(resolve(process.cwd(), "src/database/roles/provision.sql"), rolesFile);
       const options = { migrationsDirectory, rolesFile };
 
-      await writeFile(join(migrationsDirectory, "0006-noop.sql"), "SELECT 1;\n");
+      await writeFile(join(migrationsDirectory, "0007-noop.sql"), "SELECT 1;\n");
       await runMigrations(databaseUrl, options);
-      await rm(join(migrationsDirectory, "0006-noop.sql"));
+      await rm(join(migrationsDirectory, "0007-noop.sql"));
       await assert.rejects(runMigrations(databaseUrl, options), /Applied migration files are missing/);
 
-      await writeFile(join(migrationsDirectory, "0006-noop.sql"), "SELECT 1;\n");
+      await writeFile(join(migrationsDirectory, "0007-noop.sql"), "SELECT 1;\n");
       await writeFile(join(migrationsDirectory, "0000-retroactive.sql"), "SELECT 1;\n");
       await assert.rejects(runMigrations(databaseUrl, options), /Retroactive migrations are not allowed/);
       await rm(join(migrationsDirectory, "0000-retroactive.sql"));

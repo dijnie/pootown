@@ -116,6 +116,7 @@ describe("HTTP API contracts", () => {
       checkpointChecksum: "a".repeat(64),
     };
     assert.equal(SettlementRequestSchema.safeParse(settlement).success, true);
+    assert.equal(SettlementRequestSchema.safeParse({ ...settlement, terminalStateVersion: 0 }).success, false);
     assert.equal(SettlementRequestSchema.safeParse({ ...settlement, winnerCoin: "999" }).success, false);
     assert.equal(SettlementRequestSchema.safeParse({ ...settlement, winnerId: "player_2" }).success, false);
   });
