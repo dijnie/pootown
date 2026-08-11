@@ -1,382 +1,154 @@
 "use client";
 
-import React, {
-  createContext,
-  useContext,
-  useCallback,
-  useEffect,
-  useState,
-  ReactNode,
-} from "react";
-import { Address, isSome } from "@solana/kit";
-import { GameEvent } from "@/lib/sdk/types";
-import { useGameEvents } from "@/hooks/useGameEvents";
-import { useWallet } from "@/hooks/use-wallet";
-import { playSound } from "@/lib/soundUtil";
-import { useGameContext } from "./game-provider";
 import {
-  // showTaxPaidToast,
-  // showPlayerPassedGoToast,
-  // showPlayerJoinedToast,
-  // showGameStartedToast,
-  // showChanceCardDrawnToast,
-  // showCommunityChestCardDrawnToast,
-  // showGoToJailToast,
-  // showPropertyPurchasedToast,
-  showGameEndedToast,
-} from "@/lib/toast-utils";
-import { getBoardSpaceData } from "@/lib/board-utils";
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import type {
+  GameplayEventPayload,
+  LifecycleEventPayload,
+  ServerMessage,
+} from "@pootown/game-contracts";
 
-type EventHandler<T = any> = (event: T, context: GameEventContext) => void;
+import { useRoom } from "@/components/providers/room-provider";
+import { playSound } from "@/lib/soundUtil";
+import { showGameEndedToast } from "@/lib/toast-utils";
+
+type DomainPayload = GameplayEventPayload | LifecycleEventPayload;
+type DomainMessage = Extract<ServerMessage, { type: "domain.event" }>;
+type PayloadType = DomainPayload["type"];
 
 interface GameEventContext {
-  signature: string;
-  gameAddress: Address | null;
-  currentPlayerAddress: string | null;
-  isCurrentPlayer: (playerAddress: Address) => boolean;
+  readonly currentPlayerId: string | null;
+  readonly eventId: string;
+  readonly isCurrentPlayer: (playerId: string) => boolean;
 }
 
+type TypedHandler<TType extends PayloadType> = (
+  event: Extract<DomainPayload, { type: TType }>,
+  context: GameEventContext,
+) => void;
+type StoredHandler = (event: DomainPayload, context: GameEventContext) => void;
+
 interface GameEventsContextType {
-  isSubscribed: boolean;
-  lastEvent: GameEvent | null;
-  eventHistory: GameEvent[];
-
-  registerEventHandler: <T extends GameEvent["type"]>(
-    eventType: T,
-    handler: EventHandler<Extract<GameEvent, { type: T }>["data"]>
+  readonly isSubscribed: boolean;
+  readonly lastEvent: DomainMessage | null;
+  readonly eventHistory: readonly DomainMessage[];
+  readonly registerEventHandler: <TType extends PayloadType>(
+    eventType: TType,
+    handler: TypedHandler<TType>,
   ) => () => void;
-
-  clearEventHistory: () => void;
+  readonly clearEventHistory: () => void;
 }
 
 const GameEventsContext = createContext<GameEventsContextType | null>(null);
 
-export const useGameEventsContext = () => {
+export function useGameEventsContext(): GameEventsContextType {
   const context = useContext(GameEventsContext);
-  if (!context) {
-    throw new Error(
-      "useGameEventsContext must be used within GameEventsProvider"
-    );
-  }
+  if (context === null) throw new Error("useGameEventsContext must be used within GameEventsProvider");
   return context;
-};
-
-interface GameEventsProviderProps {
-  children: ReactNode;
 }
 
-export const GameEventsProvider: React.FC<GameEventsProviderProps> = ({
-  children,
-}) => {
-  const { gameAddress, gameState } = useGameContext();
-  const { wallet } = useWallet();
-  const [eventHandlers, setEventHandlers] = useState<
-    Map<string, Set<EventHandler>>
-  >(new Map());
-  const [lastEvent, setLastEvent] = useState<GameEvent | null>(null);
-  const [eventHistory, setEventHistory] = useState<GameEvent[]>([]);
+function isDomainMessage(message: ServerMessage): message is DomainMessage {
+  return message?.type === "domain.event";
+}
 
-  const { isSubscribed } = useGameEvents(gameAddress, {
-    gameData: gameState,
-    onEvent: useCallback(
-      (event: GameEvent) => {
-        console.log("GameEventsProvider received event:", event);
-        setLastEvent(event);
-        setEventHistory((prev) => [...prev, event].slice(-100)); // Keep last 100 events
+export function GameEventsProvider({ children }: { readonly children: ReactNode }) {
+  const room = useRoom();
+  const handlers = useRef(new Map<PayloadType, Set<StoredHandler>>());
+  const seenEventIds = useRef(new Set<string>());
+  const activeGameId = useRef<string | null>(null);
+  const [lastEvent, setLastEvent] = useState<DomainMessage | null>(null);
+  const [eventHistory, setEventHistory] = useState<DomainMessage[]>([]);
 
-        const handlers = eventHandlers.get(event.type);
-
-        if (handlers) {
-          const context: GameEventContext = {
-            gameAddress: gameAddress || null,
-            currentPlayerAddress: wallet?.address || null,
-            isCurrentPlayer: (playerAddress: Address) =>
-              wallet?.address === playerAddress.toString(),
-            signature: event.signature,
-          };
-
-          handlers.forEach((handler) => {
-            try {
-              handler(event.data, context);
-            } catch (error) {
-              console.error(`Error in event handler for ${event.type}:`, error);
-            }
-          });
-        }
-      },
-      [eventHandlers, gameAddress, wallet?.address]
-    ),
-  });
-
-  const registerEventHandler = useCallback(
-    <T extends GameEvent["type"]>(
-      eventType: T,
-      handler: EventHandler<Extract<GameEvent, { type: T }>["data"]>
-    ) => {
-      setEventHandlers((prev) => {
-        const newMap = new Map(prev);
-        if (!newMap.has(eventType)) {
-          newMap.set(eventType, new Set());
-        }
-        newMap.get(eventType)!.add(handler as EventHandler);
-        return newMap;
-      });
-
-      return () => {
-        setEventHandlers((prev) => {
-          const newMap = new Map(prev);
-          const handlers = newMap.get(eventType);
-          if (handlers) {
-            handlers.delete(handler as EventHandler);
-            if (handlers.size === 0) {
-              newMap.delete(eventType);
-            }
-          }
-          return newMap;
-        });
-      };
-    },
-    []
-  );
-
-  const clearEventHistory = useCallback(() => {
-    setEventHistory([]);
-    setLastEvent(null);
+  const registerEventHandler = useCallback(<TType extends PayloadType>(
+    eventType: TType,
+    handler: TypedHandler<TType>,
+  ) => {
+    const stored: StoredHandler = (event, context) => {
+      if (event.type === eventType) handler(event as Extract<DomainPayload, { type: TType }>, context);
+    };
+    const typeHandlers = handlers.current.get(eventType) ?? new Set<StoredHandler>();
+    typeHandlers.add(stored);
+    handlers.current.set(eventType, typeHandlers);
+    return () => {
+      typeHandlers.delete(stored);
+      if (typeHandlers.size === 0) handlers.current.delete(eventType);
+    };
   }, []);
 
   useEffect(() => {
-    const unsubscribeTaxPaid = registerEventHandler(
-      "TaxPaid",
-      (data, context) => {
-        // showTaxPaidToast({
-        //   isCurrentPlayer: context.isCurrentPlayer(data.player),
-        //   playerAddress: data.player.toString(),
-        //   taxType: data.taxType,
-        //   amount: data.amount,
-        //   position: data.position,
-        // });
+    const nextGameId = room.state?.gameId ?? null;
+    if (activeGameId.current === nextGameId) return;
+    activeGameId.current = nextGameId;
+    seenEventIds.current.clear();
+    setLastEvent(null);
+    setEventHistory([]);
+  }, [room.state?.gameId]);
 
-        // Play money pay sound for tax
-        if (context.isCurrentPlayer(data.player)) {
-          playSound("money-pay", 0.6);
+  useEffect(() => {
+    const events = room.messages.filter(isDomainMessage).filter((event) => !seenEventIds.current.has(event.eventId));
+    if (events.length === 0) return;
+    for (const event of events) {
+      seenEventIds.current.add(event.eventId);
+      const context: GameEventContext = {
+        currentPlayerId: room.playerId,
+        eventId: event.eventId,
+        isCurrentPlayer: (playerId) => playerId === room.playerId,
+      };
+      for (const handler of handlers.current.get(event.payload.type) ?? []) {
+        try {
+          handler(event.payload, context);
+        } catch {
+          // UI effects cannot alter authoritative room state or event delivery.
         }
       }
-    );
-
-    const unsubscribePlayerPassedGo = registerEventHandler(
-      "PlayerPassedGo",
-      (data, context) => {
-        if (context.isCurrentPlayer(data.player)) {
-          // showPlayerPassedGoToast({
-          //   salaryCollected: data.salaryCollected,
-          // });
-
-          playSound("money-receive");
-        }
+      const payload = event.payload;
+      if (payload.type === "playerJoined") playSound("player-join", 0.5);
+      if (payload.type === "gameStarted") playSound("game-start", 0.4);
+      if (payload.type === "jailEntered") playSound("jail", 0.7);
+      if (payload.type === "propertyPurchased") playSound("property-buy", 0.3);
+      if (payload.type === "buildingBuilt") playSound(payload.buildingType === "hotel" ? "hotel-build" : "house-build", 0.4);
+      if (payload.type === "buildingSold") playSound("building-sell", 0.4);
+      if (payload.type === "rentPaid") {
+        if (context.isCurrentPlayer(payload.payerId)) playSound("money-pay", 0.6);
+        if (context.isCurrentPlayer(payload.ownerId)) playSound("money-receive", 0.6);
       }
-    );
-
-    const unsubscribePlayerJoined = registerEventHandler(
-      "PlayerJoined",
-      (data, context) => {
-        // Show toast for everyone except the player who joined
-        // if (!context.isCurrentPlayer(data.player)) {
-        //   showPlayerJoinedToast({
-        //     playerAddress: data.player,
-        //     playerIndex: data.playerIndex,
-        //     totalPlayers: data.totalPlayers,
-        //   });
-        // }
-
-        // Play sound for ALL players in lobby (including the one who joined)
-        playSound("player-join", 0.5);
-      }
-    );
-
-    const unsubscribeGameStarted = registerEventHandler(
-      "GameStarted",
-      (data) => {
-        // showGameStartedToast({
-        //   totalPlayers: data.totalPlayers,
-        //   firstPlayer: data.firstPlayer,
-        // });
-
-        // Play game start sound for all players
-        playSound("game-start", 0.4);
-      }
-    );
-
-    const unsubscribeChanceCard = registerEventHandler(
-      "ChanceCardDrawn",
-      (data, context) => {
-        if (!context.isCurrentPlayer(data.player)) {
-          // showChanceCardDrawnToast({
-          //   playerAddress: data.player,
-          //   cardIndex: data.cardIndex,
-          //   isCurrentPlayer: context.isCurrentPlayer(data.player),
-          // });
-        }
-      }
-    );
-
-    const unsubscribeCommunityChestCard = registerEventHandler(
-      "CommunityChestCardDrawn",
-      (data, context) => {
-        if (!context.isCurrentPlayer(data.player)) {
-          // showCommunityChestCardDrawnToast({
-          //   playerAddress: data.player,
-          //   cardIndex: data.cardIndex,
-          //   isCurrentPlayer: context.isCurrentPlayer(data.player),
-          // });
-        }
-      }
-    );
-
-    const unsubscribeSpecialSpaceAction = registerEventHandler(
-      "SpecialSpaceAction",
-      (data, context) => {
-        if (data.spaceType === 2) {
-          // showGoToJailToast({
-          //   playerAddress: data.player,
-          //   isCurrentPlayer: context.isCurrentPlayer(data.player),
-          // });
-
-          // Play jail sound for all players
-          playSound("jail", 0.7);
-        }
-      }
-    );
-
-    const unsubscribePropertyPurchased = registerEventHandler(
-      "PropertyPurchased",
-      (data, context) => {
-        const propertyData = getBoardSpaceData(data.propertyPosition);
-        const propertyName =
-          propertyData?.name || `Property ${data.propertyPosition}`;
-
-        const isCurrentPlayer = context.isCurrentPlayer(data.player);
-
-        // showPropertyPurchasedToast({
-        //   propertyName,
-        //   price: data.price,
-        //   isCurrentPlayer,
-        //   playerAddress: isCurrentPlayer ? undefined : data.player,
-        // });
-
-        // Play property buy sound for all players
-        if (!isCurrentPlayer) {
-          playSound("property-buy", 0.3);
-        }
-      }
-    );
-
-    const unsubscribeRentPaid = registerEventHandler(
-      "RentPaid",
-      (data, context) => {
-        // Play rent payment sound for payer
-        if (context.isCurrentPlayer(data.payer)) {
-          playSound("money-pay", 0.6);
-        }
-        // Play money receive sound for owner
-        else if (context.isCurrentPlayer(data.owner)) {
-          playSound("money-receive", 0.6);
-        }
-      }
-    );
-
-    const unsubscribeHouseBuilt = registerEventHandler(
-      "HouseBuilt",
-      (data, context) => {
-        // Play house build sound for all players
-        if (!context.isCurrentPlayer(data.player)) {
-          playSound("house-build", 0.4);
-        }
-      }
-    );
-
-    const unsubscribeHotelBuilt = registerEventHandler(
-      "HotelBuilt",
-      (data, context) => {
-        // Play hotel build sound for all players
-        if (!context.isCurrentPlayer(data.player)) {
-          playSound("hotel-build", 0.4);
-        }
-      }
-    );
-
-    const unsubscribeBuildingSold = registerEventHandler(
-      "BuildingSold",
-      (data, context) => {
-        // Play building sell sound for all players
-        if (!context.isCurrentPlayer(data.player)) {
-          playSound("building-sell", 0.4);
-        }
-      }
-    );
-
-    const unsubscribePlayerBankrupt = registerEventHandler(
-      "PlayerBankrupt",
-      (data, context) => {
-        // Play lose sound when a player goes bankrupt
-        if (context.isCurrentPlayer(data.player)) {
-          playSound("lose", 0.8);
-        } else {
-          // Other players hear a lighter sound
-          playSound("bruh", 0.3);
-        }
-      }
-    );
-
-    const unsubscribeGameEnded = registerEventHandler(
-      "GameEnded",
-      (data, context) => {
-        const winner = isSome(data.winner) ? data.winner.value : null;
-
+      if (payload.type === "playerBankrupt") playSound(context.isCurrentPlayer(payload.playerId) ? "lose" : "bruh", 0.4);
+      if (payload.type === "gameEnded") {
+        const winner = payload.winnerId;
         showGameEndedToast({
           winner,
-          reason: data.reason,
-          winnerNetWorth: Number(data.winnerNetWorth),
-          currentPlayerAddress: context.currentPlayerAddress,
+          reason: payload.reason === "timeLimit" ? 1 : 0,
+          winnerNetWorth: payload.ranking[0]?.netWorth ?? "0",
+          currentPlayerAddress: room.playerId,
         });
-
-        const isWinner =
-          winner &&
-          context.currentPlayerAddress &&
-          winner === context.currentPlayerAddress;
-        playSound(isWinner ? "money-receive" : "button-click");
+        playSound(context.isCurrentPlayer(winner) ? "money-receive" : "button-click");
       }
-    );
+    }
+    setLastEvent(events.at(-1) ?? null);
+    setEventHistory((history) => [...history, ...events].slice(-100));
+  }, [room.messages, room.playerId]);
 
-    return () => {
-      unsubscribeTaxPaid();
-      unsubscribePlayerPassedGo();
-      unsubscribePlayerJoined();
-      unsubscribeGameStarted();
-      unsubscribeChanceCard();
-      unsubscribeCommunityChestCard();
-      unsubscribeSpecialSpaceAction();
-      unsubscribePropertyPurchased();
-      unsubscribeRentPaid();
-      unsubscribeHouseBuilt();
-      unsubscribeHotelBuilt();
-      unsubscribeBuildingSold();
-      unsubscribePlayerBankrupt();
-      unsubscribeGameEnded();
-    };
-  }, [registerEventHandler]);
+  const clearEventHistory = useCallback(() => {
+    setLastEvent(null);
+    setEventHistory([]);
+    seenEventIds.current.clear();
+  }, []);
 
-  const contextValue: GameEventsContextType = {
-    isSubscribed,
+  const value = useMemo<GameEventsContextType>(() => ({
+    isSubscribed: room.status === "connected",
     lastEvent,
     eventHistory,
-    // @ts-expect-error
     registerEventHandler,
     clearEventHistory,
-  };
+  }), [clearEventHistory, eventHistory, lastEvent, registerEventHandler, room.status]);
 
-  return (
-    <GameEventsContext.Provider value={contextValue}>
-      {children}
-    </GameEventsContext.Provider>
-  );
-};
+  return <GameEventsContext.Provider value={value}>{children}</GameEventsContext.Provider>;
+}

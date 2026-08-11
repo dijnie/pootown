@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { showGameEndedToast } from "@/lib/toast-utils";
-import { GameEndReason } from "@/lib/sdk/generated";
+import { GameEndReason } from "@/types/schema";
 
 export function DebugUI() {
   const { leaveGame } = useGameContext();

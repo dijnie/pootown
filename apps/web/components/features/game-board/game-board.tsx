@@ -33,14 +33,10 @@ import {
   GoToJailCorner,
   JailCorner,
 } from "./corner-spaces";
-import { useWallet } from "@/hooks/use-wallet";
-import { Button } from "@/components/ui/button";
-import { RotateCw, RotateCcw } from "lucide-react";
 import { GameLogs } from "./game-logs";
 import { useRouter } from "next/navigation";
-import { GameStatus } from "@/lib/sdk/generated";
+import { GameStatus } from "@/types/schema";
 import { ClaimRewardButton } from "./claim-reward-button";
-import { useLogin } from "@privy-io/react-auth";
 
 interface MonopolyBoardProps {
   boardRotation: number;
@@ -50,14 +46,11 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
   const [isLoading, setIsLoading] = useState<string | null>(null);
   // const [boardRotation, setBoardRotation] = useState<number>(0);
 
-  const { ready, authenticated, wallet } = useWallet();
-  const { login } = useLogin();
-  const disableLogin = !ready || (ready && authenticated);
-
   const router = useRouter();
 
   const {
     gameState,
+    ownPlayerId,
     players,
     properties,
     currentPlayerState,
@@ -67,36 +60,24 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
     setCardDrawType,
     // Actions
     startGame,
-    joinGame,
     endTurn,
     buyProperty,
     skipProperty,
     payMevTax,
     payPriorityFeeTax,
     payJailFine,
-    useGetOutOfJailCard,
+    useGetOutOfJailCard: getOutOfJail,
     endGame,
     cancelGame,
     leaveGame,
   } = useGameContext();
 
-  const handleStartGame = async (_gameAddress: string) => {
+  const handleStartGame = async () => {
     try {
       setIsLoading("startGame");
       await startGame();
     } catch (error) {
       console.error("Failed to start game:", error);
-    } finally {
-      setIsLoading(null);
-    }
-  };
-
-  const handleJoinGame = async (_gameAddress: string) => {
-    try {
-      setIsLoading("joinGame");
-      await joinGame();
-    } catch (error) {
-      console.error("Failed to join game:", error);
     } finally {
       setIsLoading(null);
     }
@@ -171,7 +152,7 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
   const handleGetOutOfJailCard = async () => {
     setIsLoading("getOutOfJailCard");
     try {
-      await useGetOutOfJailCard();
+      await getOutOfJail();
     } catch (error) {
       console.error("Failed to get out of jail card:", error);
     } finally {
@@ -287,11 +268,11 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
                 ) : (
                   <>
                     <div className="flex-1 w-full flex flex-col items-center justify-end">
-                      {wallet && wallet?.delegated ? (
+                      {ownPlayerId !== null ? (
                         <DiceProvider>
                           <PlayerActions
+                            playerId={ownPlayerId}
                             handleStartGame={handleStartGame}
-                            handleJoinGame={handleJoinGame}
                             handleEndTurn={handleEndTurn}
                             handleBuyProperty={handleBuyProperty}
                             handleSkipProperty={handleSkipProperty}
@@ -303,13 +284,10 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
                             handleCancelGame={handleCancelGame}
                             handleLeaveGame={handleLeaveGame}
                             isLoading={isLoading}
-                            wallet={wallet}
                           />
                         </DiceProvider>
                       ) : (
-                        <Button disabled={disableLogin} onClick={login}>
-                          Connect Wallet
-                        </Button>
+                        <p className="text-sm font-semibold text-muted-foreground">Player admission unavailable</p>
                       )}
                     </div>
                     {/* game-logs */}

@@ -1,164 +1,71 @@
 "use client";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import type { SessionView } from "@pootown/game-contracts";
+
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Eye } from "lucide-react";
-import { GameAccount } from "@/types/schema";
-import { GameStatus } from "@/lib/sdk/generated";
-import {
-  formatAddress,
-  formatNumber,
-  formatPrice,
-  formatTimeAgo,
-  lamportsToSol,
-} from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { formatAddress, formatTimeAgo } from "@/lib/utils";
 
 interface GameItemProps {
-  game: GameAccount;
-  onJoinGame: (game: GameAccount) => void;
-  onSpectateGame: (gameId: string) => void;
-  joining: boolean;
-  isWalletConnected: boolean;
+  readonly game: SessionView;
+  readonly joining: boolean;
+  readonly onJoinGame: (game: SessionView) => void;
 }
 
-export function GameItem({
-  game,
-  onJoinGame,
-  onSpectateGame,
-  joining,
-  isWalletConnected,
-}: GameItemProps) {
-  const getGameStatusBadge = (status: GameStatus) => {
-    switch (status) {
-      case GameStatus.WaitingForPlayers:
-        return (
-          <Badge variant="default" className="bg-green-500 text-white">
-            WAITING FOR PLAYERS
-          </Badge>
-        );
-      case GameStatus.InProgress:
-        return (
-          <Badge variant="neutral" className="bg-gray-500 text-white">
-            IN-PLAY
-          </Badge>
-        );
-      case GameStatus.Finished:
-        return (
-          <Badge variant="neutral" className="bg-red-500 text-white">
-            FINISHED
-          </Badge>
-        );
-      default:
-        return <Badge variant="neutral">UNKNOWN</Badge>;
-    }
-  };
+function lifecycleBadge(game: SessionView) {
+  if (game.lifecycle === "open") {
+    return <Badge className="bg-green-500 text-white">WAITING FOR PLAYERS</Badge>;
+  }
+  if (game.lifecycle === "active" || game.lifecycle === "recoveryRequired") {
+    return <Badge variant="neutral" className="bg-gray-500 text-white">IN PLAY</Badge>;
+  }
+  if (game.lifecycle === "settled") {
+    return <Badge variant="neutral" className="bg-red-500 text-white">FINISHED</Badge>;
+  }
+  return <Badge variant="neutral">{game.lifecycle.toUpperCase()}</Badge>;
+}
 
-  const getPlayerAvatars = (players: string[], maxPlayers: number) => {
-    const avatars = [];
+function formatCoin(value: string): string {
+  return new Intl.NumberFormat("en-US").format(BigInt(value));
+}
 
-    for (let i = 0; i < players.length; i++) {
-      const player = players[i];
-      avatars.push(
-        <Avatar
-          key={player}
-          className="w-10 h-10 sm:w-12 sm:h-12 border-2 border-white"
-        >
-          <AvatarImage walletAddress={player} />
-          <AvatarFallback
-            walletAddress={player}
-            className="bg-blue-500 text-white text-xs sm:text-sm"
-          >
-            {player.slice(0, 2).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-      );
-    }
-
-    for (let i = players.length; i < maxPlayers; i++) {
-      avatars.push(
-        <Avatar
-          key={`empty-${i}`}
-          className="w-10 h-10 sm:w-12 sm:h-12 border-2 border-gray-300 bg-gray-100"
-        >
-          <AvatarFallback className="bg-gray-200 text-gray-400 text-xs sm:text-sm">
-            ?
-          </AvatarFallback>
-        </Avatar>
-      );
-    }
-
-    return avatars;
-  };
-
+export function GameItem({ game, joining, onJoinGame }: GameItemProps) {
   return (
     <Card className="bg-chart-3">
       <CardContent className="p-4 sm:p-6">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 flex-1">
-            <div className="flex items-center gap-3">
-              <div className="flex -space-x-2">
-                {getPlayerAvatars(game.players, game.maxPlayers)}
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-base sm:text-lg font-semibold text-foreground">
-                  {game.entryFee > 0
-                    ? `◎ ${formatNumber(lamportsToSol(Number(game.entryFee)))}`
-                    : "FREE"}
-                </span>
-              </div>
-
-              {/* Game status */}
-              {getGameStatusBadge(game.gameStatus)}
-            </div>
-          </div>
-
-          {/* Right side - Action buttons */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            {game.gameStatus === GameStatus.WaitingForPlayers &&
-              isWalletConnected && (
-                <Button
-                  onClick={() => onJoinGame(game)}
-                  // className="bg-green-500 hover:bg-green-600 text-white px-4 sm:px-6 flex-1 sm:flex-none"
-                  loading={joining}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-1 flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+            <div className="flex -space-x-2" aria-label={`${game.currentPlayers} joined players`}>
+              {Array.from({ length: game.maximumPlayers }, (_, seat) => (
+                <div
+                  key={seat}
+                  className={`flex h-10 w-10 items-center justify-center rounded-full border-2 border-white text-sm font-bold sm:h-12 sm:w-12 ${seat < game.currentPlayers ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-400"}`}
                 >
-                  Join
-                </Button>
-              )}
-
-            <Button
-              variant="neutral"
-              size="icon"
-              onClick={() => onSpectateGame(game.address)}
-              className="w-10 h-10 flex-shrink-0"
-            >
-              <Eye className="w-4 h-4" />
-            </Button>
+                  {seat < game.currentPlayers ? seat + 1 : "?"}
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+              <span className="break-all text-base font-semibold text-foreground sm:text-lg">
+                {game.entryCoin === "0" ? "FREE" : `${formatCoin(game.entryCoin)} ACCOUNT COIN`}
+              </span>
+              {lifecycleBadge(game)}
+            </div>
           </div>
+          {game.lifecycle === "open" && game.currentPlayers < game.maximumPlayers && (
+            <Button onClick={() => onJoinGame(game)} loading={joining}>
+              Join
+            </Button>
+          )}
         </div>
-
-        <div className="mt-4 pt-4 border-t border-border">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 text-sm">
-            <div className="flex flex-row xs:items-center gap-2 xs:gap-4">
-              <span className="font-medium">
-                Players: {game.currentPlayers}/{game.maxPlayers}
-              </span>
-              <span className="text-muted-foreground">
-                Game ID: {formatAddress(game.address)}
-              </span>
-              {/* {game.timeLimit && (
-                <span className="text-muted-foreground">
-                  Time Limit: {Number(game.timeLimit) / 60}min
-                </span>
-              )} */}
+        <div className="mt-4 border-t border-border pt-4">
+          <div className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div className="flex flex-row gap-2 xs:items-center xs:gap-4">
+              <span className="font-medium">Players: {game.currentPlayers}/{game.maximumPlayers}</span>
+              <span className="text-muted-foreground">Game ID: {formatAddress(game.gameId)}</span>
             </div>
-            <div>
-              Created: {formatTimeAgo(new Date(Number(game.createdAt) * 1000))}
-            </div>
+            <div>Created: {formatTimeAgo(new Date(game.createdAtMs))}</div>
           </div>
         </div>
       </CardContent>

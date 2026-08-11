@@ -1,20 +1,29 @@
-// Imports: add useState
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import GameBoard from "./game-board";
 
 import { useGameContext } from "@/components/providers/game-provider";
 import { useParams } from "next/navigation";
-import { address } from "@solana/kit";
+import { usePrivy } from "@privy-io/react-auth";
 import { LeftPanel } from "./left-panel";
 import { RightPanel } from "./right-panel";
 import { Spinner } from "@/components/ui/spinner";
+import { Button } from "@/components/ui/button";
+import { useApi } from "@/components/providers/api-provider";
+import { useRoom } from "@/components/providers/room-provider";
+import { GameIdSchema } from "@pootown/game-contracts";
 
 export function GameView() {
   const { address: gameAddress } = useParams<{ address: string }>();
+  const { authenticated, login, ready } = usePrivy();
+  const { sessions } = useApi();
+  const room = useRoom();
+  const { connect, disconnect, state: roomState, status: roomStatus } = room;
   const { setGameAddress, gameState, gameLoading, gameError } =
     useGameContext();
+  const [reconnectError, setReconnectError] = useState<Error | null>(null);
+  const reconnectKey = useRef(crypto.randomUUID());
 
   // Board rotation state lifted here
   const [boardRotation, setBoardRotation] = useState<number>(0);
@@ -29,11 +38,41 @@ export function GameView() {
 
   useEffect(() => {
     if (gameAddress) {
-      setGameAddress(address(gameAddress));
+      setGameAddress(gameAddress);
     }
-  }, [gameAddress]);
+  }, [gameAddress, setGameAddress]);
 
-  if (gameLoading || !gameState) {
+  useEffect(() => {
+    const parsedGameId = GameIdSchema.safeParse(gameAddress);
+    if (!parsedGameId.success || !ready || !authenticated || roomStatus === "connecting") return;
+    if (roomState?.gameId === parsedGameId.data) return;
+    let active = true;
+    void sessions.reconnect(parsedGameId.data, { idempotencyKey: reconnectKey.current })
+      .then((admission) => connect(admission))
+      .then(() => active && setReconnectError(null))
+      .catch((error: unknown) => {
+        if (active) setReconnectError(error instanceof Error ? error : new Error("Unable to reconnect"));
+      });
+    return () => {
+      active = false;
+    };
+  }, [authenticated, connect, gameAddress, ready, roomState?.gameId, roomStatus, sessions]);
+
+  useEffect(() => () => {
+    void disconnect();
+  }, [disconnect]);
+
+  const parsedGameId = GameIdSchema.safeParse(gameAddress);
+
+  if (!parsedGameId.success) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <p>Invalid game link.</p>
+      </div>
+    );
+  }
+
+  if (!ready || (authenticated && (gameLoading || !gameState))) {
     return (
       <div className="h-screen w-full flex items-center justify-center">
         <Spinner variant="bars" />
@@ -41,11 +80,19 @@ export function GameView() {
     );
   }
 
-  if (gameError) {
+  if (!authenticated) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Button onClick={login}>Sign in to reconnect</Button>
+      </div>
+    );
+  }
+
+  if (gameError || reconnectError) {
     return (
       <div className="h-screen w-full flex items-center justify-center">
         <div id="error">
-          <p>ERROR: {gameError?.message}</p>
+          <p>ERROR: {(gameError ?? reconnectError)?.message}</p>
         </div>
       </div>
     );

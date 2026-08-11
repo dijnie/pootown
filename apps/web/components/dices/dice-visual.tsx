@@ -18,7 +18,7 @@ const DiceFace: React.FC<DiceFaceProps> = ({ value, className }) => (
 interface SingleDiceProps {
   diceNumber: 1 | 2;
   value: number;
-  diceRef: React.RefObject<HTMLDivElement>;
+  diceRef: React.RefObject<HTMLDivElement | null>;
   isRolling: boolean;
   isThrowAnimation: boolean;
 }

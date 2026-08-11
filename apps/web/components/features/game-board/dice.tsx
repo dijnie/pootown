@@ -67,7 +67,7 @@ export const DiceProvider: React.FC<{ children: React.ReactNode }> = ({
       dice2Ref.current.style.transform = "rotate3d(0, 0.9, 0.9, 120deg)";
     }
 
-    // Call Solana program to roll dice
+    // Submit the intent; the room owns dice generation and publishes the result.
     try {
       await rollDice(demoDices ? demoDices : undefined);
       await new Promise((resolve) => setTimeout(resolve, 6000));

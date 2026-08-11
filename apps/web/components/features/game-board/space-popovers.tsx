@@ -14,8 +14,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { PropertyAccount } from "@/types/schema";
-import { address, Address } from "@solana/kit";
-import { cn, formatAddress, formatPrice } from "@/lib/utils";
+import { canAffordMatchCash, cn, formatAddress, formatPrice } from "@/lib/utils";
 import {
   Building2,
   ChevronDown,
@@ -28,13 +27,13 @@ import {
   RailroadSpace,
   UtilitySpace,
   TaxSpace,
+  type BoardSpace,
   colorMap,
 } from "@/configs/board-data";
 import { getBoardSide, hasColorGroupMonopoly } from "@/lib/board-utils";
-import { useWallet } from "@/hooks/use-wallet";
 import { useGameContext } from "@/components/providers/game-provider";
 import { Button } from "@/components/ui/button";
-import { BuildingType } from "@/lib/sdk/generated";
+import { BuildingType } from "@/types/schema";
 import { toast } from "sonner";
 
 interface BasePopoverProps {
@@ -42,8 +41,8 @@ interface BasePopoverProps {
   property?: PropertyAccount | null;
 }
 
-const getOwner = (property?: PropertyAccount | null): Address | null => {
-  return !!property && property.owner ? address(property.owner) : null;
+const getOwner = (property?: PropertyAccount | null): string | null => {
+  return property?.owner ?? null;
 };
 
 // Property popover props
@@ -56,13 +55,13 @@ export const PropertyPopover: React.FC<PropertyPopoverProps> = ({
   propertyData,
   property,
 }) => {
-  const { wallet } = useWallet();
   const {
     buildHouse,
     buildHotel,
     sellBuilding,
     properties,
     currentPlayerState,
+    ownPlayerId,
   } = useGameContext();
 
   const [isLoading, setIsLoading] = useState<string | null>(null);
@@ -74,7 +73,7 @@ export const PropertyPopover: React.FC<PropertyPopoverProps> = ({
   const color = colorMap[propertyData.colorGroup];
   const side = getBoardSide(propertyData.position);
 
-  const isOwnedByCurrentPlayer = owner === wallet?.address;
+  const isOwnedByCurrentPlayer = owner === ownPlayerId;
 
   const hasMonopoly =
     currentPlayerState && isOwnedByCurrentPlayer
@@ -85,14 +84,13 @@ export const PropertyPopover: React.FC<PropertyPopoverProps> = ({
         )
       : false;
 
-  const playerBalance = currentPlayerState
-    ? Number(currentPlayerState.cashBalance)
-    : 0;
   const houseCost = propertyData.houseCost || 0;
   const hotelCost = propertyData.hotelCost || propertyData.houseCost || 0;
 
-  const hasEnoughForHouse = playerBalance >= houseCost;
-  const hasEnoughForHotel = playerBalance >= hotelCost;
+  const hasEnoughForHouse = currentPlayerState !== null &&
+    canAffordMatchCash(currentPlayerState.cashBalance, houseCost);
+  const hasEnoughForHotel = currentPlayerState !== null &&
+    canAffordMatchCash(currentPlayerState.cashBalance, hotelCost);
 
   const canBuildHouse =
     hasMonopoly && !hasHotel && houses < 4 && !isMortgaged && hasEnoughForHouse;
@@ -260,8 +258,6 @@ export const PropertyPopover: React.FC<PropertyPopoverProps> = ({
         className="p-0 border-0 bg-transparent shadow-lg w-auto"
         onOpenAutoFocus={(event) => {
           event.preventDefault();
-          // @ts-expect-error
-          event.target.focus();
         }}
       >
         <Card className="w-60 lg:w-64 bg-white border-2 gap-0 border-black py-0 rounded-none overflow-hidden">
@@ -676,7 +672,7 @@ export const TaxPopover: React.FC<TaxPopoverProps> = ({
 
 // Special Space Popover Component (GO, Jail, Free Parking, etc.)
 interface SpecialPopoverProps extends BasePopoverProps {
-  propertyData: any;
+  propertyData: BoardSpace;
 }
 
 export const SpecialPopover: React.FC<SpecialPopoverProps> = ({

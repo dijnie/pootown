@@ -24,7 +24,7 @@ export default function HeroSection() {
         <div className="mb-7 animate-[slide-in-top_0.8s_ease-out] animate-fill-both">
           <div className="bg-[#ff0080] border-4 border-black shadow-[7px_7px_0_#000] px-6 py-3 inline-block hover:shadow-[11px_11px_0_#000] hover:-translate-y-1 hover:rotate-2 transition-all duration-300 cursor-pointer">
             <span className="text-white font-black text-sm md:text-lg uppercase tracking-wider">
-              ⚡ BETA V1.0 - LIVE ON DEVNET
+              ⚡ BETA V1.0 - REALTIME MULTIPLAYER
             </span>
           </div>
         </div>
@@ -34,9 +34,9 @@ export default function HeroSection() {
             MONOPOLY
           </span>
           <span className="block text-black hover:text-[#9945ff] transition-colors duration-300 animate-[slide-in-left_0.9s_ease-out] animate-fill-both cursor-pointer">
-            ON{" "}
+            IN{" "}
             <span className="inline-block bg-[#14f195] px-3 lg:px-4 border-4 lg:border-5 border-black shadow-[6px_6px_0_#000] lg:shadow-[7px_7px_0_#000] hover:shadow-[9px_9px_0_#000] hover:-translate-y-2 transition-all duration-300">
-              SOLANA
+              REALTIME
             </span>
           </span>
         </h1>
@@ -44,14 +44,14 @@ export default function HeroSection() {
         <div className="bg-[#ffed00] text-black border-4 lg:border-5 border-black shadow-[9px_9px_0_#000] lg:shadow-[12px_12px_0_#000] px-6 lg:px-7 py-6 lg:py-7 mb-9 lg:mb-11 hover:shadow-[13px_13px_0_#000] lg:hover:shadow-[18px_18px_0_#000] hover:-translate-y-3 hover:rotate-1 transition-all duration-500 animate-[slide-in-right_0.8s_ease-out_0.3s] animate-fill-both group cursor-pointer relative overflow-hidden">
           <div className="absolute inset-0 bg-[#ff0080] translate-x-full group-hover:translate-x-0 transition-transform duration-700" />
           <p className="text-lg md:text-xl lg:text-2xl font-black uppercase leading-tight relative z-10 group-hover:text-black transition-colors duration-700">
-            Classic Monopoly meets Solana speed—Buy NFTs, Earn SOL, Crush
-            opponents in decentralized chaos! 🎲
+            Classic property strategy meets fast authoritative rooms—buy,
+            trade, collect rent, and outlast your opponents! 🎲
           </p>
         </div>
 
         <Link href="/lobby">
           <button className="bg-[#9945ff] text-white border-4 lg:border-5 border-black shadow-[11px_11px_0_#000] lg:shadow-[14px_14px_0_#000] px-7 lg:px-9 py-5 lg:py-6 text-xl md:text-2xl lg:text-3xl font-black uppercase max-w-fit transition-all duration-500 hover:bg-[#14f195] hover:text-black hover:scale-110 hover:rotate-3 hover:shadow-[16px_16px_0_#000] lg:hover:shadow-[20px_20px_0_#000] active:scale-95 active:shadow-[7px_7px_0_#000] lg:active:shadow-[9px_9px_0_#000] animate-[slide-in-bottom_0.8s_ease-out_0.5s] animate-fill-both group relative overflow-hidden">
-            <span className="relative z-10">🚀 CONNECT WALLET & PLAY</span>
+            <span className="relative z-10">🚀 SIGN IN & PLAY</span>
             <div className="absolute inset-0 bg-[#ff0080] translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
           </button>
         </Link>
@@ -107,15 +107,15 @@ export default function HeroSection() {
                 </AvatarFallback>
               </Avatar>
               <span className="text-3xl md:text-5xl font-black uppercase text-black mx-8 [text-shadow:4px_4px_0_rgba(255,255,255,0.5)]">
-                WIN SOL
+                WIN THE MATCH
               </span>
               <Avatar className="w-12 h-12 md:w-16 md:h-16 border-4 border-black shadow-[4px_4px_0_#000] mx-8 shrink-0">
-                <AvatarImage walletAddress="WinSol1111111111111111111111111111111111" />
+                <AvatarImage walletAddress="WinMatch11111111111111111111111111111111" />
                 <AvatarFallback
-                  walletAddress="WinSol1111111111111111111111111111111111"
+                  walletAddress="WinMatch11111111111111111111111111111111"
                   className="bg-[#ff0080] text-black text-xl font-black"
                 >
-                  WS
+                  WM
                 </AvatarFallback>
               </Avatar>
             </div>

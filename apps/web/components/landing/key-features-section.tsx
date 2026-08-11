@@ -6,21 +6,21 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 export default function KeyFeaturesSection() {
   const features = [
     {
-      walletAddress: "MagicBlock1111111111111111111111111111111",
-      title: "MAGICBLOCK",
-      desc: "Lightning-fast gameplay powered by MagicBlock's ephemeral rollups for instant transactions",
+      walletAddress: "RealtimeRooms1111111111111111111111111111",
+      title: "REALTIME ROOMS",
+      desc: "Fast authoritative multiplayer rooms keep every player on the same verified turn state",
       color: "#9945ff",
     },
     {
-      walletAddress: "Indexer11111111111111111111111111111111",
-      title: "INDEXER",
-      desc: "Real-time game state tracking with advanced indexing for seamless multiplayer experience",
+      walletAddress: "Recovery1111111111111111111111111111111",
+      title: "SAFE RECOVERY",
+      desc: "Durable checkpoints let active games reconnect without trusting stale browser state",
       color: "#14f195",
     },
     {
-      walletAddress: "Solana111111111111111111111111111111111",
-      title: "SOLANA",
-      desc: "Built on Solana for ultra-low fees and blazing-fast transactions. Play without breaking the bank",
+      walletAddress: "AccountCoin11111111111111111111111111111",
+      title: "ACCOUNT COIN",
+      desc: "Simple in-app account coin powers game admission without wallet signatures or transaction fees",
       color: "#ffed00",
     },
   ];

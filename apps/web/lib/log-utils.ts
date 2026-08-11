@@ -1,10 +1,9 @@
-import { Address } from "@solana/kit";
 import { getBoardSpaceData } from "./board-utils";
 import { surpriseCards, treasureCards } from "@/configs/board-data";
 import { formatAddress } from "./utils";
 import { GameLogEntry } from "@/types/space-types";
 
-export const getPlayerDisplayName = (address: Address): string => {
+export const getPlayerDisplayName = (address: string): string => {
   // For now, just use formatted address
   // In the future, this could check for ENS names or custom player names
   return formatAddress(address);

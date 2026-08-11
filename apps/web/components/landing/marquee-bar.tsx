@@ -45,15 +45,15 @@ export default function MarqueeBar() {
               </AvatarFallback>
             </Avatar>
             <span className="text-3xl md:text-5xl font-black uppercase text-black mx-8 [text-shadow:4px_4px_0_rgba(255,255,255,0.5)]">
-              WIN SOL
+              WIN THE MATCH
             </span>
             <Avatar className="w-12 h-12 md:w-16 md:h-16 border-4 border-black shadow-[4px_4px_0_#000] mx-8 shrink-0">
-              <AvatarImage walletAddress="WinSol1111111111111111111111111111111111" />
+              <AvatarImage walletAddress="WinMatch11111111111111111111111111111111" />
               <AvatarFallback
-                walletAddress="WinSol1111111111111111111111111111111111"
+                walletAddress="WinMatch11111111111111111111111111111111"
                 className="bg-[#ff0080] text-black text-xl font-black"
               >
-                WS
+                WM
               </AvatarFallback>
             </Avatar>
           </div>

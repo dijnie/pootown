@@ -9,8 +9,8 @@ export default function HowItWorksSection() {
   const steps = [
     {
       num: "01",
-      title: "CONNECT WALLET",
-      desc: "Link your Solana wallet to start playing",
+      title: "SIGN IN",
+      desc: "Use your Poo Town account to start playing",
       color: "#ff0080",
     },
     {
@@ -22,13 +22,13 @@ export default function HowItWorksSection() {
     {
       num: "03",
       title: "BUY PROPERTIES",
-      desc: "Purchase NFT properties with SOL",
+      desc: "Buy in-match properties with your match cash",
       color: "#14f195",
     },
     {
       num: "04",
       title: "COLLECT RENT",
-      desc: "Earn SOL when opponents land on your properties",
+      desc: "Collect in-match cash when opponents land on your properties",
       color: "#ffed00",
     },
   ];

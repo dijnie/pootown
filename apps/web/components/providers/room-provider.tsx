@@ -14,6 +14,7 @@ import type {
   AdmissionResponse,
   CommandAcknowledgement,
   RoomCommand,
+  ServerMessage,
 } from "@pootown/game-contracts";
 
 import envConfig from "@/configs/env";
@@ -30,6 +31,9 @@ type RoomContextValue = {
   readonly connect: (admission: AdmissionResponse) => Promise<RoomPublicState>;
   readonly disconnect: () => Promise<void>;
   readonly error: Error | null;
+  readonly lastMessage: ServerMessage | null;
+  readonly messages: readonly ServerMessage[];
+  readonly playerId: AdmissionResponse["admission"]["playerId"] | null;
   readonly send: (command: RoomCommand) => Promise<CommandAcknowledgement>;
   readonly state: RoomPublicState | null;
   readonly status: RoomConnectionStatus;
@@ -41,19 +45,32 @@ export function RoomProvider({ children }: { readonly children: ReactNode }) {
   const [state, setState] = useState<RoomPublicState | null>(null);
   const [status, setStatus] = useState<RoomConnectionStatus>("disconnected");
   const [error, setError] = useState<Error | null>(null);
+  const [lastMessage, setLastMessage] = useState<ServerMessage | null>(null);
+  const [messages, setMessages] = useState<ServerMessage[]>([]);
+  const [playerId, setPlayerId] = useState<AdmissionResponse["admission"]["playerId"] | null>(null);
   const operations = useRef(new RoomOperationFence());
   const client = useMemo(() => new GameRoomClient(
     createColyseusRoomConnector(envConfig.NEXT_PUBLIC_GAME_SERVER_URL),
     {
       onProtocolError: () => {
         setState(null);
+        setPlayerId(null);
+        setLastMessage(null);
+        setMessages([]);
         setStatus("disconnected");
         setError(new Error("The game server returned invalid data"));
+      },
+      onMessage: (message) => {
+        setLastMessage(message);
+        setMessages((current) => [...current, message].slice(-100));
       },
       onState: setState,
       onTransportError: () => setError(new Error("The game server connection failed")),
       onUnexpectedDisconnect: () => {
         setState(null);
+        setPlayerId(null);
+        setLastMessage(null);
+        setMessages([]);
         setStatus("disconnected");
         setError(new Error("The game server disconnected"));
       },
@@ -72,6 +89,9 @@ export function RoomProvider({ children }: { readonly children: ReactNode }) {
     } finally {
       if (operations.current.isCurrent(operation)) {
         setState(null);
+        setPlayerId(null);
+        setLastMessage(null);
+        setMessages([]);
         setStatus("disconnected");
       }
     }
@@ -85,6 +105,9 @@ export function RoomProvider({ children }: { readonly children: ReactNode }) {
         throw new Error("Room connection was superseded");
       }
       setError(null);
+      setLastMessage(null);
+      setMessages([]);
+      setPlayerId(admission.admission.playerId);
       setStatus("connecting");
       const nextState = await client.connect({
         contractVersion: admission.contractVersion,
@@ -103,6 +126,9 @@ export function RoomProvider({ children }: { readonly children: ReactNode }) {
         : new Error("The game server connection failed");
       if (operations.current.isCurrent(operation)) {
         setState(null);
+        setPlayerId(null);
+        setLastMessage(null);
+        setMessages([]);
         setError(normalized);
         setStatus("disconnected");
       }
@@ -114,10 +140,13 @@ export function RoomProvider({ children }: { readonly children: ReactNode }) {
     connect,
     disconnect,
     error,
+    lastMessage,
+    messages,
+    playerId,
     send: (command) => client.send(command),
     state,
     status,
-  }), [client, connect, disconnect, error, state, status]);
+  }), [client, connect, disconnect, error, lastMessage, messages, playerId, state, status]);
 
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>;
 }

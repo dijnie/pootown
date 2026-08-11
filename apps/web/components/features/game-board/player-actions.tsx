@@ -1,8 +1,8 @@
-import { GameStatus } from "@/lib/sdk/generated";
+import { GameStatus } from "@/types/schema";
 import { useGameContext } from "@/components/providers/game-provider";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { formatAddress, formatPrice } from "@/lib/utils";
+import { canAffordMatchCash, formatAddress, formatPrice } from "@/lib/utils";
 import { getBoardSpaceData, getTypedSpaceData } from "@/lib/board-utils";
 import { PlayerAccount } from "@/types/schema";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,6 @@ import {
   MEV_TAX_POSITION,
   PRIORITY_FEE_TAX_POSITION,
 } from "@/configs/constants";
-import { WalletWithMetadata } from "@privy-io/react-auth";
 import { DicesOnly, useDiceContext } from "./dice";
 
 interface PlayerTokenProps {
@@ -41,13 +40,7 @@ export const PlayerInJailAlert: React.FC<PlayerTokenProps> = ({
   );
 };
 
-interface BankruptcyActionProps {
-  player: PlayerAccount;
-}
-
-export const BankruptcyAction: React.FC<BankruptcyActionProps> = ({
-  player,
-}) => {
+export const BankruptcyAction = () => {
   return (
     <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
       <div className="text-sm font-medium text-red-800">Bankruptcy Check</div>
@@ -79,26 +72,23 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
     const propertyData = getBoardSpaceData(position);
     const propertyAccount = getPropertyByPosition(position);
 
-    return {
-      propertyData,
-      propertyAccount,
-      isOwned: !!propertyAccount?.owner,
-      isOwnedByCurrentPlayer:
-        !!propertyAccount?.owner && propertyAccount.owner === player.wallet,
-    } as any;
-  }, [player, getPropertyByPosition, position]);
+    const price = propertyData !== null && propertyData !== undefined && "price" in propertyData
+      ? propertyData.price
+      : null;
+    return { propertyData, price, isOwned: !!propertyAccount?.owner };
+  }, [getPropertyByPosition, position]);
 
   if (position === MEV_TAX_POSITION || position === PRIORITY_FEE_TAX_POSITION) {
     return <Button>Pay tax</Button>;
   }
 
-  const hasInsufficientFunds =
-    Number(player.cashBalance) < pendingPropertyInfo.propertyData?.price;
+  const hasInsufficientFunds = pendingPropertyInfo.price !== null &&
+    !canAffordMatchCash(player.cashBalance, pendingPropertyInfo.price);
 
   return (
     <>
       {!pendingPropertyInfo.isOwned &&
-        pendingPropertyInfo.propertyData?.price && (
+        pendingPropertyInfo.price !== null && (
           <div className="space-y-2">
             <div className="flex gap-2">
               <TooltipProvider>
@@ -114,7 +104,7 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
                       {isLoading === "buyProperty"
                         ? "Buying..."
                         : `Buy for ${formatPrice(
-                            pendingPropertyInfo.propertyData.price
+                            pendingPropertyInfo.price
                           )}`}
                     </Button>
                   </TooltipTrigger>
@@ -142,9 +132,8 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
 };
 
 export const PlayerActions = ({
-  wallet,
+  playerId,
   handleStartGame,
-  handleJoinGame,
   handleBuyProperty,
   handleSkipProperty,
   handleEndTurn,
@@ -157,9 +146,8 @@ export const PlayerActions = ({
   handleLeaveGame,
   isLoading,
 }: {
-  wallet: WalletWithMetadata;
+  playerId: string;
   handleStartGame: (gameAddress: string) => void;
-  handleJoinGame: (gameAddress: string) => void;
   handleBuyProperty: (position: number) => void;
   handleSkipProperty: (position: number) => void;
   handlePayMevTax: () => void;
@@ -194,8 +182,8 @@ export const PlayerActions = ({
   const isStarted = game.gameStatus === GameStatus.InProgress;
   const isEnded = game?.gameStatus === GameStatus.Finished;
   const endConditionMet = game?.endConditionMet;
-  const isCreator = game.creator === wallet.address;
-  const isInGame = wallet.address && game.players.includes(wallet.address);
+  const isCreator = game.creator === playerId;
+  const isInGame = game.players.includes(playerId);
 
   if (isEnded) {
     return (
@@ -239,30 +227,17 @@ export const PlayerActions = ({
                 <Button
                   onClick={() => handleStartGame(game.address)}
                   loading={isLoading === "startGame"}
-                  disabled={game.players.length < 2}
+                  disabled={game.currentPlayers < 2}
                 >
                   Start game
                 </Button>
               </div>
-              {game.players.length < 2 && (
+              {game.currentPlayers < 2 && (
                 <Badge variant="neutral">
                   At least 2 players are required to start the game
                 </Badge>
               )}
             </div>
-          )}
-
-          {!isCreator && !isInGame && (
-            <Button
-              onClick={() => handleJoinGame(game.address)}
-              loading={isLoading === "joinGame"}
-            >
-              {game.entryFee > 0
-                ? `Join game (Pay ${formatPrice(
-                    Number(game.entryFee) / 10 ** 9
-                  )})`
-                : "Join game"}
-            </Button>
           )}
 
           {!isCreator && isInGame && (
@@ -295,7 +270,7 @@ export const PlayerActions = ({
 
             {showPayJailFine && (
               <Button
-                disabled={Number(currentPlayerState.cashBalance) < JAIL_FINE}
+                disabled={!canAffordMatchCash(currentPlayerState.cashBalance, JAIL_FINE)}
                 onClick={handlePayJailFine}
                 size="sm"
                 loading={isLoading === "payJailFine"}
@@ -315,7 +290,7 @@ export const PlayerActions = ({
             )}
 
             {currentPlayerState?.needsBankruptcyCheck && (
-              <BankruptcyAction player={currentPlayerState} />
+              <BankruptcyAction />
             )}
 
             {/* Property Actions */}

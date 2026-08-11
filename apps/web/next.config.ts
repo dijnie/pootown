@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 import { normalizeApiOrigin } from "./services/api-origin";
+import { createWebSecurityHeaders } from "./services/security-headers";
 
 type SvgFileRule = {
   exclude?: RegExp;
@@ -20,6 +21,14 @@ function isSvgFileRule(rule: unknown): rule is SvgFileRule {
 
 const nextConfig: NextConfig = {
   webpack(config) {
+    // Pure adapters are also compiled as Node ESM tests, so their relative
+    // imports use the emitted .js extension. Resolve those imports to TS source
+    // when the same modules are bundled by Next.js.
+    config.resolve.extensionAlias = {
+      ...config.resolve.extensionAlias,
+      ".js": [".ts", ".tsx", ".js"],
+    };
+
     // Grab the existing rule that handles SVG imports
     const fileLoaderRule = config.module.rules.find(isSvgFileRule);
     if (fileLoaderRule === undefined) throw new Error("Next.js SVG file-loader rule was not found");
@@ -47,6 +56,15 @@ const nextConfig: NextConfig = {
   },
   eslint: {
     ignoreDuringBuilds: true,
+  },
+  async headers() {
+    return [{
+      source: "/:path*",
+      headers: createWebSecurityHeaders(
+        process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:8080",
+        process.env["NEXT_PUBLIC_GAME_SERVER_URL"] ?? "ws://localhost:2567",
+      ),
+    }];
   },
   async rewrites() {
     const origin = normalizeApiOrigin(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080");

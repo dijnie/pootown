@@ -9,12 +9,12 @@ export default function FAQSection() {
     const faqs = [
         {
             q: "How much does it cost to play?",
-            a: "Currently FREE on devnet! Mainnet will have minimal SOL fees for transactions.",
+            a: "Each published game shows its Account Coin entry cost before you join. Account Coin is in-app and non-withdrawable.",
             color: "#ff0080",
         },
         {
             q: "Do I need crypto experience?",
-            a: "No! Just connect a Solana wallet and start playing. We'll guide you through everything.",
+            a: "No. Sign in with your Poo Town account and the game handles admission and recovery for you.",
             color: "#9945ff",
         },
         {
@@ -23,13 +23,13 @@ export default function FAQSection() {
             color: "#14f195",
         },
         {
-            q: "What happens to my NFT properties?",
-            a: "You own them! Trade, sell, or hold your properties as real NFTs on Solana.",
+            q: "Do match properties leave the game?",
+            a: "No. Properties and match cash exist only inside that match and reset when the match ends.",
             color: "#ffed00",
         },
         {
             q: "Is this official Monopoly?",
-            a: "This is an independent blockchain game inspired by classic board game mechanics.",
+            a: "This is an independent multiplayer game inspired by classic property board-game mechanics.",
             color: "#ff0080",
         },
     ]

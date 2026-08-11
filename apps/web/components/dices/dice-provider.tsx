@@ -25,8 +25,8 @@ interface DiceContextType {
   handleRollDice: () => Promise<void>;
 
   // Animation refs
-  dice1Ref: React.RefObject<HTMLDivElement>;
-  dice2Ref: React.RefObject<HTMLDivElement>;
+  dice1Ref: React.RefObject<HTMLDivElement | null>;
+  dice2Ref: React.RefObject<HTMLDivElement | null>;
 }
 
 const DiceContext = createContext<DiceContextType | null>(null);
@@ -93,6 +93,7 @@ export const DiceProvider: React.FC<DiceProviderProps> = ({ children }) => {
     diceState.status,
     setFinalRotations,
     stopDiceSound,
+    setDemoDices,
   ]);
 
   // Initialize dice values on first load (only if we haven't processed any dice roll yet)
@@ -167,9 +168,7 @@ export const DiceProvider: React.FC<DiceProviderProps> = ({ children }) => {
       diceState,
       canRoll,
       handleRollDice,
-      // @ts-expect-error
       dice1Ref,
-      // @ts-expect-error
       dice2Ref,
     }),
     [diceState, canRoll, handleRollDice, dice1Ref, dice2Ref]

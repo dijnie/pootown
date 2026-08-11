@@ -1,4 +1,4 @@
-import { DiceState, DiceAction, DiceValue } from "./dice-constants";
+import { DiceState, DiceAction } from "./dice-constants";
 
 const initialDiceState: DiceState = {
   values: [1, 1],

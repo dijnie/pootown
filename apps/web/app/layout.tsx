@@ -18,8 +18,8 @@ export const metadata: Metadata = {
     template: "%s | Poo Town",
   },
   description:
-    "The First Fully On-Chain Property Tycoon Game on @solana, Powered by @magicblock",
-  keywords: ["solana", "monopoly", "blockchain", "web3", "magicblock"],
+    "A fast multiplayer property tycoon game with authoritative real-time rooms.",
+  keywords: ["multiplayer", "monopoly", "board game", "property tycoon"],
   authors: [{ name: "Poo Town", url: "https://pootown.vercel.app" }],
   creator: "Poo Town",
   publisher: "Poo Town",
@@ -41,19 +41,15 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    title:
-      "Poo Town - The First Fully On-Chain Property Tycoon Game on @solana, Powered by @magicblock",
-    description:
-      "The First Fully On-Chain Property Tycoon Game on @solana, Powered by @magicblock",
+    title: "Poo Town - Multiplayer Property Tycoon",
+    description: "A fast multiplayer property tycoon game with authoritative real-time rooms.",
     url: "https://pootown.vercel.app",
     siteName: "Poo Town",
   },
   twitter: {
     card: "summary_large_image",
-    title:
-      "Poo Town - The First Fully On-Chain Property Tycoon Game on @solana, Powered by @magicblock",
-    description:
-      "The First Fully On-Chain Property Tycoon Game on @solana, Powered by @magicblock",
+    title: "Poo Town - Multiplayer Property Tycoon",
+    description: "A fast multiplayer property tycoon game with authoritative real-time rooms.",
     images: ["https://pootown.vercel.app/preview.png"],
     creator: "@poo_town_",
   },
@@ -62,7 +58,7 @@ export const metadata: Metadata = {
   //   // yandex: 'your-yandex-verification-code',
   //   // yahoo: 'your-yahoo-verification-code',
   // },
-  category: "blockchain",
+  category: "game",
   classification: "Poo Town",
 };
 

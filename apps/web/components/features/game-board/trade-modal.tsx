@@ -16,15 +16,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent } from "@/components/ui/card";
-import { ArrowRight } from "lucide-react";
+import { Card } from "@/components/ui/card";
 import { useGameContext } from "@/components/providers/game-provider";
-import { useWallet } from "@/hooks/use-wallet";
-import { formatAddress } from "@/lib/utils";
+import { formatAddress, toSafeMatchCashNumber } from "@/lib/utils";
 import { getTypedSpaceData } from "@/lib/board-utils";
 import { colorMap, ColorGroup } from "@/configs/board-data";
 import { PropertyAccount, TradeOffer } from "@/types/schema";
@@ -205,8 +202,7 @@ export function CreateTradeDialog({
   open,
   onOpenChange,
 }: CreateTradeDialogProps) {
-  const { players, properties, createTrade } = useGameContext();
-  const { wallet } = useWallet();
+  const { ownPlayerId, players, properties, createTrade } = useGameContext();
 
   const [isRequesting, setIsRequesting] = useState(false);
   const [selectedPlayerAddress, setSelectedPlayerAddress] =
@@ -219,15 +215,15 @@ export function CreateTradeDialog({
 
   // Filter out current player from available players
   const currentPlayerState = players.find(
-    (player) => player.wallet === wallet?.address
+    (player) => player.wallet === ownPlayerId
   );
 
   const availablePlayers = players.filter(
-    (player) => player.wallet !== wallet?.address
+    (player) => player.wallet !== ownPlayerId
   );
 
   const currentPlayerProperties = properties.filter(
-    (property) => property.owner === wallet?.address
+    (property) => property.owner === ownPlayerId
   );
 
   const selectedPlayer = availablePlayers.find(
@@ -238,8 +234,8 @@ export function CreateTradeDialog({
     (property) => property.owner === selectedPlayerAddress
   );
 
-  const currentPlayerMoney = Number(currentPlayerState?.cashBalance || 0);
-  const selectedPlayerMoney = Number(selectedPlayer?.cashBalance || 0);
+  const currentPlayerMoney = toSafeMatchCashNumber(currentPlayerState?.cashBalance ?? "0");
+  const selectedPlayerMoney = toSafeMatchCashNumber(selectedPlayer?.cashBalance ?? "0");
 
   const availableTradeTypes = useMemo(() => {
     const types = [];
@@ -414,7 +410,7 @@ export function CreateTradeDialog({
                           walletAddress={player.wallet}
                           className="text-white font-black bg-black dark:bg-white dark:text-black text-sm"
                         >
-                          {wallet?.address === player.wallet
+                          {ownPlayerId === player.wallet
                             ? "YOU"
                             : formatAddress(player.address).substring(0, 2).toUpperCase()}
                         </AvatarFallback>

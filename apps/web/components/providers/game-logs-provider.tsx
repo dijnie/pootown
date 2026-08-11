@@ -10,9 +10,8 @@ import React, {
 } from "react";
 import { GameLogEntry } from "@/types/space-types";
 import { useGameEventsContext } from "./game-events-provider";
-import { mapEventToLogEntry } from "@/lib/event-to-log-mapper";
-import { GameEvent } from "@/lib/sdk/types";
 import { useGameContext } from "./game-provider";
+import { mapRoomEventToLog } from "@/services/room-event-to-log";
 
 interface GameLogsContextType {
   gameLogs: GameLogEntry[];
@@ -45,7 +44,8 @@ export const GameLogsProvider: React.FC<GameLogsProviderProps> = ({
 }) => {
   const { gameAddress } = useGameContext();
   const [gameLogs, setGameLogs] = useState<GameLogEntry[]>([]);
-  const { registerEventHandler } = useGameEventsContext();
+  const { eventHistory } = useGameEventsContext();
+  const loggedEventIds = React.useRef(new Set<string>());
 
   const storageKey = gameAddress
     ? `gameLogs:${gameAddress.toString()}`
@@ -168,6 +168,7 @@ export const GameLogsProvider: React.FC<GameLogsProviderProps> = ({
   }, [saveLogs]);
 
   useEffect(() => {
+    loggedEventIds.current.clear();
     loadLogs();
   }, [loadLogs]);
 
@@ -185,74 +186,14 @@ export const GameLogsProvider: React.FC<GameLogsProviderProps> = ({
   }, [storageKey, loadLogs, persistToStorage]);
 
   useEffect(() => {
-    const unsubscribeHandlers: (() => void)[] = [];
-
-    const eventTypes = [
-      "PlayerJoined",
-      "PlayerLeft",
-      "GameStarted",
-      "GameCancelled",
-      "PlayerPassedGo",
-      "PropertyPurchased",
-      "PropertyDeclined",
-      "RentPaid",
-      "ChanceCardDrawn",
-      "CommunityChestCardDrawn",
-      "HouseBuilt",
-      "HotelBuilt",
-      "BuildingSold",
-      "PropertyMortgaged",
-      "PropertyUnmortgaged",
-      "TaxPaid",
-      "SpecialSpaceAction",
-      "TradeCreated",
-      "TradeAccepted",
-      "TradeRejected",
-      "TradeCancelled",
-      "TradesCleanedUp",
-      "PlayerBankrupt",
-      "GameEnded",
-      // "GameEndConditionMet",
-      "PrizeClaimed",
-    ] as const;
-
-    eventTypes.forEach((eventType) => {
-      const unsubscribe = registerEventHandler(
-        eventType as GameEvent["type"],
-        (eventData, context) => {
-          try {
-            const fullEvent = {
-              type: eventType,
-              data: eventData,
-              signature: context.signature,
-            } as GameEvent;
-
-            const logEntry = mapEventToLogEntry(fullEvent);
-
-            addGameLog({
-              gameId: logEntry.gameId,
-              type: logEntry.type,
-              playerId: logEntry.playerId,
-              playerName: logEntry.playerName,
-              details: logEntry.details,
-              signature: logEntry.signature,
-            });
-          } catch (error) {
-            console.error(
-              `Error processing ${eventType} event for logs:`,
-              error
-            );
-          }
-        }
-      );
-
-      unsubscribeHandlers.push(unsubscribe);
-    });
-
-    return () => {
-      unsubscribeHandlers.forEach((unsubscribe) => unsubscribe());
-    };
-  }, [registerEventHandler, addGameLog]);
+    if (gameAddress === null) return;
+    for (const event of eventHistory) {
+      if (loggedEventIds.current.has(event.eventId)) continue;
+      loggedEventIds.current.add(event.eventId);
+      const entry = mapRoomEventToLog(event.payload, gameAddress, event.eventId);
+      if (entry !== null) addGameLog(entry);
+    }
+  }, [addGameLog, eventHistory, gameAddress]);
 
   const contextValue: GameLogsContextType = {
     gameLogs,

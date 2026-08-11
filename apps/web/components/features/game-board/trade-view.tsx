@@ -11,11 +11,10 @@ import { ArrowRight, Plus, Check, X } from "lucide-react";
 import { formatAddress } from "@/lib/utils";
 import { useGameContext } from "@/components/providers/game-provider";
 import { CreateTradeDialog } from "./trade-modal";
-import { GameStatus, TradeStatus } from "@/lib/sdk/generated";
+import { GameStatus, TradeStatus } from "@/types/schema";
 import { getTypedSpaceData } from "@/lib/board-utils";
 import { colorMap, ColorGroup } from "@/configs/board-data";
 import type { TradeInfo } from "@/types/schema";
-import { useWallet } from "@/hooks/use-wallet";
 
 const getTradeStatusText = (status: TradeStatus): string => {
   switch (status) {
@@ -69,8 +68,7 @@ const getOfferDisplay = (money: number | string, property: number | null) => {
 };
 
 export function TradeView() {
-  const { wallet } = useWallet();
-  const { gameState, acceptTrade, rejectTrade, cancelTrade } = useGameContext();
+  const { gameState, ownPlayerId, acceptTrade, rejectTrade, cancelTrade } = useGameContext();
   const activeTrades = gameState?.activeTrades || [];
 
   const [isCreateTradeOpen, setIsCreateTradeOpen] = useState(false);
@@ -79,7 +77,7 @@ export function TradeView() {
     setIsCreateTradeOpen(true);
   };
 
-  const handleAccept = async (tradeId: number, proposer: string) => {
+  const handleAccept = async (tradeId: number | string, proposer: string) => {
     try {
       await acceptTrade(tradeId.toString(), proposer);
     } catch (error) {
@@ -87,7 +85,7 @@ export function TradeView() {
     }
   };
 
-  const handleReject = async (tradeId: number) => {
+  const handleReject = async (tradeId: number | string) => {
     try {
       await rejectTrade(tradeId.toString());
     } catch (error) {
@@ -95,7 +93,7 @@ export function TradeView() {
     }
   };
 
-  const handleCancel = async (tradeId: number) => {
+  const handleCancel = async (tradeId: number | string) => {
     try {
       await cancelTrade(tradeId.toString());
     } catch (error) {
@@ -130,7 +128,7 @@ export function TradeView() {
                 <TradeItem
                   key={trade.id}
                   trade={trade}
-                  currentPlayer={wallet?.address}
+                  currentPlayer={ownPlayerId ?? undefined}
                   onAccept={handleAccept}
                   onReject={handleReject}
                   onCancel={handleCancel}
@@ -158,9 +156,9 @@ function TradeItem({
 }: {
   trade: TradeInfo;
   currentPlayer?: string;
-  onAccept: (tradeId: number, proposer: string) => void;
-  onReject: (tradeId: number) => void;
-  onCancel: (tradeId: number) => void;
+  onAccept: (tradeId: number | string, proposer: string) => void;
+  onReject: (tradeId: number | string) => void;
+  onCancel: (tradeId: number | string) => void;
 }) {
   const [isAccepting, setIsAccepting] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);

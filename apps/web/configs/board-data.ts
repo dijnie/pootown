@@ -776,7 +776,7 @@ export const surpriseCards = [
     id: 3,
     title: "Flash Loan Win ⚡",
     description:
-      "Borrow big, repay fast. Collect 100 SOL from the bank – degen arbitrage pays off.",
+      "Borrow big, repay fast. Collect $100 match cash from the bank – degen arbitrage pays off.",
     action: "collect-money",
     value: 100,
   },

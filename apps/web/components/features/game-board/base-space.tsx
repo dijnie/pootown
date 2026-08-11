@@ -1,5 +1,4 @@
 import React from "react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import {
   getBorderClasses,
@@ -22,6 +21,7 @@ interface BaseSpaceComponentProps extends BaseSpaceProps {
 
 export const BaseSpace: React.FC<BaseSpaceComponentProps> = ({
   position,
+  onClick,
   onChainProperty,
   children,
   colorBarColor,
@@ -40,7 +40,6 @@ export const BaseSpace: React.FC<BaseSpaceComponentProps> = ({
   const textContainerClasses = getTextContainerClasses(side);
 
   return (
-    // @ts-expect-error
     <div
       className={cn(
         "bg-board-space relative cursor-pointer board-space-container",
@@ -48,6 +47,7 @@ export const BaseSpace: React.FC<BaseSpaceComponentProps> = ({
         className
       )}
       {...rest}
+      onClick={() => onClick?.(position)}
     >
       {hasColorBar && (
         <div

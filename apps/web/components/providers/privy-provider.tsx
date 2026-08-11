@@ -3,37 +3,13 @@
 import envConfig from "@/configs/env";
 import type { PrivyClientConfig } from "@privy-io/react-auth";
 import { PrivyProvider } from "@privy-io/react-auth";
-import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 
 const privyConfig: PrivyClientConfig = {
-  //   embeddedWallets: {
-  //     solana: {
-  //       createOnLogin: "all-users",
-  //     },
-  //   },
-  loginMethods: ["wallet"],
+  loginMethods: ["email", "google"],
   appearance: {
-    showWalletLoginFirst: true,
     accentColor: "#6A6FF5",
-    loginMessage: "Please sign this message to confirm your identity",
-    walletChainType: "solana-only",
+    loginMessage: "Sign in to play Poo Town",
     theme: "dark",
-    walletList: ["phantom", "solflare", "backpack"],
-  },
-  solanaClusters: [
-    {
-      name: "devnet",
-      rpcUrl: envConfig.NEXT_PUBLIC_DEVNET_RPC_URL,
-    },
-    {
-      name: "mainnet-beta",
-      rpcUrl: envConfig.NEXT_PUBLIC_MAINNET_RPC_URL,
-    },
-  ],
-  externalWallets: {
-    solana: {
-      connectors: toSolanaWalletConnectors(),
-    },
   },
 };
 

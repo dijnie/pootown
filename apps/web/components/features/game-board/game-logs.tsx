@@ -6,9 +6,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { getCardData, getPropertyName } from "@/lib/log-utils";
 import { cn, formatAddress } from "@/lib/utils";
 import { GameLogEntry } from "@/types/space-types";
-import { useWallet } from "@/hooks/use-wallet";
 import { UserAvatar } from "@/components/user-avatar";
 import { useGameLogs } from "@/components/providers/game-logs-provider";
+import { useGameContext } from "@/components/providers/game-provider";
 import { getTypedSpaceData } from "@/lib/board-utils";
 
 interface GameLogsProps {
@@ -23,8 +23,8 @@ export const GameLogs: React.FC<GameLogsProps> = ({
   autoScroll = true,
 }) => {
   const { gameLogs } = useGameLogs();
+  const { ownPlayerId } = useGameContext();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const { wallet } = useWallet();
 
   useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -91,7 +91,7 @@ export const GameLogs: React.FC<GameLogsProps> = ({
                   log={log}
                   showTimestamp={showTimestamps}
                   showIcon={showIcons}
-                  currentPlayerAddress={wallet?.address}
+                  currentPlayerAddress={ownPlayerId ?? undefined}
                 />
               </motion.div>
             ))}

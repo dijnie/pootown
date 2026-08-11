@@ -22,10 +22,6 @@ export const CardDrawModal: React.FC<CardDrawModalProps> = ({
 }) => {
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawnCard, setDrawnCard] = useState<CardData | null>(null);
-  const [showCard, setShowCard] = useState(false);
-  const [animationPhase, setAnimationPhase] = useState<
-    "idle" | "drawing" | "revealing" | "complete"
-  >("idle");
 
   const [rollingCards, setRollingCards] = useState<CardData[]>([]);
   const [rollingIndex, setRollingIndex] = useState(0);
@@ -47,8 +43,6 @@ export const CardDrawModal: React.FC<CardDrawModalProps> = ({
       // Reset state when modal opens
       setIsDrawing(false);
       setDrawnCard(null);
-      setShowCard(false);
-      setAnimationPhase("idle");
       setIsFlipped(false);
       setRollingCards(cardDeck);
       setRollingIndex(0);
@@ -66,13 +60,12 @@ export const CardDrawModal: React.FC<CardDrawModalProps> = ({
   }, [isOpen, cardDeck]);
 
   useEffect(() => {
-    const unsubscribeChance = registerEventHandler(
-      "ChanceCardDrawn",
+    const unsubscribeCard = registerEventHandler(
+      "cardDrawn",
       (latestCardDraw) => {
-        if (!isDrawing) return;
+        if (!isDrawing || latestCardDraw.deck !== (cardType === "chance" ? "chance" : "communityChest")) return;
 
-        const cardIndex = latestCardDraw.cardIndex ?? 0;
-        const card = surpriseCards[cardIndex];
+        const card = cardDeck[latestCardDraw.cardId - 1];
 
         // Stop rolling and reveal card
         if (rollingTimerRef.current) {
@@ -82,54 +75,19 @@ export const CardDrawModal: React.FC<CardDrawModalProps> = ({
 
         if (card) {
           setDrawnCard(card);
-          setAnimationPhase("revealing");
 
           // Show the card after a brief delay for smoothness
           setTimeout(() => {
-            setShowCard(true);
-            setAnimationPhase("complete");
             setIsDrawing(false);
             // We are already flipped at this point; ensure it stays front-facing
             setIsFlipped(true);
           }, 500);
         }
-      }
-    );
-
-    const unsubscribeCommunity = registerEventHandler(
-      "CommunityChestCardDrawn",
-      (latestCardDraw) => {
-        console.log("latestCardDraw", latestCardDraw, isDrawing);
-        if (!isDrawing) return;
-
-        const cardIndex = latestCardDraw.cardIndex ?? 0;
-        const card = treasureCards[cardIndex];
-
-        // Stop rolling and reveal card
-        if (rollingTimerRef.current) {
-          window.clearInterval(rollingTimerRef.current);
-          rollingTimerRef.current = null;
-        }
-
-        if (card) {
-          setDrawnCard(card);
-          setAnimationPhase("revealing");
-
-          // Show the card after a brief delay for smoothness
-          setTimeout(() => {
-            setShowCard(true);
-            setAnimationPhase("complete");
-            setIsDrawing(false);
-            // We are already flipped at this point; ensure it stays front-facing
-            setIsFlipped(true);
-          }, 500);
-        }
-      }
+      },
     );
 
     return () => {
-      unsubscribeChance();
-      unsubscribeCommunity();
+      unsubscribeCard();
     };
   }, [registerEventHandler, isDrawing, cardDeck, cardType]);
 
@@ -148,7 +106,6 @@ export const CardDrawModal: React.FC<CardDrawModalProps> = ({
     if (isDrawing) return;
 
     setIsDrawing(true);
-    setAnimationPhase("drawing");
     setIsFlipped(true);
     startRolling();
 
@@ -165,7 +122,6 @@ export const CardDrawModal: React.FC<CardDrawModalProps> = ({
         rollingTimerRef.current = null;
       }
       setIsDrawing(false);
-      setAnimationPhase("idle");
       setIsFlipped(false);
     }
   };
@@ -178,9 +134,7 @@ export const CardDrawModal: React.FC<CardDrawModalProps> = ({
   };
 
   const handleClose = () => {
-    setShowCard(false);
     setDrawnCard(null);
-    setAnimationPhase("idle");
     if (rollingTimerRef.current) {
       window.clearInterval(rollingTimerRef.current);
       rollingTimerRef.current = null;
@@ -240,7 +194,7 @@ export const CardDrawModal: React.FC<CardDrawModalProps> = ({
                 <p className="text-sm">
                   {displayCard
                     ? displayCard.description
-                    : "Waiting for on-chain result..."}
+                    : "Waiting for room result..."}
                 </p>
               </div>
               {/* <div className="flex justify-between items-start mb-4">
@@ -286,7 +240,7 @@ export const CardDrawModal: React.FC<CardDrawModalProps> = ({
                 <p className="text-sm">
                   {displayCard
                     ? displayCard.description
-                    : "Waiting for on-chain result..."}
+                    : "Waiting for room result..."}
                 </p>
               </div> */}
             </div>

@@ -2,9 +2,8 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { cn, formatAddress, formatPrice } from "@/lib/utils";
+import { cn, formatAddress, formatMatchCash, formatPrice } from "@/lib/utils";
 import { useGameContext } from "@/components/providers/game-provider";
-import { useWallet } from "@/hooks/use-wallet";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { UserAvatar } from "@/components/user-avatar";
@@ -75,16 +74,18 @@ function PlayerItem({
   isYou,
   isWinner,
 }: PlayerItemProps) {
-  const [previousBalance, setPreviousBalance] = useState<number | null>(null);
+  const [previousBalance, setPreviousBalance] = useState<string | null>(null);
   const [balanceChange, setBalanceChange] = useState<number>(0);
   const [animationKey, setAnimationKey] = useState<number>(0);
-  const currentBalance = Number(player.cashBalance);
+  const currentBalance = player.cashBalance;
 
   useEffect(() => {
     if (previousBalance !== null && previousBalance !== currentBalance) {
-      const change = currentBalance - previousBalance;
-      setBalanceChange(change);
-      setAnimationKey((prev) => prev + 1);
+      const change = BigInt(currentBalance) - BigInt(previousBalance);
+      if (change <= BigInt(Number.MAX_SAFE_INTEGER) && change >= BigInt(Number.MIN_SAFE_INTEGER)) {
+        setBalanceChange(Number(change));
+        setAnimationKey((prev) => prev + 1);
+      }
     }
     setPreviousBalance(currentBalance);
   }, [currentBalance, previousBalance]);
@@ -130,7 +131,7 @@ function PlayerItem({
                   times: [0, 0.5, 1],
                 }}
               >
-                {formatPrice(currentBalance)}
+                ${formatMatchCash(currentBalance)} Match Cash
               </motion.p>
               <AnimatePresence mode="wait">
                 {balanceChange !== 0 && (
@@ -184,17 +185,15 @@ function PlayerLoadingItem() {
 }
 
 export function PlayerList() {
-  const { wallet } = useWallet();
-  const { gameState, players, gameLoading } = useGameContext();
+  const { currentPlayerAddress, gameState, ownPlayerId, players, gameLoading } = useGameContext();
 
   if (gameLoading) {
     return (
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">Players</h2>
         <div className="space-y-3">
-          {Array.from({ length: 4 }).map((id) => (
-            // @ts-expect-error
-            <PlayerLoadingItem key={id} />
+          {Array.from({ length: 4 }, (_, index) => (
+            <PlayerLoadingItem key={index} />
           ))}
         </div>
       </div>
@@ -210,8 +209,6 @@ export function PlayerList() {
     );
   }
 
-  const currentPlayerIndex = gameState.currentTurn;
-
   return (
     <Card className="bg-white">
       <CardHeader className="flex items-center justify-between">
@@ -219,14 +216,14 @@ export function PlayerList() {
       </CardHeader>
       <CardContent className="space-y-3">
         {players.map((player, index) => {
-          const isCurrentTurn = index === currentPlayerIndex;
+          const isCurrentTurn = player.wallet === currentPlayerAddress;
           return (
             <PlayerItem
               key={player.wallet}
               player={player}
               index={index}
               isCurrentTurn={isCurrentTurn}
-              isYou={player.wallet === wallet?.address}
+              isYou={player.wallet === ownPlayerId}
               isWinner={gameState.winner === player.wallet}
             />
           );

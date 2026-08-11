@@ -1,319 +1,97 @@
-# 🎲 Pootown
+# Pootown
 
-An on-chain Monopoly game built on the Solana blockchain with **Ephemeral Rollups**, powered by **Magic Block** for a real-time gaming experience.
+Pootown is a realtime multiplayer board game. The product UI is built with Next.js, the API and account-coin authority run in NestJS, Colyseus owns live rooms, and PostgreSQL stores durable identity, economy, session, checkpoint, and read-model data.
 
-## 📋 Table of Contents
+The legacy Rust/Anchor program remains in this repository as the frozen source of approved game rules and parity evidence. It is not part of the browser or production gameplay runtime.
 
-* [Overview](#-overview)
-* [System Architecture](#-system-architecture)
-* [System Requirements](#-system-requirements)
-* [Installation](#-installation)
-* [Environment Configuration](#-environment-configuration)
-* [Running the Project](#-running-the-project)
-* [Testing](#-testing)
-* [API Documentation](#-api-documentation)
-* [Project Structure](#-project-structure)
-* [Useful Commands](#-useful-commands)
-* [Troubleshooting](#-troubleshooting)
+## Architecture
 
-## 🎮 Overview
-
-Panda Monopoly is a full on-chain implementation of Monopoly on the Solana blockchain, featuring:
-
-* **On-chain Game Logic** — implemented entirely in a Solana Program
-* **Ephemeral Rollups** — powered by Magic Block for real-time performance
-* **Web3 Authentication** — integrated with Privy for wallet auth
-* **Realtime Updates** — via WebSocket connections
-* **Leaderboard System** — track player stats and rankings
-* **Trading System** — trade properties and assets between players
-* **VRF Randomness** — verifiable random dice rolls and card draws
-
-### Game Features
-
-* 🎲 Roll dice using VRF or a client-provided seed
-* 🏠 Buy, sell, and build properties
-* 💰 Trade between players
-* 🎴 Chance and Community Chest cards
-* 🏛️ Tax spaces (MEV Tax, Priority Fee Tax)
-* 🚔 Jail and bail mechanics
-* 💸 Bankruptcy system
-* 🏆 Leaderboard and rewards
-* ⏱️ Time-limited game sessions
-* 🤖 Permissionless force actions for timeout handling
-
-## 🏗️ System Architecture
-
-The project consists of three core components:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        WEB FRONTEND                         │
-│                  (Next.js + Privy Auth)                     │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     │ HTTP / WebSocket
-                     │
-┌────────────────────▼────────────────────────────────────────┐
-│                         INDEXER                             │
-│            (Fastify API + BullMQ Workers)                   │
-│   - Realtime Listener (WebSocket from ER)                  │
-│   - Parser Workers (Parse transactions)                    │
-│   - Writer Workers (Write to PostgreSQL)                   │
-│   - Enrichment Workers (Add extra data)                    │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     │ gRPC / HTTP
-                     │
-┌────────────────────▼────────────────────────────────────────┐
-│                    SOLANA BLOCKCHAIN                        │
-│                                                             │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │          Ephemeral Rollups (Magic Block)            │  │
-│  │  - High-speed transaction processing                │  │
-│  │  - Real-time game state updates                     │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                           │                                │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │         Solana Devnet (Settlement Layer)            │  │
-│  │  - Final state settlement                           │  │
-│  │  - Historical data storage                          │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                             │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │            Panda Monopoly Program                    │  │
-│  │         (4vucUqMcXN4sgLsgnrXTUC9U7ACZ5DmoR...)       │  │
-│  └──────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+```text
+Next.js web + Privy authentication
+        | HTTPS bearer API             | WSS room ticket
+        v                              v
+NestJS API ----------------------> Colyseus game server
+        | identity, Account Coin       | canonical match state
+        | sessions, settlement         | commands, events, checkpoints
+        +--------------- PostgreSQL ---+
 ```
 
-### Components
+- `apps/web`: Next.js frontend. It consumes typed API contracts and canonical Colyseus state. It contains no wallet signing, RPC, generated Solana SDK, or client-authorized settlement.
+- `apps/api`: NestJS authority for Privy identity, Account Coin, game definitions, admission, durable finalization, settlement, history, and leaderboard.
+- `apps/game-server`: Colyseus rooms, authoritative match transitions, lease fencing, recovery, and checkpoints.
+- `packages/game-contracts`: strict HTTP, room, command, event, and public-state schemas.
+- `packages/game-core`: deterministic rules derived from the approved Rust source.
+- `programs/panda-monopoly`: frozen legacy Rust rule authority used by characterization and parity checks.
 
-1. **Solana Program** (`programs/panda-monopoly/`)
+Account Coin is an in-app, non-withdrawable balance owned by the API. Match cash exists only inside a game room. The two values are separate domains and must not be presented as wallet, SOL, or withdrawable funds.
 
-   * Smart contract written in Rust/Anchor
-   * Handles full game logic
-   * Deployable to Solana devnet or localnet
+## Requirements
 
-2. **Web Frontend** (`apps/web/`)
+- Node.js `24.18.x` (see `.node-version`)
+- pnpm `11.13.1` (see `package.json`)
+- PostgreSQL matching the deployment target
+- Docker for the real-PostgreSQL integration and migration tests
 
-   * Next.js 15 with React 19
-   * Privy authentication
-   * Real-time state updates via WebSockets
-   * Responsive UI with Tailwind CSS
+Rust, Anchor, and the local validator are needed only when rerunning legacy characterization or parity evidence.
 
-3. **Indexer** (`indexer/`)
-
-   * Backend service built with Fastify
-   * Indexes blockchain data into PostgreSQL
-   * Uses BullMQ for queue processing
-   * Provides REST & WebSocket APIs
-
-## 📦 System Requirements
-
-### Core
-
-* **Node.js** 24.x (pinned in `.node-version`)
-* **pnpm** 11.x (pinned in `package.json`)
-* **Rust** ≥ 1.75.0
-* **Solana CLI** ≥ 1.18.0
-* **Anchor CLI** ≥ 0.31.1
-
-### Databases & Services
-
-* **PostgreSQL** ≥ 14
-* **Redis** ≥ 7.0
-
-### Optional
-
-* **Docker & Docker Compose** — to run PostgreSQL and Redis easily
-* **Solana Test Validator** — for local testing
-
-got it 😎 — đây là bản **Installation** section đã được chỉnh lại để repo URL là của bạn (`https://github.com/0xLou1s/pootown`) luôn nhé:
-
----
-
-## 🔧 Installation
-
-follow these steps to get the project running locally (development flow).
-
-### 1. clone repository
+## Install and verify
 
 ```bash
-git clone https://github.com/0xLou1s/pootown.git
-cd pootown
+pnpm install --frozen-lockfile
+pnpm lint
+pnpm test
+pnpm build
 ```
 
-### 2. install root / monorepo dependencies (used for anchor/tests)
+Useful focused commands:
 
 ```bash
-pnpm install
+pnpm --filter @pootown/game-contracts test
+pnpm --filter @pootown/game-core test
+pnpm --filter @pootown/api test
+pnpm --filter @pootown/api db:migrate:test
+pnpm --filter @pootown/game-server test
+pnpm --filter ./apps/web test
+pnpm --filter ./apps/web build
+pnpm legacy:characterize
 ```
 
-The root install also installs `apps/web`; the repository uses one root lockfile.
+## Web configuration
 
-### 4. install indexer dependencies
+The tracked public web environment template defines these deployment variables:
+
+```dotenv
+NEXT_PUBLIC_API_URL=https://api.example.com
+NEXT_PUBLIC_GAME_SERVER_URL=wss://game.example.com
+NEXT_PUBLIC_PRIVY_APP_ID=your-privy-app-id
+```
+
+Both service URLs must be canonical origins: no credentials, extra path, query, or fragment. Never expose a Privy private key, service credential, access token, or realtime ticket through a `NEXT_PUBLIC_*` variable.
+
+The API and game server validate their private runtime settings at startup. Their required variables and constraints are defined in `apps/api/src/config/api-config.ts` and `apps/game-server/src/app-config.ts`; secrets belong in the deployment secret manager, not files committed to Git.
+
+## Run built services
+
+After configuring PostgreSQL, Privy verification, internal service credentials, and allowed browser origins:
 
 ```bash
-cd indexer
-pnpm install
-cd ..
+pnpm --filter @pootown/api build
+pnpm --filter @pootown/api start
+
+pnpm --filter @pootown/game-server build
+pnpm --filter @pootown/game-server start
+
+pnpm --filter ./apps/web dev
 ```
 
-### 5. install solana cli & anchor
+The API defaults to port `3001`, the game server to `2567`, and the web development server to `3000`. Production deployments should set explicit origins and health checks rather than relying on defaults.
 
-```bash
-# install solana cli (stable)
-sh -c "$(curl -sSfL https://release.solana.com/stable/install)"
+## Security boundary
 
-# install anchor version manager + toolchain
-cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-avm install 0.31.1
-avm use 0.31.1
-```
+- Privy access tokens authenticate the browser to the API; identity fields in request bodies are not trusted.
+- Realtime tickets are short-lived, one-use, hash-only credentials and are sent only in the Colyseus join payload.
+- The API alone owns Account Coin, reservations, ledger entries, and settlement.
+- The game server owns match state and writes fenced checkpoints and terminal proofs; it cannot directly mutate API-owned balances.
+- Browser security headers allow only the configured API, game server, and Privy authentication endpoints.
 
-### 6. start postgres & redis (two options)
-
-**option a — docker (recommended)**
-
-```bash
-# create docker-compose.yml (see README for example) then:
-docker-compose up -d
-```
-
-**option b — local (macos example)**
-
-```bash
-# postgres
-brew install postgresql@16
-brew services start postgresql@16
-createdb monopoly
-
-# redis
-brew install redis
-brew services start redis
-```
-
-### 7. setup solana wallet (devnet/localnet)
-
-```bash
-# generate a new keypair if needed
-solana-keygen new --outfile ~/.config/solana/id.json
-
-# point to devnet for testing
-solana config set --url devnet
-
-# request devnet airdrop (devnet only)
-solana airdrop 2
-```
-
-### 8. run local validator & ephemeral validator (local dev)
-
-```bash
-# make sure start-validator.sh is executable
-chmod +x start-validator.sh
-./start-validator.sh
-```
-
-this script will start the solana test validator (port 8899) and the ephemeral validator (port 7799) and fetch required programs.
-
-### 9. build & deploy programs
-
-```bash
-# build program artifacts
-anchor build
-
-# deploy to localnet
-anchor deploy --provider.cluster localnet
-
-# alternate automatic script (also handles airdrop)
-chmod +x run.sh
-./run.sh
-```
-
-### 10. generate frontend sdk
-
-```bash
-cd apps/web
-node codama.mjs
-cd ../..
-```
-
-### 11. setup database (indexer)
-
-```bash
-cd indexer
-
-# generate migrations (if using drizzle/drift)
-pnpm run db:generate
-
-# run migrations
-pnpm run db:migrate
-
-cd ..
-```
-
-### 12. start services (dev)
-
-open separate terminals for each:
-
-* indexer
-
-```bash
-cd indexer
-pnpm run dev
-```
-
-* web frontend
-
-```bash
-cd apps/web
-pnpm run dev
-```
-
-* (optional) other utilities, tests
-
-```bash
-# run tests
-anchor test
-
-# or run type-tests / integration tests
-pnpm exec ts-mocha -p ./tsconfig.json tests/<test-file>.ts
-```
-
-### 13. quick verification
-
-* frontend: `http://localhost:3000`
-* indexer API: `http://localhost:8080` (and `http://localhost:8080/documentation` for swagger)
-* postgres: `psql postgresql://postgres:postgres@localhost:5432/monopoly`
-* redis: `redis-cli ping` → should return `PONG`
-
-
-## 📝 Notes
-
-### Game Rules
-
-The game follows standard Monopoly rules with some modifications:
-
-* 40 spaces on the board
-* Roll doubles for an extra turn
-* Buy and build properties
-* Pay rent when landing on another player’s property
-* Chance & Community Chest cards
-* Tax and Jail spaces
-* Trading system
-* Bankruptcy when funds hit zero
-
-### Ephemeral Rollups
-
-Magic Block’s Ephemeral Rollups provide:
-
-* High-speed, low-latency gameplay
-* Real-time updates
-* Final settlement on Solana mainnet
-
-### Security
-
-* Private keys are never shared
-* All transactions are signed client-side
-* Dice rolls use VRF for provable randomness
-* Platform fees configurable by admin
+Implementation plans, phase evidence, and remaining release gates are tracked under `plans/260811-0313-nestjs-colyseus-monorepo-refactor/`.

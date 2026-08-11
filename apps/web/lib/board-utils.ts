@@ -235,19 +235,8 @@ export const calculateRentForProperty = (
   diceResult: [number, number],
   allProperties: PropertyAccount[]
 ): number => {
-  // FIXME
-  const propertyTypeMap = {
-    [PropertyType.Street]: "Street",
-    [PropertyType.Railroad]: "Railroad",
-    [PropertyType.Utility]: "Utility",
-    // @ts-expect-error
-    [PropertyType.Property]: "Street", // Fallback to Street for Property type
-  };
-
-  const propertyTypeString = propertyTypeMap[property.propertyType] || "Street";
-
-  switch (propertyTypeString) {
-    case "Street": {
+  switch (property.propertyType) {
+    case PropertyType.Street: {
       if (property.hasHotel) {
         return property.rentWithHotel;
       } else if (property.houses > 0) {
@@ -267,7 +256,7 @@ export const calculateRentForProperty = (
         }
       }
     }
-    case "Railroad": {
+    case PropertyType.Railroad: {
       const railroadsOwned = countRailroadsOwned(ownerState, allProperties);
       const baseRent = property.rentBase;
 
@@ -284,7 +273,7 @@ export const calculateRentForProperty = (
           return baseRent;
       }
     }
-    case "Utility": {
+    case PropertyType.Utility: {
       const utilitiesOwned = countUtilitiesOwned(ownerState, allProperties);
       const diceSum = diceResult[0] + diceResult[1];
 

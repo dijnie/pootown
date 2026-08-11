@@ -8,6 +8,19 @@ export function cn(...inputs: ClassValue[]) {
 export const formatAddress = (addr: string, length: number = 4) =>
   `${addr.slice(0, length)}...${addr.slice(-length)}`;
 
+export function formatMatchCash(value: string): string {
+  return BigInt(value).toLocaleString("en-US");
+}
+
+export function canAffordMatchCash(balance: string, cost: number): boolean {
+  return Number.isSafeInteger(cost) && cost >= 0 && BigInt(balance) >= BigInt(cost);
+}
+
+export function toSafeMatchCashNumber(value: string): number {
+  const cash = BigInt(value);
+  return Number(cash > BigInt(Number.MAX_SAFE_INTEGER) ? Number.MAX_SAFE_INTEGER : cash);
+}
+
 export function formatPrice(
   price: number,
   options: {

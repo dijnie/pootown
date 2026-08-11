@@ -4,15 +4,13 @@ import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckIcon, CopyIcon, Share2, ArrowLeft, Trophy } from "lucide-react";
-import { formatAddress, formatPrice } from "@/lib/utils";
+import { CheckIcon, CopyIcon, Share2, ArrowLeft, ShieldCheck } from "lucide-react";
+import { formatAddress } from "@/lib/utils";
 import { toast } from "sonner";
 import { useParams, useRouter } from "next/navigation";
-import { useGameContext } from "@/components/providers/game-provider";
 
 export function RoomUrlShare() {
   const { address: gameAddress } = useParams<{ address: string }>();
-  const { gameState } = useGameContext();
   const [copyToClipboard, isCopied] = useCopyToClipboard();
   const router = useRouter();
 
@@ -30,8 +28,6 @@ export function RoomUrlShare() {
 
   if (!gameAddress) return null;
 
-  const entryFee = gameState?.entryFee || 0;
-  const totalPrizePool = gameState?.totalPrizePool || 0;
   //   const currentPlayers = gameState?.currentPlayers || 0;
   //   const maxPlayers = gameState?.maxPlayers || 0;
 
@@ -78,26 +74,12 @@ export function RoomUrlShare() {
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Trophy className="h-4 w-4 text-foreground/70" />
-              <span className="text-sm font-base">Game Type</span>
+              <ShieldCheck className="h-4 w-4 text-foreground/70" />
+              <span className="text-sm font-base">Room state</span>
             </div>
-            {entryFee > 0 ? (
-              <div className="text-right">
-                <div className="text-sm font-medium text-green-600">
-                  Prize Pool
-                </div>
-                <div className="text-xs text-foreground/70">
-                  {formatPrice(totalPrizePool / 10 ** 9)} SOL
-                </div>
-              </div>
-            ) : (
-              <Badge
-                variant="neutral"
-                className="text-xs bg-blue-100 text-blue-800 border-blue-200"
-              >
-                Free Game
-              </Badge>
-            )}
+            <Badge variant="neutral" className="text-xs bg-blue-100 text-blue-800 border-blue-200">
+              Server verified
+            </Badge>
           </div>
         </div>
 

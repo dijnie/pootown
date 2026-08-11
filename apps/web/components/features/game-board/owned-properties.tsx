@@ -3,15 +3,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useGameContext } from "@/components/providers/game-provider";
 import { colorMap, type BoardSpace } from "@/configs/board-data";
-import { useWallet } from "@/hooks/use-wallet";
 import { getBoardSpaceData } from "@/lib/board-utils";
 
 export function OwnedProperties() {
-  const { wallet } = useWallet();
-  const { properties: allProperties } = useGameContext();
+  const { ownPlayerId, properties: allProperties } = useGameContext();
 
   const ownedProperties = allProperties.filter(
-    (property) => property.owner === wallet?.address
+    (property) => property.owner === ownPlayerId
   );
 
   console.log("ownedProperties", ownedProperties);

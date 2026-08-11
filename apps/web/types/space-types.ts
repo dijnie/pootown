@@ -1,6 +1,33 @@
 import { TaxSpace } from "@/configs/board-data";
-import { GameEvent } from "@/lib/sdk/types";
-import { PropertyAccount } from "@/types/schema";
+import type { PropertyAccount } from "@/types/schema";
+
+type GameLogType =
+  | "BuildingSold"
+  | "ChanceCardDrawn"
+  | "CommunityChestCardDrawn"
+  | "GameCancelled"
+  | "GameEndConditionMet"
+  | "GameEnded"
+  | "GameStarted"
+  | "HotelBuilt"
+  | "HouseBuilt"
+  | "PlayerBankrupt"
+  | "PlayerJoined"
+  | "PlayerLeft"
+  | "PlayerPassedGo"
+  | "PrizeClaimed"
+  | "PropertyDeclined"
+  | "PropertyMortgaged"
+  | "PropertyPurchased"
+  | "PropertyUnmortgaged"
+  | "RentPaid"
+  | "SpecialSpaceAction"
+  | "TaxPaid"
+  | "TradeAccepted"
+  | "TradeCancelled"
+  | "TradeCreated"
+  | "TradeRejected"
+  | "TradesCleanedUp";
 
 export interface BaseSpaceProps {
   position: number;
@@ -29,7 +56,7 @@ export interface GameLogEntry {
   id: string;
   gameId: string;
   timestamp: number;
-  type: GameEvent["type"];
+  type: GameLogType;
   signature: string;
   // type:
   //   | "move"
@@ -53,7 +80,7 @@ export interface GameLogEntry {
     // Property-related
     propertyName?: string;
     position?: number;
-    price?: number;
+    price?: number | string;
     houseCount?: number;
 
     // payRent
@@ -65,7 +92,7 @@ export interface GameLogEntry {
     cardDescription?: string;
     cardIndex?: number;
     effectType?: number;
-    amount?: number;
+    amount?: number | string;
 
     // Trade-related
     tradeId?: string;
@@ -74,8 +101,8 @@ export interface GameLogEntry {
     // targetPlayerName?: string;
     offeredProperties?: number | null;
     requestedProperties?: number | null;
-    offeredMoney?: number;
-    requestedMoney?: number;
+    offeredMoney?: number | string;
+    requestedMoney?: number | string;
     // clear trades:
     remainingTrades?: number;
 
@@ -97,15 +124,15 @@ export interface GameLogEntry {
     taxType?: string;
 
     // bankruptcy
-    liquidationValue?: number;
-    cashTransferred?: number;
+    liquidationValue?: number | string;
+    cashTransferred?: number | string;
 
     // special spaces
     spaceType?: number;
 
     // end game
     winner?: string | null;
-    winnerNetWorth?: number;
+    winnerNetWorth?: number | string;
 
     // claim prize
     prizeAmount?: number;

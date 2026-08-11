@@ -86,20 +86,20 @@ export default function FooterSection() {
           </div>
         </div>
 
-        {/* Devnet Banner */}
+        {/* Service status banner */}
         <div className="bg-[#9945ff] text-white border-6 border-black shadow-[12px_12px_0_#000] px-8 py-6 mb-16 hover:shadow-[18px_18px_0_#000] hover:-translate-y-2 transition-all duration-500 cursor-pointer group">
           <div className="flex items-center justify-center gap-4">
             <Avatar className="w-12 h-12 border-4 border-black shadow-[4px_4px_0_#000] group-hover:scale-110 transition-transform duration-300">
-              <AvatarImage walletAddress="Devnet11111111111111111111111111111111" />
+              <AvatarImage walletAddress="Realtime111111111111111111111111111111" />
               <AvatarFallback
-                walletAddress="Devnet11111111111111111111111111111111"
+                walletAddress="Realtime111111111111111111111111111111"
                 className="bg-[#ffed00] text-black text-lg font-black"
               >
-                DE
+                RT
               </AvatarFallback>
             </Avatar>
             <p className="text-xl md:text-2xl font-black uppercase [text-shadow:3px_3px_0_#000]">
-              RUNNING ON DEVNET - FREE TO PLAY
+              REALTIME BETA - ACCOUNT COIN ADMISSION
             </p>
           </div>
         </div>
@@ -112,8 +112,8 @@ export default function FooterSection() {
               About
             </h4>
             <p className="text-black text-base font-bold leading-relaxed">
-              Panda Monopoly is a fully on-chain multiplayer board game built on
-              Solana blockchain with real-time gameplay.
+              Poo Town is a real-time multiplayer property game with server-authoritative
+              rules, durable recovery, and in-app account coin.
             </p>
           </div>
 
@@ -124,13 +124,13 @@ export default function FooterSection() {
             </h4>
             <ul className="space-y-2 text-black text-base font-bold">
               <li className="hover:text-[#9945ff] transition-colors cursor-pointer">
-                → Solana Blockchain
+                → NestJS API
               </li>
               <li className="hover:text-[#9945ff] transition-colors cursor-pointer">
-                → MagicBlock Engine
+                → Colyseus Rooms
               </li>
               <li className="hover:text-[#9945ff] transition-colors cursor-pointer">
-                → Real-time Indexer
+                → PostgreSQL Recovery
               </li>
               <li className="hover:text-[#9945ff] transition-colors cursor-pointer">
                 → Next.js + React

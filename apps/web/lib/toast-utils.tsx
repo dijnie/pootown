@@ -3,8 +3,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { formatAddress } from "./utils";
 import { surpriseCards, treasureCards } from "@/configs/board-data";
-import { Address } from "@solana/kit";
-import { GameEndReason } from "./sdk/generated";
+import { GameEndReason } from "@/types/schema";
 import { UserAvatar } from "@/components/user-avatar";
 import Link from "next/link";
 
@@ -360,9 +359,9 @@ export const showPropertyPurchasedToast = ({
 };
 
 interface GameEndedToastProps {
-  winner: Address | string | null;
+  winner: string | null;
   reason: GameEndReason;
-  winnerNetWorth: number | null;
+  winnerNetWorth: number | string | null;
   currentPlayerAddress: string | null;
 }
 
@@ -378,8 +377,6 @@ export const showGameEndedToast = ({
         return "Bankruptcy Victory";
       case GameEndReason.TimeLimit:
         return "Time Limit Reached";
-      case GameEndReason.Manual:
-        return "Manual End";
       default:
         return "Game Ended";
     }
@@ -568,10 +565,9 @@ export const showGameEndedToast = ({
         content: "w-full",
       },
       style: {
-        // @ts-ignore
         "--width": "600px",
         width: "600px",
-      },
+      } as React.CSSProperties,
     }
   );
 };
