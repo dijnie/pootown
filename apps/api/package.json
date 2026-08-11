@@ -4,12 +4,11 @@
   "private": true,
   "main": "./dist/main.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node -e \"const fs=require('node:fs'); for (const path of ['dist/database/migrations','dist/database/roles']) fs.rmSync(path,{recursive:true,force:true})\" && cp -R src/database/migrations dist/database/ && cp -R src/database/roles dist/database/",
     "lint": "eslint src test --max-warnings=0 && tsc -p tsconfig.test.json --noEmit",
     "start": "node dist/main.js",
     "test": "tsc -p tsconfig.test.json && node --test .test-dist/test/*.test.js",
     "test:e2e": "tsc -p tsconfig.test.json && node --test .test-dist/test/*.e2e-spec.js",
-    "db:migrate": "node dist/database/migration-cli.js up",
     "db:migrate:test": "tsc -p tsconfig.test.json && node --test .test-dist/test/database-migrations.e2e-spec.js"
   },
   "dependencies": {
@@ -31,6 +30,7 @@
   },
   "devDependencies": {
     "@nestjs/testing": "11.1.29",
+    "@testcontainers/postgresql": "12.1.0",
     "@types/node": "24.3.1",
     "@types/pg": "8.21.0",
     "@types/supertest": "7.2.1",
