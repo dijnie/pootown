@@ -22,6 +22,9 @@ const ApiEnvironmentSchema = z.object({
   RESCUE_BALANCE_COIN: positiveCanonicalCoin.default("100"),
   RESCUE_WINDOW_MS: z.coerce.number().int().positive().default(86_400_000),
   REALTIME_TICKET_TTL_MS: z.coerce.number().int().min(10_000).max(300_000).default(60_000),
+  WAITING_SESSION_TTL_MS: z.coerce.number().int().min(60_000).max(86_400_000).default(900_000),
+  TICKET_RELEASE_GRACE_MS: z.coerce.number().int().min(1_000).max(300_000).default(30_000),
+  ACTIVE_RECOVERY_GRACE_MS: z.coerce.number().int().min(30_000).max(900_000).default(120_000),
 }).superRefine((environment, context) => {
   if (BigInt(environment.INITIAL_GRANT_COIN) < BigInt(environment.RESCUE_BALANCE_COIN)) {
     context.addIssue({

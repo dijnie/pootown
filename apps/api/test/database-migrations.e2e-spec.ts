@@ -75,6 +75,7 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       { name: "0004-session-release-and-cancellation.sql", checksum_length: 64 },
       { name: "0005-internal-session-transitions.sql", checksum_length: 64 },
       { name: "0006-terminal-settlement-invariants.sql", checksum_length: 64 },
+      { name: "0007-reconciliation-recovery-status.sql", checksum_length: 64 },
     ]);
     const owners = await pool.query<{ tableowner: string }>(`
       SELECT DISTINCT tableowner
@@ -386,6 +387,11 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
         await client.query("ROLLBACK");
       }
       await denied(() => client.query("SELECT * FROM realtime.room_checkpoints"));
+      await client.query("SELECT game_session_id, room_id, lease_until, checkpoint_state_version, runtime_evidence_at FROM realtime.api_room_recovery_status");
+      const recoveryGrant = await client.query<{ allowed: boolean }>(
+        "SELECT has_column_privilege('api_runtime', 'game.game_sessions', 'recovery_required_at', 'UPDATE') AS allowed",
+      );
+      assert.deepEqual(recoveryGrant.rows, [{ allowed: true }]);
       await denied(() => client.query("CREATE TABLE identity.forbidden (id integer)"));
     });
 
@@ -680,12 +686,12 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       await cp(resolve(process.cwd(), "src/database/roles/provision.sql"), rolesFile);
       const options = { migrationsDirectory, rolesFile };
 
-      await writeFile(join(migrationsDirectory, "0007-noop.sql"), "SELECT 1;\n");
+      await writeFile(join(migrationsDirectory, "0008-noop.sql"), "SELECT 1;\n");
       await runMigrations(databaseUrl, options);
-      await rm(join(migrationsDirectory, "0007-noop.sql"));
+      await rm(join(migrationsDirectory, "0008-noop.sql"));
       await assert.rejects(runMigrations(databaseUrl, options), /Applied migration files are missing/);
 
-      await writeFile(join(migrationsDirectory, "0007-noop.sql"), "SELECT 1;\n");
+      await writeFile(join(migrationsDirectory, "0008-noop.sql"), "SELECT 1;\n");
       await writeFile(join(migrationsDirectory, "0000-retroactive.sql"), "SELECT 1;\n");
       await assert.rejects(runMigrations(databaseUrl, options), /Retroactive migrations are not allowed/);
       await rm(join(migrationsDirectory, "0000-retroactive.sql"));

@@ -3,6 +3,7 @@ import { ConfigModule } from "@nestjs/config";
 import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { LoggerModule } from "nestjs-pino";
+import { ScheduleModule } from "@nestjs/schedule";
 
 import { AuthModule } from "./auth/auth.module";
 import { InternalAuthGuard } from "./auth/internal-auth.guard";
@@ -20,6 +21,7 @@ import { ReadModelsModule } from "./read-models/read-models.module";
   imports: [
     ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true, validate: parseApiEnvironment }),
     LoggerModule.forRoot(loggerConfig),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     AuthModule,
     DatabaseModule,

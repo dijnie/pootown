@@ -16,6 +16,7 @@ import {
 } from "../src";
 import {
   InternalMutationContractSchemas,
+  ReconciliationResponseSchema,
   SessionStartedRequestSchema,
   SettlementRequestSchema,
   TicketConsumeRequestSchema,
@@ -134,6 +135,7 @@ describe("HTTP API contracts", () => {
       "abortSession",
       "consumeTicket",
       "markStarted",
+      "runReconciliation",
       "settleSession",
     ]);
     for (const contract of [
@@ -143,6 +145,24 @@ describe("HTTP API contracts", () => {
       assert.equal(contract.headers.safeParse({ contractVersion: 1 }).success, false);
       assert.equal(contract.headers.safeParse({ contractVersion: 1, idempotencyKey: "operation:1" }).success, true);
     }
+  });
+
+  it("strictly versions reconciliation requests and bounded counters", () => {
+    const reconciliation = InternalMutationContractSchemas.runReconciliation.body;
+    assert.equal(reconciliation.safeParse({ contractVersion: 1 }).success, true);
+    assert.equal(reconciliation.safeParse({ contractVersion: 2 }).success, false);
+    assert.equal(reconciliation.safeParse({ contractVersion: 1, actorId: "forged" }).success, false);
+    const response = {
+      contractVersion: 1,
+      waitingSessionsCancelled: 1,
+      expiredAdmissionsReleased: 2,
+      terminalSettlementsCommitted: 3,
+      sessionsMarkedForRecovery: 4,
+      alreadyRunning: false,
+    };
+    assert.equal(ReconciliationResponseSchema.safeParse(response).success, true);
+    assert.equal(ReconciliationResponseSchema.safeParse({ ...response, sessionsMarkedForRecovery: -1 }).success, false);
+    assert.equal(ReconciliationResponseSchema.safeParse({ ...response, privateCheckpoint: {} }).success, false);
   });
 
   it("keeps rescue policy and identity server-owned", () => {

@@ -2,10 +2,12 @@ import { Body, Controller, Headers, Param, Post } from "@nestjs/common";
 import { GameIdSchema, type OperationResponse } from "@pootown/game-contracts";
 import {
   AbortSessionRequestSchema,
+  ReconciliationRequestSchema,
   SessionStartedRequestSchema,
   SettlementRequestSchema,
   TicketConsumeRequestSchema,
   type AbortSessionRequest,
+  type ReconciliationResponse,
   type SettlementRequest,
   type TicketConsumeRequest,
   type TicketConsumeResponse,
@@ -13,6 +15,7 @@ import {
 
 import { InternalSettlementService } from "./internal-settlement.service";
 import { InternalSessionService } from "./internal-session.service";
+import { ReconciliationService } from "./reconciliation.service";
 import { InternalRoute } from "../auth/internal-route.decorator";
 import { ApiHttpException } from "../platform/http/api-http.exception";
 import { requireMutationHeaders, type HttpHeaders } from "../platform/http/contract-headers";
@@ -24,6 +27,7 @@ export class InternalController {
   public constructor(
     private readonly sessions: InternalSessionService,
     private readonly settlements: InternalSettlementService,
+    private readonly reconciliation: ReconciliationService,
   ) {}
 
   @Post("tickets/consume")
@@ -72,5 +76,14 @@ export class InternalController {
     const gameId = GameIdSchema.safeParse(rawGameId);
     if (!gameId.success) throw new ApiHttpException("REQUEST_INVALID", 400, "Game ID is invalid");
     return this.settlements.abort(gameId.data, body, mutation.idempotencyKey);
+  }
+
+  @Post("reconciliation/run")
+  public runReconciliation(
+    @Headers() headers: HttpHeaders,
+    @Body(new ZodValidationPipe(ReconciliationRequestSchema)) _body: { readonly contractVersion: 1 },
+  ): Promise<ReconciliationResponse> {
+    requireMutationHeaders(headers);
+    return this.reconciliation.run();
   }
 }

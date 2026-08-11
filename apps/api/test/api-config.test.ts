@@ -19,8 +19,17 @@ describe("API configuration", () => {
     const config = parseApiEnvironment(validEnvironment);
     assert.equal(config.API_PORT, 3001);
     assert.equal(config.INITIAL_GRANT_COIN, "1000");
+    assert.equal(config.WAITING_SESSION_TTL_MS, 900_000);
+    assert.equal(config.TICKET_RELEASE_GRACE_MS, 30_000);
+    assert.equal(config.ACTIVE_RECOVERY_GRACE_MS, 120_000);
     assert.deepEqual([...corsOrigins(config)], ["https://play.example.com", "https://admin.example.com"]);
     assert.equal(config.PRIVY_VERIFICATION_KEY.includes("\\n"), false);
+  });
+
+  it("bounds reconciliation timing policy", () => {
+    assert.throws(() => parseApiEnvironment({ ...validEnvironment, WAITING_SESSION_TTL_MS: 59_999 }));
+    assert.throws(() => parseApiEnvironment({ ...validEnvironment, TICKET_RELEASE_GRACE_MS: 999 }));
+    assert.throws(() => parseApiEnvironment({ ...validEnvironment, ACTIVE_RECOVERY_GRACE_MS: 29_999 }));
   });
 
   it("rejects wildcard origins and public private-key names", () => {

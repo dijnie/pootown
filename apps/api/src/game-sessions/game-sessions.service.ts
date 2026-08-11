@@ -320,6 +320,135 @@ export class GameSessionsService {
     });
   }
 
+  public cancelExpiredWaitingSession(gameId: string, expiresBefore: Date, now = new Date()): Promise<boolean> {
+    const idempotencyKey = `reconcile:waiting:${gameId}`;
+    const hash = requestHash({ contractVersion: CONTRACT_VERSION, gameId, reason: "waitingExpired" });
+    return withTransaction(this.pool, async (client) => {
+      await this.advisoryLockSession(client, gameId);
+      const candidate = await client.query<{ creator_user_id: string; created_at: Date }>(
+        "SELECT creator_user_id, created_at FROM game.game_sessions WHERE id = $1",
+        [gameId],
+      );
+      const row = candidate.rows[0];
+      if (row === undefined || row.created_at.getTime() > expiresBefore.getTime()) return false;
+      const prior = await this.findOperation(client, row.creator_user_id, "cancelSession", idempotencyKey);
+      if (prior !== undefined) {
+        this.assertReplay(prior, hash, "committed");
+        return false;
+      }
+      const reservations = await client.query<ReservationRow>(
+        `
+          SELECT id, user_id, amount::text FROM economy.coin_reservations
+          WHERE game_session_id = $1 AND status = 'reserved' ORDER BY user_id
+        `,
+        [gameId],
+      );
+      const userIds = [...new Set(reservations.rows.map((reservation) => reservation.user_id))].sort();
+      const locked = await client.query(
+        "SELECT user_id FROM economy.coin_accounts WHERE user_id = ANY($1::varchar[]) ORDER BY user_id FOR UPDATE",
+        [userIds],
+      );
+      if (locked.rowCount !== userIds.length) throw new Error("Waiting cancellation account set is incomplete");
+      const session = await this.lockSession(client, gameId);
+      if (session.lifecycle !== "open" || session.created_at.getTime() > expiresBefore.getTime()) return false;
+      const operationId = randomUUID();
+      await this.insertOperation(client, operationId, row.creator_user_id, "cancelSession", idempotencyKey, hash);
+      await client.query("UPDATE game.game_sessions SET lifecycle = 'cancelling' WHERE id = $1", [gameId]);
+      for (const reservation of reservations.rows) await this.releaseReservation(client, operationId, reservation, now);
+      await client.query(
+        `
+          UPDATE game.join_intents SET status = 'released', updated_at = $2
+          WHERE game_session_id = $1 AND status IN ('pending', 'admitted')
+        `,
+        [gameId, now],
+      );
+      await client.query(
+        `
+          INSERT INTO readmodel.session_history
+            (game_session_id, user_id, player_id, result, account_coin_delta, finished_at)
+          SELECT game_session_id, user_id, player_id, 'cancelled', 0, $2
+          FROM game.session_players WHERE game_session_id = $1 AND active = true
+          ON CONFLICT (game_session_id, user_id) DO NOTHING
+        `,
+        [gameId, now],
+      );
+      await client.query("DELETE FROM game.session_players WHERE game_session_id = $1", [gameId]);
+      await client.query(
+        `
+          UPDATE game.realtime_tickets
+          SET expires_at = GREATEST(created_at + interval '1 millisecond', $2::timestamptz)
+          WHERE game_session_id = $1 AND consumed_at IS NULL
+        `,
+        [gameId, now],
+      );
+      await client.query(
+        "UPDATE game.game_sessions SET lifecycle = 'cancelled', cancelled_at = $2 WHERE id = $1",
+        [gameId, now],
+      );
+      const response = OperationResponseSchema.parse({ contractVersion: CONTRACT_VERSION, operationId, committed: true });
+      await this.commitOperation(client, operationId, response, now);
+      return true;
+    });
+  }
+
+  public releaseExpiredAdmission(reservationId: string, expiredBefore: Date, now = new Date()): Promise<boolean> {
+    return withTransaction(this.pool, async (client) => {
+      const binding = await client.query<{ game_session_id: string; user_id: string }>(
+        "SELECT game_session_id, user_id FROM economy.coin_reservations WHERE id = $1",
+        [reservationId],
+      );
+      const row = binding.rows[0];
+      if (row === undefined) return false;
+      await this.advisoryLockSession(client, row.game_session_id);
+      await this.lockAccount(client, row.user_id);
+      const session = await this.lockSession(client, row.game_session_id);
+      if (session.lifecycle !== "open") return false;
+      const operationKey = `reconcile:ticket:${reservationId}`;
+      const hash = requestHash({ contractVersion: CONTRACT_VERSION, reservationId, reason: "ticketExpired" });
+      const prior = await this.findOperation(client, row.user_id, "releaseJoinIntent", operationKey);
+      if (prior !== undefined) {
+        this.assertReplay(prior, hash, "committed");
+        return false;
+      }
+      const reservationResult = await client.query<ReservationRow>(
+        `
+          SELECT reservation.id, reservation.user_id, reservation.amount::text
+          FROM economy.coin_reservations reservation
+          WHERE reservation.id = $1 AND reservation.status = 'reserved'
+            AND EXISTS (
+              SELECT 1 FROM game.realtime_tickets ticket
+              WHERE ticket.reservation_id = reservation.id
+                AND ticket.consumed_at IS NULL
+                AND ticket.expires_at <= $2
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM game.session_players player
+              WHERE player.reservation_id = reservation.id AND player.active = true
+            )
+          FOR UPDATE
+        `,
+        [reservationId, expiredBefore],
+      );
+      const reservation = reservationResult.rows[0];
+      if (reservation === undefined) return false;
+      const operationId = randomUUID();
+      await this.insertOperation(client, operationId, row.user_id, "releaseJoinIntent", operationKey, hash);
+      await this.releaseReservation(client, operationId, reservation, now);
+      await client.query(
+        `
+          UPDATE game.join_intents
+          SET status = CASE WHEN status = 'pending' THEN 'expired' ELSE 'released' END, updated_at = $2
+          WHERE reservation_id = $1 AND status IN ('pending', 'admitted')
+        `,
+        [reservationId, now],
+      );
+      await this.expireUnusedTickets(client, reservationId, now);
+      const response = OperationResponseSchema.parse({ contractVersion: CONTRACT_VERSION, operationId, committed: true });
+      await this.commitOperation(client, operationId, response, now);
+      return true;
+    });
+  }
+
   public async reconnectTicket(
     principal: AuthenticatedPrincipal,
     gameId: string,

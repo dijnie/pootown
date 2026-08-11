@@ -55,15 +55,30 @@ export const AbortSessionRequestSchema = z.strictObject({
   reason: z.enum(["reconnectWindowExpired", "operatorDecision"]),
 });
 
+export const ReconciliationRequestSchema = z.strictObject({
+  contractVersion: ContractVersionSchema,
+});
+
+export const ReconciliationResponseSchema = z.strictObject({
+  contractVersion: ContractVersionSchema,
+  waitingSessionsCancelled: z.number().int().nonnegative(),
+  expiredAdmissionsReleased: z.number().int().nonnegative(),
+  terminalSettlementsCommitted: z.number().int().nonnegative(),
+  sessionsMarkedForRecovery: z.number().int().nonnegative(),
+  alreadyRunning: z.boolean(),
+});
+
 export const InternalMutationContractSchemas = {
   consumeTicket: { headers: MutationHeadersSchema, body: TicketConsumeRequestSchema },
   markStarted: { headers: MutationHeadersSchema, body: SessionStartedRequestSchema },
   settleSession: { headers: MutationHeadersSchema, body: SettlementRequestSchema },
   abortSession: { headers: MutationHeadersSchema, body: AbortSessionRequestSchema },
+  runReconciliation: { headers: MutationHeadersSchema, body: ReconciliationRequestSchema },
 } as const;
 
 export type TicketConsumeRequest = z.infer<typeof TicketConsumeRequestSchema>;
 export type TicketConsumeResponse = z.infer<typeof TicketConsumeResponseSchema>;
 export type SettlementRequest = z.infer<typeof SettlementRequestSchema>;
 export type AbortSessionRequest = z.infer<typeof AbortSessionRequestSchema>;
+export type ReconciliationResponse = z.infer<typeof ReconciliationResponseSchema>;
 export type InternalOperationResponse = z.infer<typeof OperationResponseSchema>;

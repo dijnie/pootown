@@ -66,7 +66,7 @@ export class InternalSettlementService {
       if (session.room_id !== request.roomId) {
         throw new ApiHttpException("TERMINAL_PROOF_INVALID", 409, "Terminal proof room binding is invalid");
       }
-      if (session.lifecycle !== "active") {
+      if (session.lifecycle !== "active" && session.lifecycle !== "settling" && session.lifecycle !== "recovery_required") {
         throw new ApiHttpException("SESSION_NOT_OPEN", 409, "Session is not active for settlement");
       }
 
