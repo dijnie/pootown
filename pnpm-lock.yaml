@@ -200,6 +200,9 @@ importers:
       '@codama/renderers-js':
         specifier: ^1.4.2
         version: 1.7.1(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2)
+      '@pootown/game-contracts':
+        specifier: workspace:^
+        version: link:../../packages/game-contracts
       '@privy-io/react-auth':
         specifier: ^2.24.0
         version: 2.25.0(66e8cc55087e664d2c2c446e3feb231c)

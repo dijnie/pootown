@@ -6,13 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "pnpm --filter @pootown/game-contracts build && tsc -p tsconfig.test.json && node --test .test-dist/tests/*.test.js"
   },
   "dependencies": {
     "@codama/nodes-from-anchor": "^1.2.9",
     "@codama/renderers-js": "^1.4.2",
     "@privy-io/react-auth": "^2.24.0",
     "@privy-io/server-auth": "^1.32.5",
+    "@pootown/game-contracts": "workspace:^",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-dialog": "^1.1.15",
