@@ -24,6 +24,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@colyseus/sdk": "0.17.43",
     "@testcontainers/postgresql": "12.1.0",
     "@types/express": "5.0.6",
     "@types/node": "24.3.1",

@@ -1,0 +1,179 @@
+import assert from "node:assert/strict";
+import { after, before, describe, it } from "node:test";
+
+import { CheckpointRepository } from "../src/persistence/checkpoint-repository.js";
+import {
+  CommandCommitConflictError,
+  CommandIdempotencyConflictError,
+  CommandRepository,
+} from "../src/persistence/command-repository.js";
+import { RoomLeaseRepository } from "../src/persistence/room-lease.js";
+import {
+  lifecycleSnapshot,
+  seedGameSession,
+  startTestDatabase,
+  stopTestDatabase,
+  type TestDatabase,
+} from "./database-test-helper.js";
+
+describe("atomic room command persistence", { timeout: 120_000 }, () => {
+  let database: TestDatabase;
+
+  before(async () => {
+    database = await startTestDatabase();
+    await seedGameSession(database.pool, "game_command", "room_command");
+    await seedGameSession(database.pool, "game_command_race", "room_command_race");
+    await seedGameSession(database.pool, "game_command_duplicate", "room_command_duplicate");
+  });
+
+  after(async () => stopTestDatabase(database));
+
+  it("commits checkpoint, events, and acknowledgement once before exact replay", async () => {
+    const leases = new RoomLeaseRepository(database.pool, "command-instance", 30_000);
+    const lease = await leases.acquire("room_command", "game_command", new Date("2026-08-11T20:00:00.000Z"));
+    await new CheckpointRepository(database.pool, leases).initialize(
+      lease,
+      1,
+      lifecycleSnapshot("game_command", 1),
+      new Date("2026-08-11T20:00:01.000Z"),
+    );
+    const commands = new CommandRepository(database.pool, leases);
+    const value = {
+      playerId: "player_checkpoint",
+      command: {
+        requestId: "00000000-0000-4000-8000-000000000101",
+        expectedStateVersion: 1,
+        type: "joinGame",
+        payload: {},
+      },
+      stateVersion: 2,
+      serializedState: lifecycleSnapshot("game_command", 2),
+      acknowledgement: {
+        type: "command.ack",
+        requestId: "00000000-0000-4000-8000-000000000101",
+        stateVersion: 2,
+        eventIds: ["event_command_1"],
+      },
+      events: [{
+        type: "domain.event",
+        eventId: "event_command_1",
+        stateVersion: 2,
+        occurredAtMs: Date.parse("2026-08-11T20:00:02.000Z"),
+        payload: { type: "playerJoined", playerId: "player_2", seatIndex: 1, totalPlayers: 2 },
+      }],
+    };
+    const committed = await commands.commit(lease, value, new Date("2026-08-11T20:00:02.000Z"));
+    assert.equal(committed.duplicate, false);
+    assert.deepEqual(
+      await commands.findReplay(lease, value.playerId, value.command, new Date("2026-08-11T20:00:02.500Z")),
+      committed.acknowledgement,
+    );
+    const replay = await commands.commit(lease, value, new Date("2026-08-11T20:00:03.000Z"));
+    assert.equal(replay.duplicate, true);
+    assert.deepEqual(replay.acknowledgement, committed.acknowledgement);
+
+    await assert.rejects(commands.commit(lease, {
+      ...value,
+      command: { ...value.command, type: "leaveGame" },
+    }, new Date("2026-08-11T20:00:04.000Z")), CommandIdempotencyConflictError);
+    await assert.rejects(commands.findReplay(lease, value.playerId, {
+      ...value.command,
+      type: "leaveGame",
+    }, new Date("2026-08-11T20:00:04.000Z")), CommandIdempotencyConflictError);
+    const stored = await database.pool.query(
+      `
+        SELECT
+          (SELECT count(*)::int FROM realtime.room_commands WHERE room_id = $1) AS commands,
+          (SELECT count(*)::int FROM realtime.room_events WHERE room_id = $1) AS events,
+          (SELECT state_version::int FROM realtime.room_checkpoints WHERE room_id = $1) AS state_version
+      `,
+      [lease.roomId],
+    );
+    assert.deepEqual(stored.rows, [{ commands: 1, events: 1, state_version: 2 }]);
+  });
+
+  it("allows exactly one command from a shared expected revision", async () => {
+    const leases = new RoomLeaseRepository(database.pool, "command-instance", 30_000);
+    const lease = await leases.acquire(
+      "room_command_race",
+      "game_command_race",
+      new Date("2026-08-11T20:00:05.000Z"),
+    );
+    await new CheckpointRepository(database.pool, leases).initialize(
+      lease,
+      2,
+      lifecycleSnapshot("game_command_race", 2),
+      new Date("2026-08-11T20:00:05.000Z"),
+    );
+    const commands = new CommandRepository(database.pool, leases);
+    const attempt = (requestId: string) => commands.commit(lease, {
+      playerId: "player_checkpoint",
+      command: { requestId, expectedStateVersion: 2, type: "joinGame", payload: {} },
+      stateVersion: 3,
+      serializedState: lifecycleSnapshot("game_command_race", 3),
+      acknowledgement: { type: "command.ack", requestId, stateVersion: 3, eventIds: [] },
+      events: [],
+    }, new Date("2026-08-11T20:00:06.000Z"));
+    const results = await Promise.allSettled([
+      attempt("00000000-0000-4000-8000-000000000102"),
+      attempt("00000000-0000-4000-8000-000000000103"),
+    ]);
+    assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+    const rejected = results.find((result) => result.status === "rejected");
+    assert.equal(rejected?.status === "rejected" && rejected.reason instanceof CommandCommitConflictError, true);
+    const stored = await database.pool.query(
+      "SELECT state_version::int FROM realtime.room_checkpoints WHERE room_id = $1",
+      [lease.roomId],
+    );
+    assert.deepEqual(stored.rows, [{ state_version: 3 }]);
+  });
+
+  it("returns the committed acknowledgement to concurrent exact duplicates", async () => {
+    const leases = new RoomLeaseRepository(database.pool, "command-instance", 30_000);
+    const lease = await leases.acquire(
+      "room_command_duplicate",
+      "game_command_duplicate",
+      new Date("2026-08-11T20:00:07.000Z"),
+    );
+    await new CheckpointRepository(database.pool, leases).initialize(
+      lease,
+      4,
+      lifecycleSnapshot("game_command_duplicate", 4),
+      new Date("2026-08-11T20:00:07.000Z"),
+    );
+    const commands = new CommandRepository(database.pool, leases);
+    const value = {
+      playerId: "player_checkpoint",
+      command: {
+        requestId: "00000000-0000-4000-8000-000000000104",
+        expectedStateVersion: 4,
+        type: "joinGame",
+        payload: {},
+      },
+      stateVersion: 5,
+      serializedState: lifecycleSnapshot("game_command_duplicate", 5),
+      acknowledgement: {
+        type: "command.ack",
+        requestId: "00000000-0000-4000-8000-000000000104",
+        stateVersion: 5,
+        eventIds: [],
+      },
+      events: [],
+    };
+    const results = await Promise.all([
+      commands.commit(lease, value, new Date("2026-08-11T20:00:08.000Z")),
+      commands.commit(lease, value, new Date("2026-08-11T20:00:08.000Z")),
+    ]);
+    assert.deepEqual(results.map((result) => result.duplicate).sort(), [false, true]);
+    assert.deepEqual(results[0]?.acknowledgement, results[1]?.acknowledgement);
+    const stored = await database.pool.query(
+      `
+        SELECT
+          (SELECT count(*)::int FROM realtime.room_commands WHERE room_id = $1) AS commands,
+          (SELECT state_version::int FROM realtime.room_checkpoints WHERE room_id = $1) AS state_version
+      `,
+      [lease.roomId],
+    );
+    assert.deepEqual(stored.rows, [{ commands: 1, state_version: 5 }]);
+  });
+});

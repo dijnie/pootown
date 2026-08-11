@@ -2,11 +2,48 @@ import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
+import {
+  gameId,
+  playerId,
+  serializeSnapshot,
+  transition,
+  type GameState,
+  type RandomCheckpoint,
+  type RandomSource,
+} from "@pootown/game-core";
 import { Pool } from "pg";
 
 export interface TestDatabase {
   readonly container: StartedPostgreSqlContainer;
   readonly pool: Pool;
+}
+
+class DatabaseTestRandomSource implements RandomSource {
+  public nextBytes(length: number): Uint8Array {
+    return new Uint8Array(length);
+  }
+
+  public checkpoint(): RandomCheckpoint {
+    return { algorithm: "database-test-v1", state: "initial", draws: 0, bytesConsumed: 0 };
+  }
+
+  public canResume(checkpoint: RandomCheckpoint): boolean {
+    return checkpoint.algorithm === "database-test-v1";
+  }
+}
+
+export function lifecycleSnapshot(gameIdValue: string, stateVersion: number): string {
+  const result = transition(null, {
+    type: "createGame",
+    expectedStateVersion: 0,
+    payload: { gameId: gameId(gameIdValue), maximumPlayers: 4, timeLimitMs: 3_600_000 },
+  }, {
+    actorId: playerId("player_checkpoint"),
+    nowMs: Date.parse("2026-08-11T17:00:00.000Z"),
+    randomSource: new DatabaseTestRandomSource(),
+  });
+  if (!result.ok) throw new Error(result.error.message);
+  return serializeSnapshot({ ...(result.state as GameState), stateVersion });
 }
 
 export async function startTestDatabase(): Promise<TestDatabase> {

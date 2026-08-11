@@ -10,6 +10,9 @@ import { InternalApiClient } from "./api/internal-api-client.js";
 import { parseGameServerEnvironment, type GameServerConfig } from "./app-config.js";
 import { Es256ServiceCredentialProvider } from "./auth/service-credential.js";
 import { registerHealthRoutes } from "./health.js";
+import { CheckpointRepository } from "./persistence/checkpoint-repository.js";
+import { RoomLeaseRepository } from "./persistence/room-lease.js";
+import { createGameRoomClass } from "./rooms/game-room.js";
 
 interface GameServerRuntime {
   readonly gameServer: ColyseusServer;
@@ -62,6 +65,8 @@ export async function createGameServerRuntime(config: GameServerConfig): Promise
     baseUrl: config.apiBaseUrl,
     credentialProvider,
   });
+  const leases = new RoomLeaseRepository(pool, config.instanceId, config.leaseDurationMs);
+  const checkpoints = new CheckpointRepository(pool, leases);
   let acceptingConnections = false;
   let shutdownPromise: Promise<void> | undefined;
   registerHealthRoutes(app, pool, { isAcceptingConnections: () => acceptingConnections });
@@ -75,6 +80,12 @@ export async function createGameServerRuntime(config: GameServerConfig): Promise
     },
   });
   const gameServer = new ColyseusServer({ transport });
+  gameServer.define("game", createGameRoomClass({
+    api: internalApiClient,
+    checkpoints,
+    leaseRenewMs: config.leaseRenewMs,
+    leases,
+  })).filterBy(["gameId"]);
 
   return {
     gameServer,

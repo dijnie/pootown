@@ -8,6 +8,7 @@ import {
   InMatchCashStringSchema,
   PlayerPrivateViewSchema,
   PublicGameStateSchema,
+  RoomAdmissionOptionsSchema,
   RoomCommandSchema,
   lifecycleContractFixture,
   type AccountCoinString,
@@ -48,6 +49,23 @@ describe("game contracts", () => {
     assert.equal(CreateGameRequestSchema.safeParse({ ...validCreateRequest, extra: true }).success, false);
     assert.equal(AccountCoinStringSchema.safeParse("9".repeat(79)).success, false);
     assert.equal(InMatchCashStringSchema.safeParse("-1").success, false);
+
+    const admission = {
+      contractVersion: 1,
+      gameId: "game_1",
+      ticket: "A".repeat(43),
+    };
+    assert.equal(RoomAdmissionOptionsSchema.safeParse(admission).success, true);
+    for (const forged of [
+      { ...admission, userId: "user_1" },
+      { ...admission, playerId: "player_1" },
+      { ...admission, seatIndex: 0 },
+      { ...admission, role: "player" },
+      { ...admission, roomId: "room_attacker" },
+      { ...admission, contractVersion: 2 },
+    ]) {
+      assert.equal(RoomAdmissionOptionsSchema.safeParse(forged).success, false);
+    }
 
     assert.equal(
       RoomCommandSchema.safeParse({

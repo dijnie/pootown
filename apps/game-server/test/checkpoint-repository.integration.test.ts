@@ -1,14 +1,5 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
-import {
-  gameId,
-  playerId,
-  serializeSnapshot,
-  transition,
-  type GameState,
-  type RandomCheckpoint,
-  type RandomSource,
-} from "@pootown/game-core";
 
 import {
   CheckpointConflictError,
@@ -18,38 +9,11 @@ import {
 import { RoomLeaseRepository, RoomLeaseUnavailableError } from "../src/persistence/room-lease.js";
 import {
   seedGameSession,
+  lifecycleSnapshot,
   startTestDatabase,
   stopTestDatabase,
   type TestDatabase,
 } from "./database-test-helper.js";
-
-class CheckpointTestRandomSource implements RandomSource {
-  public nextBytes(length: number): Uint8Array {
-    return new Uint8Array(length);
-  }
-
-  public checkpoint(): RandomCheckpoint {
-    return { algorithm: "checkpoint-test-v1", state: "initial", draws: 0, bytesConsumed: 0 };
-  }
-
-  public canResume(checkpoint: RandomCheckpoint): boolean {
-    return checkpoint.algorithm === "checkpoint-test-v1";
-  }
-}
-
-function lifecycleSnapshot(stateVersion: number): string {
-  const result = transition(null, {
-    type: "createGame",
-    expectedStateVersion: 0,
-    payload: { gameId: gameId("game_checkpoint"), maximumPlayers: 4, timeLimitMs: 3_600_000 },
-  }, {
-    actorId: playerId("player_checkpoint"),
-    nowMs: Date.parse("2026-08-11T17:00:00.000Z"),
-    randomSource: new CheckpointTestRandomSource(),
-  });
-  assert.equal(result.ok, true);
-  return serializeSnapshot({ ...(result.state as GameState), stateVersion });
-}
 
 describe("durable room checkpoints", { timeout: 120_000 }, () => {
   let database: TestDatabase;
@@ -72,7 +36,7 @@ describe("durable room checkpoints", { timeout: 120_000 }, () => {
     const initial = await checkpoints.initialize(
       lease,
       1,
-      lifecycleSnapshot(1),
+      lifecycleSnapshot("game_checkpoint", 1),
       new Date("2026-08-11T17:00:01.000Z"),
     );
     assert.equal(initial.stateVersion, 1);
@@ -83,7 +47,7 @@ describe("durable room checkpoints", { timeout: 120_000 }, () => {
       lease,
       1,
       2,
-      lifecycleSnapshot(2),
+      lifecycleSnapshot("game_checkpoint", 2),
       new Date("2026-08-11T17:00:03.000Z"),
     );
     assert.equal(committed.stateVersion, 2);
@@ -92,7 +56,7 @@ describe("durable room checkpoints", { timeout: 120_000 }, () => {
         lease,
         1,
         3,
-        lifecycleSnapshot(3),
+        lifecycleSnapshot("game_checkpoint", 3),
         new Date("2026-08-11T17:00:04.000Z"),
       ),
       CheckpointConflictError,
@@ -116,7 +80,7 @@ describe("durable room checkpoints", { timeout: 120_000 }, () => {
     await firstCheckpoints.initialize(
       oldLease,
       2,
-      lifecycleSnapshot(2),
+      lifecycleSnapshot("game_checkpoint_takeover", 2),
       new Date("2026-08-11T17:10:01.000Z"),
     );
     const secondLeases = new RoomLeaseRepository(database.pool, "instance-checkpoint-2", 30_000);
@@ -133,7 +97,7 @@ describe("durable room checkpoints", { timeout: 120_000 }, () => {
         oldLease,
         2,
         3,
-        lifecycleSnapshot(3),
+        lifecycleSnapshot("game_checkpoint_takeover", 3),
         new Date("2026-08-11T17:10:31.000Z"),
       ),
       RoomLeaseUnavailableError,

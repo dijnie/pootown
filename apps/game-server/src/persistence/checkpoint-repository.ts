@@ -40,11 +40,11 @@ export class CorruptCheckpointError extends Error {
   }
 }
 
-function checksum(serializedState: string): Buffer {
+export function checkpointChecksum(serializedState: string): Buffer {
   return createHash("sha256").update(serializedState).digest();
 }
 
-function validateSerializedState(serializedState: string, stateVersion?: number): void {
+export function validateCheckpointSnapshot(serializedState: string, stateVersion?: number): void {
   const bytes = Buffer.byteLength(serializedState);
   if (bytes === 0 || bytes > MAX_CHECKPOINT_BYTES) {
     throw new CorruptCheckpointError("Checkpoint size is invalid");
@@ -76,13 +76,13 @@ export class CheckpointRepository {
     serializedState: string,
     now?: Date,
   ): Promise<RoomCheckpoint> {
-    validateSerializedState(serializedState, stateVersion);
+    validateCheckpointSnapshot(serializedState, stateVersion);
     if (!Number.isSafeInteger(stateVersion) || stateVersion < 0) {
       throw new CorruptCheckpointError("Checkpoint state version is invalid");
     }
     return withTransaction(this.pool, async (client) => {
       await this.leases.assertOwned(client, lease, now);
-      const digest = checksum(serializedState);
+      const digest = checkpointChecksum(serializedState);
       const inserted = await client.query<CheckpointRow>(
         `
           INSERT INTO realtime.room_checkpoints
@@ -117,14 +117,14 @@ export class CheckpointRepository {
     serializedState: string,
     now?: Date,
   ): Promise<RoomCheckpoint> {
-    validateSerializedState(serializedState, stateVersion);
+    validateCheckpointSnapshot(serializedState, stateVersion);
     if (!Number.isSafeInteger(expectedStateVersion) || expectedStateVersion < 0 ||
         !Number.isSafeInteger(stateVersion) || stateVersion <= expectedStateVersion) {
       throw new CheckpointConflictError("Checkpoint version transition is invalid");
     }
     return withTransaction(this.pool, async (client) => {
       await this.leases.assertOwned(client, lease, now);
-      const digest = checksum(serializedState);
+      const digest = checkpointChecksum(serializedState);
       const updated = await client.query<CheckpointRow>(
         `
           UPDATE realtime.room_checkpoints
@@ -182,8 +182,8 @@ export class CheckpointRepository {
         typeof state.serialized !== "string") {
       throw new CorruptCheckpointError("Checkpoint payload is malformed");
     }
-    validateSerializedState(state.serialized, stateVersion);
-    const expected = checksum(state.serialized);
+    validateCheckpointSnapshot(state.serialized, stateVersion);
+    const expected = checkpointChecksum(state.serialized);
     if (row.checksum.length !== expected.length || !timingSafeEqual(row.checksum, expected)) {
       throw new CorruptCheckpointError("Checkpoint checksum does not match payload");
     }
