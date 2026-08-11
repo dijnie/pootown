@@ -3,6 +3,7 @@ export * from "./commands/game-command";
 export * from "./errors";
 export * from "./events/domain-event";
 export * from "./model/game-state";
+export * from "./model/gameplay-aggregate-state";
 export * from "./model/identifiers";
 export * from "./model/money";
 export * from "./ports/clock";
