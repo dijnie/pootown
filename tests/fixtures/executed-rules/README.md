@@ -1,9 +1,10 @@
 # Executed rules authority
 
 `manifest.json` freezes the implementation boundary before the off-chain port.
-It points to executable Anchor cases where they exist and to the active Rust
-handler where the old suite has no isolated case. The characterization test
-fails if those sources disappear or the two primary source hashes drift.
+The lifecycle fixture is verified against the compiled Anchor program on a
+local Solana validator. Other families remain explicitly source-evidenced until
+they gain an executable observation. The characterization test fails if those
+sources disappear or the two primary source hashes drift.
 
 The source hashes are provenance, not a target API. Phase 2 and Phase 3 consume
 transport-neutral expectations and must not reproduce PDA, signature, wallet,

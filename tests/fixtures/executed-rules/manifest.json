@@ -16,15 +16,73 @@
     "accountCoinIsDistinctFromInMatchCash": true
   },
   "ruleFamilies": [
-    { "name": "lifecycle-and-seating", "status": "source-evidenced", "evidence": ["tests/initialize-game.test.ts", "tests/join-game.test.ts", "tests/start-game.test.ts"] },
-    { "name": "turn-and-movement", "status": "source-evidenced", "evidence": ["tests/roll-dice.test.ts", "tests/move-player.test.ts", "tests/end-turn.test.ts"] },
-    { "name": "board-and-property", "status": "source-evidenced", "evidence": ["programs/panda-monopoly/src/constants.rs", "programs/panda-monopoly/src/instructions/property.rs"] },
-    { "name": "chance-and-community-cards", "status": "source-evidenced", "evidence": ["programs/panda-monopoly/src/instructions/special_spaces.rs"] },
-    { "name": "jail", "status": "source-evidenced", "evidence": ["tests/pay-jail-fine.test.ts"] },
-    { "name": "trade", "status": "source-evidenced", "evidence": ["programs/panda-monopoly/src/instructions/trading.rs"] },
-    { "name": "bankruptcy-timeout-and-terminal", "status": "source-evidenced", "evidence": ["programs/panda-monopoly/src/instructions/bankruptcy.rs", "programs/panda-monopoly/src/instructions/permissionless.rs", "programs/panda-monopoly/src/instructions/end_game.rs"] },
-    { "name": "auction", "status": "excluded", "reason": "The legacy instruction is commented out and no current UI action executes it." },
-    { "name": "unreachable-community-effects", "status": "excluded", "reason": "The legacy handler logs these paths as unimplemented; they are not target no-ops." }
+    {
+      "name": "pre-start-lifecycle-and-seating",
+      "status": "characterized",
+      "evidence": [
+        "tests/characterization/anchor-lifecycle.test.ts",
+        "tests/fixtures/executed-rules/lifecycle.json"
+      ]
+    },
+    {
+      "name": "start-and-in-progress-lifecycle",
+      "status": "source-evidenced",
+      "evidence": [
+        "tests/start-game.test.ts",
+        "programs/panda-monopoly/src/instructions/initialize.rs"
+      ]
+    },
+    {
+      "name": "turn-and-movement",
+      "status": "source-evidenced",
+      "evidence": [
+        "tests/roll-dice.test.ts",
+        "tests/move-player.test.ts",
+        "tests/end-turn.test.ts"
+      ]
+    },
+    {
+      "name": "board-and-property",
+      "status": "source-evidenced",
+      "evidence": [
+        "programs/panda-monopoly/src/constants.rs",
+        "programs/panda-monopoly/src/instructions/property.rs"
+      ]
+    },
+    {
+      "name": "chance-and-community-cards",
+      "status": "source-evidenced",
+      "evidence": ["programs/panda-monopoly/src/instructions/special_spaces.rs"]
+    },
+    {
+      "name": "jail",
+      "status": "source-evidenced",
+      "evidence": ["tests/pay-jail-fine.test.ts"]
+    },
+    {
+      "name": "trade",
+      "status": "source-evidenced",
+      "evidence": ["programs/panda-monopoly/src/instructions/trading.rs"]
+    },
+    {
+      "name": "bankruptcy-timeout-and-terminal",
+      "status": "source-evidenced",
+      "evidence": [
+        "programs/panda-monopoly/src/instructions/bankruptcy.rs",
+        "programs/panda-monopoly/src/instructions/permissionless.rs",
+        "programs/panda-monopoly/src/instructions/end_game.rs"
+      ]
+    },
+    {
+      "name": "auction",
+      "status": "excluded",
+      "reason": "The legacy instruction is commented out and no current UI action executes it."
+    },
+    {
+      "name": "unreachable-community-effects",
+      "status": "excluded",
+      "reason": "The legacy handler logs these paths as unimplemented; they are not target no-ops."
+    }
   ],
   "approvedDivergences": [
     {

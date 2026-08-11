@@ -6,7 +6,7 @@ import { expect } from "chai";
 
 type RuleFamily = {
   name: string;
-  status: "source-evidenced" | "excluded";
+  status: "characterized" | "source-evidenced" | "excluded";
   evidence?: string[];
   reason?: string;
 };
@@ -37,9 +37,7 @@ describe("executed legacy rules authority", () => {
   const state = read("programs/panda-monopoly/src/state/mod.rs");
 
   it("pins the reviewed Rust sources", () => {
-    expect(hash(constants)).to.equal(
-      manifest.sourceAuthority.constantsSha256
-    );
+    expect(hash(constants)).to.equal(manifest.sourceAuthority.constantsSha256);
     expect(hash(state)).to.equal(manifest.sourceAuthority.stateSha256);
   });
 
@@ -65,18 +63,19 @@ describe("executed legacy rules authority", () => {
       name: "community-chest-free-parking",
       legacyDestination: 21,
       targetDestination: 20,
-      reason: "Approved correction to the board's Free Parking position."
+      reason: "Approved correction to the board's Free Parking position.",
     });
   });
 
-  it("has evidence for every source-evidenced family and a reason for exclusions", () => {
+  it("has evidence for every included family and a reason for exclusions", () => {
     for (const family of manifest.ruleFamilies) {
-      if (family.status === "source-evidenced") {
+      if (family.status !== "excluded") {
         expect(family.evidence, family.name).to.not.be.empty;
         for (const evidencePath of family.evidence ?? []) {
-          expect(existsSync(resolve(root, evidencePath)), evidencePath).to.equal(
-            true
-          );
+          expect(
+            existsSync(resolve(root, evidencePath)),
+            evidencePath
+          ).to.equal(true);
         }
       } else {
         expect(family.reason, family.name).to.be.a("string").and.not.be.empty;
@@ -85,15 +84,15 @@ describe("executed legacy rules authority", () => {
   });
 
   it("contains no tracked persistent devnet key file", () => {
-    expect(existsSync(resolve(root, "tests/utils/devnet-wallets.json"))).to.equal(
-      false
-    );
+    expect(
+      existsSync(resolve(root, "tests/utils/devnet-wallets.json"))
+    ).to.equal(false);
   });
 
   it("rejects tracked secret-bearing files and serialized keypair arrays", () => {
     const trackedFiles = execFileSync("git", ["ls-files", "-z"], {
       cwd: root,
-      encoding: "utf8"
+      encoding: "utf8",
     })
       .split("\0")
       .filter(Boolean);
@@ -138,9 +137,7 @@ describe("visual baseline authority", () => {
       const image = readFileSync(
         resolve(root, "tests/visual-baseline", artifact.file)
       );
-      expect(hash(image), artifact.file).to.equal(
-        artifact.sha256
-      );
+      expect(hash(image), artifact.file).to.equal(artifact.sha256);
     }
   });
 });

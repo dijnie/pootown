@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "scenario": "free-game-lifecycle",
+  "initial": {
+    "status": "waitingForPlayers",
+    "currentPlayers": 1,
+    "playersLength": 1,
+    "maximumPlayers": 4,
+    "startingInMatchCash": 1500,
+    "bankBalance": 1000000,
+    "housesRemaining": 32,
+    "hotelsRemaining": 12,
+    "entryFee": 0,
+    "totalPrizePool": 0
+  },
+  "afterJoins": {
+    "currentPlayers": 4,
+    "playersLength": 4,
+    "activePlayers": 4,
+    "totalPlayers": 4,
+    "event": {
+      "name": "playerJoined",
+      "count": 3,
+      "playerIndexes": [1, 2, 3],
+      "totalPlayers": [2, 3, 4]
+    }
+  },
+  "rejections": {
+    "prematureStart": "minimumPlayersNotMet",
+    "unauthorizedStart": "unauthorizedCreator",
+    "unauthorizedPlatformUpdate": "unauthorizedPlatformAdmin",
+    "duplicateJoin": "duplicateSeatRejected",
+    "fullJoin": "maximumPlayersReached"
+  },
+  "cancelled": {
+    "gameClosed": true,
+    "playerStatesClosed": true,
+    "event": {
+      "name": "gameCancelled",
+      "playersCount": 4,
+      "refundAmount": 0
+    }
+  }
+}

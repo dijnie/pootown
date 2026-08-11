@@ -19,7 +19,10 @@ Date: 2026-08-11
   `54ae0ff2cf2fed8ae22fabd8e6b2cbe7860f3586636fcf7464315f2eec424d45`
 - `programs/panda-monopoly/src/state/mod.rs` SHA-256:
   `e3711de364fdb3282e29b8fe3bfb626bd138e70fbcdb63fa78a6b35cfbb3ce2a`
-- `pnpm legacy:characterize`: 7 passing.
+- `pnpm legacy:characterize`: 8 passing. The command builds with the pinned
+  `solanafoundation/anchor:v0.31.1` image, starts an owned local validator,
+  genesis-loads the program at its declared address, runs the TypeScript
+  observations, and cleans up its validator and ephemeral wallet.
 - All tracked web files other than the intentionally modified package manifest
   and deleted nested lockfile have identical pre/post-move content hashes.
 
@@ -74,6 +77,8 @@ or authentication readiness evidence.
 - Board and authenticated dialogs were not captured because no real Privy
   application, token, or funded game identity was supplied. This keeps the Phase
   1 visual gate incomplete; Phase 7 also owns final authenticated interaction E2E.
-- Full Anchor integration tests require the existing local validator/Anchor
-  environment. The source and harness remain intact; static characterization and
-  provenance tests run without an external chain.
+- Lifecycle/seating now has executable local Anchor evidence. Turn, property,
+  card, jail, trade, bankruptcy, timeout, and completed-game handlers remain
+  coupled to MagicBlock delegation/ephemeral-rollup programs that are not in the
+  local validator image; those families are still labeled `source-evidenced`,
+  so the Phase 1 behavior gate remains incomplete.
