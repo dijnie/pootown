@@ -72,11 +72,11 @@ pnpm --filter @pootown/api db:migrate:test
 
 ## Success Criteria
 
-- [ ] Auth, economy, sessions, ticket, settlement, leaderboard, health, migration, and role tests pass.
-- [ ] API is sole account-coin writer and all operations reconcile under concurrency/retries.
-- [ ] Plain tickets and tokens never persist/log; ticket replay cannot create a seat.
+- [x] Auth, economy, sessions, ticket, settlement, leaderboard, health, migration, and role tests pass.
+- [x] API is sole account-coin writer and all operations reconcile under concurrency/retries.
+- [x] Plain tickets and tokens never persist/log; ticket replay cannot create a seat.
 - [ ] Public Privy private-key config is removed; conditional rotation evidence is recorded.
-- [ ] No legacy record migration or new queue/Redis/admin/spectator capability exists.
+- [x] No legacy record migration or new queue/Redis/admin/spectator capability exists.
 
 ## Risk Assessment
 

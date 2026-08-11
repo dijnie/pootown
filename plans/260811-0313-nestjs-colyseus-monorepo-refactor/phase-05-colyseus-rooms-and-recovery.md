@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Colyseus Rooms and Recovery"
-status: in-progress
+status: complete
 priority: P1
 effort: "2-2.5 weeks"
 dependencies: [3, 4]
@@ -71,11 +71,11 @@ pnpm --filter @pootown/game-server build
 
 ## Success Criteria
 
-- [ ] Admission, command, checkpoint, reconnect, timer, lease, and settlement tests pass.
-- [ ] No ack/patch/event appears before commit.
-- [ ] Restart restores exactly and stale owners cannot write.
-- [ ] Every room policy runs once under retries/restarts.
-- [ ] Realtime cannot mutate account coin; no Redis/queue/event sourcing exists.
+- [x] Admission, command, checkpoint, reconnect, timer, lease, and settlement tests pass.
+- [x] No ack/patch/event appears before commit.
+- [x] Restart restores exactly and stale owners cannot write.
+- [x] Every room policy runs once under retries/restarts.
+- [x] Realtime cannot mutate account coin; no Redis/queue/event sourcing exists.
 
 ## Risk Assessment
 
