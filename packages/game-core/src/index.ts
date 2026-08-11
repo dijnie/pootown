@@ -12,6 +12,7 @@ export * from "./rules/building-rules";
 export * from "./rules/card-decks";
 export * from "./rules/lifecycle";
 export * from "./rules/gameplay-policy";
+export * from "./rules/jail-rules";
 export * from "./rules/movement";
 export * from "./rules/property-rules";
 export * from "./serialization/replay";
