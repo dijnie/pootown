@@ -10,7 +10,8 @@ export type GameCoreErrorCode =
   | "PLAYER_ALREADY_JOINED"
   | "PLAYER_NOT_FOUND"
   | "GAME_FULL"
-  | "CREATOR_CANNOT_LEAVE";
+  | "CREATOR_CANNOT_LEAVE"
+  | "COMMAND_UNSUPPORTED";
 
 export interface GameCoreError {
   readonly code: GameCoreErrorCode;

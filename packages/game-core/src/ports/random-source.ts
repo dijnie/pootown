@@ -9,4 +9,6 @@ export interface RandomSource {
   nextBytes(length: number): Uint8Array;
   checkpoint(): RandomCheckpoint;
   canResume(checkpoint: RandomCheckpoint): boolean;
+  /** Creates an isolated cursor at a persisted checkpoint for an atomic command attempt. */
+  fork?(checkpoint: RandomCheckpoint): RandomSource | null;
 }

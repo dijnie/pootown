@@ -5,6 +5,7 @@ import {
   createPropertyStates,
   gameId,
   initializeGameplayAggregate,
+  isValidActiveGameplayAggregateState,
   matchCash,
   playerId,
   type InProgressGameState,
@@ -109,5 +110,15 @@ describe("gameplay aggregate state", () => {
       } as InProgressGameState,
     ];
     for (const state of malformed) assert.equal(initializeGameplayAggregate(state), null);
+  });
+
+  it("accepts a recovered ten-second warning when the thirty-second tick was missed", () => {
+    const initialized = initializeGameplayAggregate(startedState());
+    assert.notEqual(initialized, null);
+    const recovered = {
+      ...initialized!,
+      turn: { ...initialized!.turn, emittedWarnings: [10] as const },
+    };
+    assert.equal(isValidActiveGameplayAggregateState(recovered), true);
   });
 });

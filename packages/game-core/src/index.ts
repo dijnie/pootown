@@ -1,5 +1,6 @@
 /** Pure, deterministic Pootown game state machine. */
 export * from "./commands/game-command";
+export * from "./commands/gameplay-command";
 export * from "./errors";
 export * from "./events/domain-event";
 export * from "./model/game-state";
@@ -15,6 +16,7 @@ export * from "./rules/card-rules";
 export * from "./rules/card-decks";
 export * from "./rules/lifecycle";
 export * from "./rules/gameplay-policy";
+export * from "./rules/gameplay-turn-transition";
 export * from "./rules/jail-rules";
 export * from "./rules/movement";
 export * from "./rules/property-rules";
