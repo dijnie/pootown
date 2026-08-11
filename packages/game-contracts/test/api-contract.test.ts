@@ -116,6 +116,7 @@ describe("HTTP API contracts", () => {
 
   it("couples every public and internal mutation body to idempotency headers", () => {
     assert.deepEqual(Object.keys(PublicMutationContractSchemas).sort(), [
+      "cancelSession",
       "createSession",
       "joinIntent",
       "reconnectTicket",

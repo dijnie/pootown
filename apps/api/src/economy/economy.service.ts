@@ -207,6 +207,7 @@ export class EconomyService {
           operation.id,
           CASE
             WHEN operation.operation_scope IN ('createSession', 'joinIntent') THEN 'reserve'
+            WHEN operation.operation_scope IN ('releaseJoinIntent', 'cancelSession') THEN 'release'
             ELSE operation.operation_scope
           END AS operation_kind,
           operation.created_at,
@@ -215,10 +216,11 @@ export class EconomyService {
         FROM economy.coin_operations operation
         JOIN economy.coin_ledger_entries entry ON entry.operation_id = operation.id
         JOIN economy.ledger_accounts ledger ON ledger.id = entry.ledger_account_id
-        WHERE operation.actor_user_id = $1
+        WHERE ledger.owner_user_id = $1
           AND operation.status = 'committed'
           AND operation.operation_scope IN (
-            'initialGrant', 'rescueGrant', 'createSession', 'joinIntent', 'reserve', 'release', 'capture', 'payout'
+            'initialGrant', 'rescueGrant', 'createSession', 'joinIntent', 'releaseJoinIntent', 'cancelSession',
+            'reserve', 'release', 'capture', 'payout'
           )
           AND ($2::timestamptz IS NULL OR (operation.created_at, operation.id) < ($2::timestamptz, $3::varchar))
         GROUP BY operation.id

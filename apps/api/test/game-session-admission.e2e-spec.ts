@@ -282,4 +282,321 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
     `, [created.session.gameId]);
     assert.deepEqual(state.rows, [{ free_reservations: 2, ledger_entries: 0 }]);
   });
+
+  it("releases a non-creator exactly once and permits a clean rejoin into the vacant seat", async () => {
+    const created = await sessions.createSession(
+      principal("release-owner"),
+      "classic_100",
+      "create:release-owner",
+      new Date("2026-08-11T16:00:00.000Z"),
+    );
+    const joined = await sessions.joinSession(
+      principal("release-player"),
+      created.session.gameId,
+      "join:release-player",
+      new Date("2026-08-11T16:00:01.000Z"),
+    );
+
+    await assert.rejects(
+      sessions.releaseJoinIntent(
+        principal("release-owner"),
+        created.session.gameId,
+        "release:creator",
+        new Date("2026-08-11T16:00:02.000Z"),
+      ),
+      (error: unknown) => apiCode(error) === "CREATOR_CANNOT_LEAVE",
+    );
+    const released = await sessions.releaseJoinIntent(
+      principal("release-player"),
+      created.session.gameId,
+      "release:player",
+      new Date("2026-08-11T16:00:02.000Z"),
+    );
+    const replay = await sessions.releaseJoinIntent(
+      principal("release-player"),
+      created.session.gameId,
+      "release:player",
+      new Date("2026-08-11T16:00:03.000Z"),
+    );
+    assert.deepEqual(replay, released);
+
+    const releasedState = await pool.query(`
+      SELECT
+        reservation.status,
+        reservation.terminal_operation_id,
+        account.available_coin::text,
+        account.reserved_coin::text,
+        (SELECT count(*)::int FROM game.session_players WHERE reservation_id = reservation.id) AS seats,
+        (SELECT expires_at FROM game.realtime_tickets WHERE reservation_id = reservation.id) AS expires_at
+      FROM economy.coin_reservations reservation
+      JOIN economy.coin_accounts account ON account.user_id = reservation.user_id
+      WHERE reservation.id = $1
+    `, [joined.admission.reservationId]);
+    assert.equal(releasedState.rows[0]?.status, "released");
+    assert.equal(releasedState.rows[0]?.terminal_operation_id, released.operationId);
+    assert.equal(releasedState.rows[0]?.available_coin, "1000");
+    assert.equal(releasedState.rows[0]?.reserved_coin, "0");
+    assert.equal(releasedState.rows[0]?.seats, 0);
+    assert.equal(new Date(releasedState.rows[0]?.expires_at as string).getTime(), Date.parse("2026-08-11T16:00:02.000Z"));
+
+    const rejoined = await sessions.joinSession(
+      principal("release-player"),
+      created.session.gameId,
+      "join:release-player:again",
+      new Date("2026-08-11T16:00:04.000Z"),
+    );
+    assert.equal(rejoined.admission.reservationId === joined.admission.reservationId, false);
+    assert.deepEqual(rejoined.session.players.map((player) => player.seatIndex), [0, 1]);
+  });
+
+  it("cancels only by the creator and atomically refunds every participant once", async () => {
+    const created = await sessions.createSession(
+      principal("cancel-owner"),
+      "classic_100",
+      "create:cancel-owner",
+      new Date("2026-08-11T17:00:00.000Z"),
+    );
+    await sessions.joinSession(
+      principal("cancel-player"),
+      created.session.gameId,
+      "join:cancel-player",
+      new Date("2026-08-11T17:00:01.000Z"),
+    );
+    await assert.rejects(
+      sessions.cancelSession(
+        principal("cancel-player"),
+        created.session.gameId,
+        "cancel:not-owner",
+        new Date("2026-08-11T17:00:02.000Z"),
+      ),
+      (error: unknown) => apiCode(error) === "SESSION_FORBIDDEN",
+    );
+
+    const cancelled = await sessions.cancelSession(
+      principal("cancel-owner"),
+      created.session.gameId,
+      "cancel:owner",
+      new Date("2026-08-11T17:00:03.000Z"),
+    );
+    const replay = await sessions.cancelSession(
+      principal("cancel-owner"),
+      created.session.gameId,
+      "cancel:owner",
+      new Date("2026-08-11T17:00:04.000Z"),
+    );
+    assert.deepEqual(replay, cancelled);
+
+    const state = await pool.query(`
+      SELECT
+        (SELECT lifecycle FROM game.game_sessions WHERE id = $1) AS lifecycle,
+        (SELECT count(*)::int FROM game.session_players WHERE game_session_id = $1) AS players,
+        (SELECT count(*)::int FROM economy.coin_reservations
+         WHERE game_session_id = $1 AND status = 'reserved') AS active_reservations,
+        (SELECT count(*)::int FROM economy.coin_reservations
+         WHERE game_session_id = $1 AND status = 'released' AND terminal_operation_id = $2) AS released_reservations,
+        (SELECT count(*)::int FROM economy.coin_ledger_entries WHERE operation_id = $2) AS refund_entries
+    `, [created.session.gameId, cancelled.operationId]);
+    assert.deepEqual(state.rows, [{
+      lifecycle: "cancelled",
+      players: 0,
+      active_reservations: 0,
+      released_reservations: 2,
+      refund_entries: 4,
+    }]);
+    const balances = await pool.query(`
+      SELECT account.available_coin::text, account.reserved_coin::text
+      FROM economy.coin_accounts account
+      JOIN identity.users users ON users.id = account.user_id
+      WHERE users.privy_did IN ('did:privy:cancel-owner', 'did:privy:cancel-player')
+      ORDER BY users.privy_did
+    `);
+    assert.deepEqual(balances.rows, [
+      { available_coin: "1000", reserved_coin: "0" },
+      { available_coin: "1000", reserved_coin: "0" },
+    ]);
+    const playerHistory = await economy.listOperations(principal("cancel-player"), 100);
+    assert.equal(playerHistory.items.some((item) =>
+      item.operationId === cancelled.operationId && item.kind === "release" &&
+      item.availableDelta === "100" && item.reservedDelta === "-100"), true);
+    await assert.rejects(
+      sessions.reconnectTicket(principal("cancel-player"), created.session.gameId, "reconnect:cancelled"),
+      (error: unknown) => apiCode(error) === "SESSION_NOT_OPEN",
+    );
+  });
+
+  it("rotates reconnect tickets without another reservation or plaintext persistence", async () => {
+    const created = await sessions.createSession(
+      principal("reconnect-owner"),
+      "classic_100",
+      "create:reconnect-owner",
+      new Date("2026-08-11T18:00:00.000Z"),
+    );
+    const first = await sessions.reconnectTicket(
+      principal("reconnect-owner"),
+      created.session.gameId,
+      "reconnect:owner",
+      new Date("2026-08-11T18:00:01.000Z"),
+    );
+    const replay = await sessions.reconnectTicket(
+      principal("reconnect-owner"),
+      created.session.gameId,
+      "reconnect:owner",
+      new Date("2026-08-11T18:00:02.000Z"),
+    );
+    assert.equal(first.admission.reservationId, created.admission.reservationId);
+    assert.equal(replay.admission.playerId, created.admission.playerId);
+    assert.notEqual(replay.admission.ticket, first.admission.ticket);
+    const stored = await pool.query<{ token_hash: Buffer; response_snapshot: unknown }>(`
+      SELECT ticket.token_hash, operation.response_snapshot
+      FROM game.realtime_tickets ticket
+      JOIN economy.coin_operations operation ON operation.actor_user_id = ticket.user_id
+      WHERE ticket.reservation_id = $1 AND operation.operation_scope = 'reconnectTicket'
+    `, [created.admission.reservationId]);
+    assert.equal(stored.rows.length, 1);
+    assert.equal(stored.rows[0]?.token_hash.equals(createHash("sha256").update(replay.admission.ticket).digest()), true);
+    assert.equal(JSON.stringify(stored.rows[0]?.response_snapshot).includes(replay.admission.ticket), false);
+    const counts = await pool.query(`
+      SELECT
+        (SELECT count(*)::int FROM economy.coin_reservations WHERE game_session_id = $1) AS reservations,
+        (SELECT count(*)::int FROM economy.coin_operations
+         WHERE actor_user_id = (SELECT creator_user_id FROM game.game_sessions WHERE id = $1)
+           AND operation_scope = 'reconnectTicket') AS reconnect_operations
+    `, [created.session.gameId]);
+    assert.deepEqual(counts.rows, [{ reservations: 1, reconnect_operations: 1 }]);
+  });
+
+  it("releases and cancels free sessions without manufacturing ledger entries", async () => {
+    const releasedSession = await sessions.createSession(principal("free-release-owner"), "free", "create:free-release-owner");
+    await sessions.joinSession(principal("free-release-player"), releasedSession.session.gameId, "join:free-release-player");
+    const released = await sessions.releaseJoinIntent(
+      principal("free-release-player"),
+      releasedSession.session.gameId,
+      "release:free-player",
+    );
+
+    const cancelledSession = await sessions.createSession(principal("free-cancel-owner"), "free", "create:free-cancel-owner");
+    await sessions.joinSession(principal("free-cancel-player"), cancelledSession.session.gameId, "join:free-cancel-player");
+    const cancelled = await sessions.cancelSession(
+      principal("free-cancel-owner"),
+      cancelledSession.session.gameId,
+      "cancel:free-owner",
+    );
+    const result = await pool.query(`
+      SELECT operation.id, count(entry.id)::int AS entries
+      FROM economy.coin_operations operation
+      LEFT JOIN economy.coin_ledger_entries entry ON entry.operation_id = operation.id
+      WHERE operation.id = ANY($1::varchar[])
+      GROUP BY operation.id
+      ORDER BY operation.id
+    `, [[released.operationId, cancelled.operationId].sort()]);
+    assert.deepEqual(result.rows.map((row) => row.entries), [0, 0]);
+  });
+
+  it("serializes cancellation against admission without leaving a stranded reservation", async () => {
+    const created = await sessions.createSession(principal("race-cancel-owner"), "classic_100", "create:race-cancel-owner");
+    const attempts = await Promise.allSettled([
+      sessions.cancelSession(principal("race-cancel-owner"), created.session.gameId, "cancel:race-owner"),
+      sessions.joinSession(principal("race-cancel-player"), created.session.gameId, "join:race-player"),
+    ]);
+    assert.equal(attempts[0]?.status, "fulfilled");
+    if (attempts[1]?.status === "rejected") {
+      assert.equal(apiCode(attempts[1].reason), "SESSION_NOT_OPEN");
+    }
+    const invariant = await pool.query(`
+      SELECT
+        session.lifecycle,
+        count(reservation.id) FILTER (WHERE reservation.status = 'reserved')::int AS active_reservations,
+        count(player.player_id)::int AS players
+      FROM game.game_sessions session
+      LEFT JOIN economy.coin_reservations reservation ON reservation.game_session_id = session.id
+      LEFT JOIN game.session_players player ON player.game_session_id = session.id
+      WHERE session.id = $1
+      GROUP BY session.lifecycle
+    `, [created.session.gameId]);
+    assert.deepEqual(invariant.rows, [{ lifecycle: "cancelled", active_reservations: 0, players: 0 }]);
+    const racer = await economy.provisionPrincipal(principal("race-cancel-player"));
+    assert.equal(BigInt(racer.balance.availableCoin) + BigInt(racer.balance.reservedCoin), 1000n);
+    assert.equal(racer.balance.reservedCoin, "0");
+  });
+
+  it("does not release active-game reservations", async () => {
+    const created = await sessions.createSession(
+      principal("active-owner"),
+      "classic_100",
+      "create:active-owner",
+      new Date("2026-08-11T19:00:00.000Z"),
+    );
+    await sessions.joinSession(
+      principal("active-player"),
+      created.session.gameId,
+      "join:active-player",
+      new Date("2026-08-11T19:00:01.000Z"),
+    );
+    await pool.query(
+      "UPDATE game.game_sessions SET lifecycle = 'active', started_at = $2 WHERE id = $1",
+      [created.session.gameId, new Date("2026-08-11T19:00:02.000Z")],
+    );
+    await assert.rejects(
+      sessions.releaseJoinIntent(principal("active-player"), created.session.gameId, "release:active-player"),
+      (error: unknown) => apiCode(error) === "SESSION_NOT_OPEN",
+    );
+    await assert.rejects(
+      sessions.cancelSession(principal("active-owner"), created.session.gameId, "cancel:active-owner"),
+      (error: unknown) => apiCode(error) === "SESSION_NOT_OPEN",
+    );
+    const state = await pool.query(`
+      SELECT
+        count(*) FILTER (WHERE status = 'reserved')::int AS reservations,
+        sum(amount)::text AS reserved_amount,
+        (SELECT count(*)::int FROM game.session_players WHERE game_session_id = $1) AS players
+      FROM economy.coin_reservations
+      WHERE game_session_id = $1
+    `, [created.session.gameId]);
+    assert.deepEqual(state.rows, [{ reservations: 2, reserved_amount: "200", players: 2 }]);
+  });
+
+  it("deduplicates 20-way release, cancellation, and reconnect retries", async () => {
+    const releaseSession = await sessions.createSession(principal("retry-release-owner"), "classic_100", "create:retry-release-owner");
+    await sessions.joinSession(principal("retry-release-player"), releaseSession.session.gameId, "join:retry-release-player");
+    const releases = await Promise.all(Array.from({ length: 20 }, () => sessions.releaseJoinIntent(
+      principal("retry-release-player"),
+      releaseSession.session.gameId,
+      "release:retry-player",
+    )));
+    assert.equal(new Set(releases.map((response) => response.operationId)).size, 1);
+
+    const cancelSession = await sessions.createSession(principal("retry-cancel-owner"), "classic_100", "create:retry-cancel-owner");
+    await sessions.joinSession(principal("retry-cancel-player"), cancelSession.session.gameId, "join:retry-cancel-player");
+    const cancellations = await Promise.all(Array.from({ length: 20 }, () => sessions.cancelSession(
+      principal("retry-cancel-owner"),
+      cancelSession.session.gameId,
+      "cancel:retry-owner",
+    )));
+    assert.equal(new Set(cancellations.map((response) => response.operationId)).size, 1);
+
+    const reconnectSession = await sessions.createSession(principal("retry-reconnect-owner"), "classic_100", "create:retry-reconnect-owner");
+    const reconnects = await Promise.all(Array.from({ length: 20 }, () => sessions.reconnectTicket(
+      principal("retry-reconnect-owner"),
+      reconnectSession.session.gameId,
+      "reconnect:retry-owner",
+    )));
+    assert.equal(new Set(reconnects.map((response) => response.admission.ticket)).size, 20);
+    const counts = await pool.query(`
+      SELECT
+        (SELECT count(*)::int FROM economy.coin_operations
+         WHERE operation_scope = 'releaseJoinIntent' AND idempotency_key = 'release:retry-player') AS release_operations,
+        (SELECT count(*)::int FROM economy.coin_operations
+         WHERE operation_scope = 'cancelSession' AND idempotency_key = 'cancel:retry-owner') AS cancel_operations,
+        (SELECT count(*)::int FROM economy.coin_operations
+         WHERE operation_scope = 'reconnectTicket' AND idempotency_key = 'reconnect:retry-owner') AS reconnect_operations,
+        (SELECT count(*)::int FROM game.realtime_tickets
+         WHERE reservation_id = $1 AND consumed_at IS NULL) AS unused_tickets
+    `, [reconnectSession.admission.reservationId]);
+    assert.deepEqual(counts.rows, [{
+      release_operations: 1,
+      cancel_operations: 1,
+      reconnect_operations: 1,
+      unused_tickets: 1,
+    }]);
+  });
 });

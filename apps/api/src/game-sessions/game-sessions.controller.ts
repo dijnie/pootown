@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   Param,
@@ -9,10 +10,14 @@ import {
   Req,
 } from "@nestjs/common";
 import {
+  CancelSessionRequestSchema,
   CreateSessionRequestSchema,
   GameIdSchema,
   JoinIntentRequestSchema,
+  ReconnectTicketRequestSchema,
+  ReleaseJoinIntentRequestSchema,
   type AdmissionResponse,
+  type OperationResponse,
   type SessionDetail,
 } from "@pootown/game-contracts";
 
@@ -84,5 +89,44 @@ export class GameSessionsController {
     const gameId = GameIdSchema.safeParse(rawGameId);
     if (!gameId.success) throw new ApiHttpException("REQUEST_INVALID", 400, "Game ID is invalid");
     return this.sessions.joinSession(principalFrom(request), gameId.data, mutation.idempotencyKey);
+  }
+
+  @Delete(":gameId/join-intent")
+  public release(
+    @Req() request: AuthenticatedRequest,
+    @Headers() headers: HttpHeaders,
+    @Param("gameId") rawGameId: string,
+    @Body(new ZodValidationPipe(ReleaseJoinIntentRequestSchema)) _body: unknown,
+  ): Promise<OperationResponse> {
+    const mutation = requireMutationHeaders(headers);
+    const gameId = GameIdSchema.safeParse(rawGameId);
+    if (!gameId.success) throw new ApiHttpException("REQUEST_INVALID", 400, "Game ID is invalid");
+    return this.sessions.releaseJoinIntent(principalFrom(request), gameId.data, mutation.idempotencyKey);
+  }
+
+  @Post(":gameId/cancel")
+  public cancel(
+    @Req() request: AuthenticatedRequest,
+    @Headers() headers: HttpHeaders,
+    @Param("gameId") rawGameId: string,
+    @Body(new ZodValidationPipe(CancelSessionRequestSchema)) _body: unknown,
+  ): Promise<OperationResponse> {
+    const mutation = requireMutationHeaders(headers);
+    const gameId = GameIdSchema.safeParse(rawGameId);
+    if (!gameId.success) throw new ApiHttpException("REQUEST_INVALID", 400, "Game ID is invalid");
+    return this.sessions.cancelSession(principalFrom(request), gameId.data, mutation.idempotencyKey);
+  }
+
+  @Post(":gameId/reconnect-ticket")
+  public reconnect(
+    @Req() request: AuthenticatedRequest,
+    @Headers() headers: HttpHeaders,
+    @Param("gameId") rawGameId: string,
+    @Body(new ZodValidationPipe(ReconnectTicketRequestSchema)) _body: unknown,
+  ): Promise<AdmissionResponse> {
+    const mutation = requireMutationHeaders(headers);
+    const gameId = GameIdSchema.safeParse(rawGameId);
+    if (!gameId.success) throw new ApiHttpException("REQUEST_INVALID", 400, "Game ID is invalid");
+    return this.sessions.reconnectTicket(principalFrom(request), gameId.data, mutation.idempotencyKey);
   }
 }

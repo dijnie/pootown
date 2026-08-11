@@ -187,12 +187,17 @@ export const ReconnectTicketRequestSchema = z.strictObject({
   contractVersion: ContractVersionSchema,
 });
 
+export const CancelSessionRequestSchema = z.strictObject({
+  contractVersion: ContractVersionSchema,
+});
+
 export const PublicMutationContractSchemas = {
   rescueGrant: { headers: MutationHeadersSchema, body: RescueGrantRequestSchema },
   createSession: { headers: MutationHeadersSchema, body: CreateSessionRequestSchema },
   joinIntent: { headers: MutationHeadersSchema, body: JoinIntentRequestSchema },
   releaseJoinIntent: { headers: MutationHeadersSchema, body: ReleaseJoinIntentRequestSchema },
   reconnectTicket: { headers: MutationHeadersSchema, body: ReconnectTicketRequestSchema },
+  cancelSession: { headers: MutationHeadersSchema, body: CancelSessionRequestSchema },
 } as const;
 
 export const LeaderboardEntrySchema = z.strictObject({
@@ -250,6 +255,7 @@ export type UserView = z.infer<typeof UserViewSchema>;
 export type CoinBalanceResponse = z.infer<typeof CoinBalanceResponseSchema>;
 export type CoinOperationsResponse = z.infer<typeof CoinOperationsResponseSchema>;
 export type RescueGrantResponse = z.infer<typeof RescueGrantResponseSchema>;
+export type OperationResponse = z.infer<typeof OperationResponseSchema>;
 export type GameDefinitionView = z.infer<typeof GameDefinitionViewSchema>;
 export type SessionView = z.infer<typeof SessionViewSchema>;
 export type SessionDetail = z.infer<typeof SessionDetailSchema>;

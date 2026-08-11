@@ -7,11 +7,13 @@ import {
   GameDefinitionIdSchema,
   GameIdSchema,
   PlayerIdSchema,
+  OperationResponseSchema,
   ReservationIdSchema,
   RoomIdSchema,
   SessionDetailSchema,
   SessionListResponseSchema,
   type AdmissionResponse,
+  type OperationResponse,
   type SessionDetail,
   type SessionListResponse,
   type SessionView,
@@ -73,6 +75,12 @@ interface PlayerRow {
 interface TicketRow {
   readonly id: string;
   readonly consumed_at: Date | null;
+}
+
+interface ReservationRow {
+  readonly id: string;
+  readonly user_id: string;
+  readonly amount: string;
 }
 
 function requestHash(value: unknown): Buffer {
@@ -169,6 +177,196 @@ export class GameSessionsService {
     });
   }
 
+  public async releaseJoinIntent(
+    principal: AuthenticatedPrincipal,
+    gameId: string,
+    idempotencyKey: string,
+    now = new Date(),
+  ): Promise<OperationResponse> {
+    const provisioned = await this.economy.provisionPrincipal(principal, now);
+    const hash = requestHash({ contractVersion: CONTRACT_VERSION, gameId });
+    return withTransaction(this.pool, async (client) => {
+      await this.advisoryLockSession(client, gameId);
+      await this.lockAccount(client, provisioned.user.userId);
+      const session = await this.lockSession(client, gameId);
+      const prior = await this.findOperation(client, provisioned.user.userId, "releaseJoinIntent", idempotencyKey);
+      if (prior !== undefined) {
+        this.assertReplay(prior, hash, "committed");
+        return OperationResponseSchema.parse(prior.response_snapshot);
+      }
+      if (session.lifecycle !== "open") throw new ApiHttpException("SESSION_NOT_OPEN", 409, "Session is not open");
+      const creator = await client.query<{ creator_user_id: string }>(
+        "SELECT creator_user_id FROM game.game_sessions WHERE id = $1",
+        [gameId],
+      );
+      if (creator.rows[0]?.creator_user_id === provisioned.user.userId) {
+        throw new ApiHttpException("CREATOR_CANNOT_LEAVE", 409, "Session creator must cancel instead");
+      }
+      const reservationResult = await client.query<ReservationRow>(
+        `
+          SELECT id, user_id, amount::text
+          FROM economy.coin_reservations
+          WHERE game_session_id = $1 AND user_id = $2 AND status = 'reserved'
+          FOR UPDATE
+        `,
+        [gameId, provisioned.user.userId],
+      );
+      const reservation = reservationResult.rows[0];
+      if (reservation === undefined) throw new ApiHttpException("RESERVATION_NOT_FOUND", 404, "Reservation was not found");
+      const operationId = randomUUID();
+      await this.insertOperation(client, operationId, provisioned.user.userId, "releaseJoinIntent", idempotencyKey, hash);
+      await this.releaseReservation(client, operationId, reservation, now);
+      await client.query(
+        "UPDATE game.join_intents SET status = 'released', updated_at = $2 WHERE reservation_id = $1",
+        [reservation.id, now],
+      );
+      await client.query("DELETE FROM game.session_players WHERE reservation_id = $1", [reservation.id]);
+      await this.expireUnusedTickets(client, reservation.id, now);
+      const response = OperationResponseSchema.parse({ contractVersion: CONTRACT_VERSION, operationId, committed: true });
+      await this.commitOperation(client, operationId, response, now);
+      return response;
+    });
+  }
+
+  public async cancelSession(
+    principal: AuthenticatedPrincipal,
+    gameId: string,
+    idempotencyKey: string,
+    now = new Date(),
+  ): Promise<OperationResponse> {
+    const provisioned = await this.economy.provisionPrincipal(principal, now);
+    const hash = requestHash({ contractVersion: CONTRACT_VERSION, gameId });
+    return withTransaction(this.pool, async (client) => {
+      await this.advisoryLockSession(client, gameId);
+      const creator = await client.query<{ creator_user_id: string }>(
+        "SELECT creator_user_id FROM game.game_sessions WHERE id = $1",
+        [gameId],
+      );
+      if (creator.rows[0] === undefined) {
+        throw new ApiHttpException("SESSION_NOT_FOUND", 404, "Session was not found");
+      }
+      if (creator.rows[0].creator_user_id !== provisioned.user.userId) {
+        throw new ApiHttpException("SESSION_FORBIDDEN", 403, "Only the session creator can cancel");
+      }
+      const prior = await this.findOperation(client, provisioned.user.userId, "cancelSession", idempotencyKey);
+      if (prior !== undefined) {
+        this.assertReplay(prior, hash, "committed");
+        return OperationResponseSchema.parse(prior.response_snapshot);
+      }
+      const reservationResult = await client.query<ReservationRow>(
+        `
+          SELECT id, user_id, amount::text
+          FROM economy.coin_reservations
+          WHERE game_session_id = $1 AND status = 'reserved'
+          ORDER BY user_id
+        `,
+        [gameId],
+      );
+      const userIds = [...new Set(reservationResult.rows.map((reservation) => reservation.user_id))].sort();
+      const locked = await client.query<{ user_id: string }>(
+        `
+          SELECT user_id FROM economy.coin_accounts
+          WHERE user_id = ANY($1::varchar[])
+          ORDER BY user_id
+          FOR UPDATE
+        `,
+        [userIds],
+      );
+      if (locked.rows.length !== userIds.length) throw new Error("Cancellation account set is incomplete");
+      const session = await this.lockSession(client, gameId);
+      if (session.lifecycle !== "open") throw new ApiHttpException("SESSION_NOT_OPEN", 409, "Session is not open");
+
+      const operationId = randomUUID();
+      await this.insertOperation(client, operationId, provisioned.user.userId, "cancelSession", idempotencyKey, hash);
+      await client.query("UPDATE game.game_sessions SET lifecycle = 'cancelling' WHERE id = $1", [gameId]);
+      for (const reservation of reservationResult.rows) {
+        await this.releaseReservation(client, operationId, reservation, now);
+      }
+      await client.query(
+        `
+          UPDATE game.join_intents
+          SET status = 'released', updated_at = $2
+          WHERE game_session_id = $1 AND status IN ('pending', 'admitted')
+        `,
+        [gameId, now],
+      );
+      await client.query("DELETE FROM game.session_players WHERE game_session_id = $1", [gameId]);
+      await client.query(
+        `
+          UPDATE game.realtime_tickets
+          SET expires_at = GREATEST(created_at + interval '1 millisecond', $2::timestamptz)
+          WHERE game_session_id = $1 AND consumed_at IS NULL
+        `,
+        [gameId, now],
+      );
+      await client.query(
+        "UPDATE game.game_sessions SET lifecycle = 'cancelled', cancelled_at = $2 WHERE id = $1",
+        [gameId, now],
+      );
+      const response = OperationResponseSchema.parse({ contractVersion: CONTRACT_VERSION, operationId, committed: true });
+      await this.commitOperation(client, operationId, response, now);
+      return response;
+    });
+  }
+
+  public async reconnectTicket(
+    principal: AuthenticatedPrincipal,
+    gameId: string,
+    idempotencyKey: string,
+    now = new Date(),
+  ): Promise<AdmissionResponse> {
+    const provisioned = await this.economy.provisionPrincipal(principal, now);
+    const hash = requestHash({ contractVersion: CONTRACT_VERSION, gameId });
+    return withTransaction(this.pool, async (client) => {
+      await this.advisoryLockSession(client, gameId);
+      await this.lockAccount(client, provisioned.user.userId);
+      const session = await this.lockSession(client, gameId);
+      if (session.lifecycle !== "open" && session.lifecycle !== "active") {
+        const code = session.lifecycle === "cancelling" ? "SESSION_CANCELLING" : "SESSION_NOT_OPEN";
+        throw new ApiHttpException(code, 409, "Session is not accepting ticket issuance");
+      }
+      const prior = await this.findOperation(client, provisioned.user.userId, "reconnectTicket", idempotencyKey);
+      if (prior !== undefined) {
+        this.assertReplay(prior, hash, "no_op");
+        return this.reissueAdmission(client, LogicalAdmissionSchema.parse(prior.response_snapshot), now);
+      }
+      const binding = await client.query<{
+        player_id: string;
+        reservation_id: string;
+        room_id: string;
+      }>(
+        `
+          SELECT player.player_id, player.reservation_id, session.room_id
+          FROM game.session_players player
+          JOIN game.game_sessions session ON session.id = player.game_session_id
+          JOIN economy.coin_reservations reservation ON reservation.id = player.reservation_id
+          WHERE player.game_session_id = $1 AND player.user_id = $2 AND player.active = true
+            AND reservation.status = 'reserved'
+        `,
+        [gameId, provisioned.user.userId],
+      );
+      const row = binding.rows[0];
+      if (row === undefined) throw new ApiHttpException("RESERVATION_NOT_FOUND", 404, "Active seat was not found");
+      const logical = LogicalAdmissionSchema.parse({
+        gameId,
+        roomId: row.room_id,
+        reservationId: row.reservation_id,
+        playerId: row.player_id,
+      });
+      const response = await this.reissueAdmission(client, logical, now);
+      await client.query(
+        `
+          INSERT INTO economy.coin_operations
+            (id, actor_user_id, operation_scope, idempotency_key, request_hash,
+             response_snapshot, status, committed_at)
+          VALUES ($1, $2, 'reconnectTicket', $3, $4, $5, 'no_op', $6)
+        `,
+        [randomUUID(), provisioned.user.userId, idempotencyKey, hash, logical, now],
+      );
+      return response;
+    });
+  }
+
   public async joinSession(
     principal: AuthenticatedPrincipal,
     gameId: string,
@@ -178,6 +376,7 @@ export class GameSessionsService {
     const provisioned = await this.economy.provisionPrincipal(principal, now);
     const hash = requestHash({ contractVersion: CONTRACT_VERSION, gameId });
     return withTransaction(this.pool, async (client) => {
+      await this.advisoryLockSession(client, gameId);
       await this.lockAccount(client, provisioned.user.userId);
       const session = await this.lockSession(client, gameId);
       const prior = await this.findOperation(client, provisioned.user.userId, "joinIntent", idempotencyKey);
@@ -307,11 +506,11 @@ export class GameSessionsService {
     return result.rows[0];
   }
 
-  private assertReplay(operation: OperationRow, hash: Buffer): void {
+  private assertReplay(operation: OperationRow, hash: Buffer, expectedStatus: "committed" | "no_op" = "committed"): void {
     if (!operation.request_hash.equals(hash)) {
       throw new ApiHttpException("IDEMPOTENCY_CONFLICT", 409, "Idempotency key was already used");
     }
-    if (operation.status !== "committed") throw new Error("Admission operation is incomplete");
+    if (operation.status !== expectedStatus) throw new Error("Admission operation is incomplete");
   }
 
   private insertOperation(
@@ -485,7 +684,7 @@ export class GameSessionsService {
   private async commitOperation(
     client: PoolClient,
     operationId: string,
-    logical: z.infer<typeof LogicalAdmissionSchema>,
+    response: unknown,
     now: Date,
   ): Promise<void> {
     await client.query(
@@ -494,7 +693,7 @@ export class GameSessionsService {
         SET status = 'committed', response_snapshot = $2, committed_at = $3
         WHERE id = $1
       `,
-      [operationId, logical, now],
+      [operationId, response, now],
     );
   }
 
@@ -575,6 +774,67 @@ export class GameSessionsService {
       finishedAtMs: session.finished_at?.getTime() ?? null,
       players: players.rows.map((player) => ({ playerId: player.player_id, seatIndex: player.seat_index })),
     });
+  }
+
+  private advisoryLockSession(client: PoolClient, gameId: string): Promise<unknown> {
+    return client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [gameId]);
+  }
+
+  private async releaseReservation(
+    client: PoolClient,
+    operationId: string,
+    reservation: ReservationRow,
+    now: Date,
+  ): Promise<void> {
+    if (BigInt(reservation.amount) > 0n) {
+      const updated = await client.query(
+        `
+          UPDATE economy.coin_accounts
+          SET available_coin = available_coin + $2::numeric,
+              reserved_coin = reserved_coin - $2::numeric,
+              version = version + 1,
+              updated_at = $3
+          WHERE user_id = $1 AND reserved_coin >= $2::numeric
+          RETURNING user_id
+        `,
+        [reservation.user_id, reservation.amount, now],
+      );
+      if (updated.rowCount !== 1) throw new Error("Reservation balance cannot be released");
+      const ledgers = await client.query<{ id: string; kind: string }>(
+        "SELECT id, kind FROM economy.ledger_accounts WHERE owner_user_id = $1",
+        [reservation.user_id],
+      );
+      const available = ledgers.rows.find((row) => row.kind === "user_available")?.id;
+      const reserved = ledgers.rows.find((row) => row.kind === "user_reserved")?.id;
+      if (available === undefined || reserved === undefined) throw new Error("User ledger accounts are missing");
+      await client.query(
+        `
+          INSERT INTO economy.coin_ledger_entries (operation_id, ledger_account_id, amount) VALUES
+            ($1, $2, $4::numeric),
+            ($1, $3, -$4::numeric)
+        `,
+        [operationId, available, reserved, reservation.amount],
+      );
+    }
+    await client.query(
+      `
+        UPDATE economy.coin_reservations
+        SET status = 'released', terminal_at = $2, terminal_operation_id = $3
+        WHERE id = $1
+      `,
+      [reservation.id, now, operationId],
+    );
+  }
+
+  private expireUnusedTickets(client: PoolClient, reservationId: string, now: Date): Promise<unknown> {
+    return client.query(
+      `
+        UPDATE game.realtime_tickets
+        SET expires_at = GREATEST(created_at + interval '1 millisecond', $2::timestamptz)
+        WHERE reservation_id = $1 AND consumed_at IS NULL
+      `,
+      [reservationId, now],
+    );
   }
 
   private decodeCursor(cursor: string): { readonly createdAt: string; readonly id: string } {

@@ -72,6 +72,7 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       { name: "0001-initial-authority.sql", checksum_length: 64 },
       { name: "0002-idempotent-operation-outcomes.sql", checksum_length: 64 },
       { name: "0003-session-admission-invariants.sql", checksum_length: 64 },
+      { name: "0004-session-release-and-cancellation.sql", checksum_length: 64 },
     ]);
     const owners = await pool.query<{ tableowner: string }>(`
       SELECT DISTINCT tableowner
@@ -194,6 +195,27 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       `),
       (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "55000",
     );
+
+    const fakeRelease = await pool.connect();
+    try {
+      await fakeRelease.query("BEGIN");
+      await fakeRelease.query(`
+        INSERT INTO economy.coin_operations
+          (id, actor_user_id, operation_scope, idempotency_key, request_hash)
+        VALUES ('op_fake_release', 'user_1', 'releaseJoinIntent', 'release:fake', decode(repeat('05', 32), 'hex'))
+      `);
+      await fakeRelease.query(`
+        UPDATE economy.coin_operations
+        SET status = 'committed', response_snapshot = '{}', committed_at = now()
+        WHERE id = 'op_fake_release'
+      `);
+      await assert.rejects(fakeRelease.query("COMMIT"), (error: unknown) => {
+        return typeof error === "object" && error !== null && "code" in error && error.code === "23514";
+      });
+      await fakeRelease.query("ROLLBACK");
+    } finally {
+      fakeRelease.release();
+    }
   });
 
   it("binds admission records while allowing consume-time seat creation", async () => {
@@ -264,6 +286,41 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       await client.query("SELECT * FROM realtime.api_settlement_proofs");
       await client.query("BEGIN");
       try {
+        await client.query("UPDATE game.game_sessions SET lifecycle = 'cancelled' WHERE id = 'game_1'");
+        await assert.rejects(
+          client.query("SET CONSTRAINTS game.cancelled_session_admission_closed IMMEDIATE"),
+          (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "23514",
+        );
+      } finally {
+        await client.query("ROLLBACK");
+      }
+      await client.query("BEGIN");
+      try {
+        await client.query(`
+          INSERT INTO game.game_sessions
+            (id, room_id, game_definition_id, game_definition_version, creator_user_id, lifecycle,
+             policy_snapshot, policy_hash, maximum_players, entry_coin)
+          VALUES ('game_closed', 'room_closed', 'standard', 1, 'user_1', 'cancelled', '{}',
+                  decode(repeat('10', 32), 'hex'), 4, 100)
+        `);
+        await client.query(`
+          INSERT INTO economy.coin_operations
+            (id, actor_user_id, operation_scope, idempotency_key, request_hash)
+          VALUES ('op_closed_reserve', 'user_1', 'joinIntent', 'closed:reserve', decode(repeat('68', 32), 'hex'))
+        `);
+        await assert.rejects(
+          client.query(`
+            INSERT INTO economy.coin_reservations
+              (id, operation_id, user_id, game_session_id, amount, status)
+            VALUES ('reservation_closed', 'op_closed_reserve', 'user_1', 'game_closed', 100, 'reserved')
+          `),
+          (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "23514",
+        );
+      } finally {
+        await client.query("ROLLBACK");
+      }
+      await client.query("BEGIN");
+      try {
         await client.query(`
           INSERT INTO economy.coin_operations
             (id, actor_user_id, operation_scope, idempotency_key, request_hash)
@@ -290,6 +347,22 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
         throw error;
       }
       await denied(() => client.query("UPDATE identity.users SET privy_did = 'did:privy:other' WHERE id = 'user_1'"));
+      await client.query("BEGIN");
+      try {
+        await client.query(`
+          INSERT INTO economy.coin_operations
+            (id, actor_user_id, operation_scope, idempotency_key, request_hash)
+          VALUES ('op_api_release', 'user_1', 'releaseJoinIntent', 'api:release', decode(repeat('67', 32), 'hex'))
+        `);
+        await client.query(`
+          UPDATE economy.coin_reservations
+          SET status = 'released', terminal_at = now(), terminal_operation_id = 'op_api_release'
+          WHERE id = 'reservation_1'
+        `);
+        await client.query("DELETE FROM game.session_players WHERE player_id = 'player_1'");
+      } finally {
+        await client.query("ROLLBACK");
+      }
       await denied(() => client.query("SELECT * FROM realtime.room_checkpoints"));
       await denied(() => client.query("CREATE TABLE identity.forbidden (id integer)"));
     });
@@ -312,6 +385,89 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
     });
   });
 
+  it("serializes direct admission inserts with lifecycle cancellation", async () => {
+    await pool.query(`
+      INSERT INTO game.game_sessions
+        (id, room_id, game_definition_id, game_definition_version, creator_user_id, lifecycle,
+         policy_snapshot, policy_hash, maximum_players, entry_coin)
+      VALUES
+        ('game_cancel_first', 'room_cancel_first', 'standard', 1, 'user_1', 'open', '{}',
+         decode(repeat('10', 32), 'hex'), 4, 100),
+        ('game_admit_first', 'room_admit_first', 'standard', 1, 'user_1', 'open', '{}',
+         decode(repeat('10', 32), 'hex'), 4, 100)
+    `);
+    await pool.query(`
+      INSERT INTO economy.coin_operations
+        (id, actor_user_id, operation_scope, idempotency_key, request_hash)
+      VALUES
+        ('op_cancel_first_reserve', 'user_1', 'joinIntent', 'race:cancel-first', decode(repeat('69', 32), 'hex')),
+        ('op_admit_first_reserve', 'user_1', 'joinIntent', 'race:admit-first', decode(repeat('6a', 32), 'hex'))
+    `);
+
+    const cancelClient = await pool.connect();
+    const admissionClient = await pool.connect();
+    try {
+      await cancelClient.query("SET ROLE api_runtime");
+      await admissionClient.query("SET ROLE api_runtime");
+
+      await cancelClient.query("BEGIN");
+      await admissionClient.query("BEGIN");
+      await cancelClient.query("UPDATE game.game_sessions SET lifecycle = 'cancelled' WHERE id = 'game_cancel_first'");
+      let lateInsertSettled = false;
+      const lateInsert = admissionClient.query(`
+        INSERT INTO economy.coin_reservations
+          (id, operation_id, user_id, game_session_id, amount, status)
+        VALUES ('reservation_cancel_first', 'op_cancel_first_reserve', 'user_1', 'game_cancel_first', 100, 'reserved')
+      `).finally(() => { lateInsertSettled = true; });
+      await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+      assert.equal(lateInsertSettled, false, "admission insert must wait for the lifecycle writer");
+      await cancelClient.query("COMMIT");
+      await assert.rejects(lateInsert, (error: unknown) => {
+        return typeof error === "object" && error !== null && "code" in error && error.code === "23514";
+      });
+      await admissionClient.query("ROLLBACK");
+
+      await admissionClient.query("BEGIN");
+      await cancelClient.query("BEGIN");
+      await admissionClient.query(`
+        INSERT INTO economy.coin_reservations
+          (id, operation_id, user_id, game_session_id, amount, status)
+        VALUES ('reservation_admit_first', 'op_admit_first_reserve', 'user_1', 'game_admit_first', 100, 'reserved')
+      `);
+      let lateCancellationSettled = false;
+      const lateCancellation = cancelClient.query(
+        "UPDATE game.game_sessions SET lifecycle = 'cancelled' WHERE id = 'game_admit_first'",
+      ).finally(() => { lateCancellationSettled = true; });
+      await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+      assert.equal(lateCancellationSettled, false, "lifecycle update must wait for the admission writer");
+      await admissionClient.query("COMMIT");
+      await lateCancellation;
+      await assert.rejects(cancelClient.query("COMMIT"), (error: unknown) => {
+        return typeof error === "object" && error !== null && "code" in error && error.code === "23514";
+      });
+      await cancelClient.query("ROLLBACK");
+    } finally {
+      await cancelClient.query("ROLLBACK").catch(() => undefined);
+      await admissionClient.query("ROLLBACK").catch(() => undefined);
+      await cancelClient.query("RESET ROLE").catch(() => undefined);
+      await admissionClient.query("RESET ROLE").catch(() => undefined);
+      cancelClient.release();
+      admissionClient.release();
+    }
+
+    const state = await pool.query(`
+      SELECT id, lifecycle,
+        (SELECT count(*)::int FROM economy.coin_reservations WHERE game_session_id = session.id) AS reservations
+      FROM game.game_sessions session
+      WHERE id IN ('game_cancel_first', 'game_admit_first')
+      ORDER BY id
+    `);
+    assert.deepEqual(state.rows, [
+      { id: "game_admit_first", lifecycle: "open", reservations: 1 },
+      { id: "game_cancel_first", lifecycle: "cancelled", reservations: 0 },
+    ]);
+  });
+
   it("rejects migration drift, removed files, and retroactive files", async () => {
     const temporaryRoot = await mkdtemp(join(tmpdir(), "pootown-migrations-"));
     const migrationsDirectory = join(temporaryRoot, "migrations");
@@ -321,12 +477,12 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       await cp(resolve(process.cwd(), "src/database/roles/provision.sql"), rolesFile);
       const options = { migrationsDirectory, rolesFile };
 
-      await writeFile(join(migrationsDirectory, "0004-noop.sql"), "SELECT 1;\n");
+      await writeFile(join(migrationsDirectory, "0005-noop.sql"), "SELECT 1;\n");
       await runMigrations(databaseUrl, options);
-      await rm(join(migrationsDirectory, "0004-noop.sql"));
+      await rm(join(migrationsDirectory, "0005-noop.sql"));
       await assert.rejects(runMigrations(databaseUrl, options), /Applied migration files are missing/);
 
-      await writeFile(join(migrationsDirectory, "0004-noop.sql"), "SELECT 1;\n");
+      await writeFile(join(migrationsDirectory, "0005-noop.sql"), "SELECT 1;\n");
       await writeFile(join(migrationsDirectory, "0000-retroactive.sql"), "SELECT 1;\n");
       await assert.rejects(runMigrations(databaseUrl, options), /Retroactive migrations are not allowed/);
       await rm(join(migrationsDirectory, "0000-retroactive.sql"));
