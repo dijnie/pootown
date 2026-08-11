@@ -16,6 +16,7 @@ import {
 } from "../src";
 import {
   InternalMutationContractSchemas,
+  SessionStartedRequestSchema,
   SettlementRequestSchema,
   TicketConsumeRequestSchema,
 } from "../src/internal";
@@ -102,6 +103,11 @@ describe("HTTP API contracts", () => {
     };
     assert.equal(TicketConsumeRequestSchema.safeParse(consume).success, true);
     assert.equal(TicketConsumeRequestSchema.safeParse({ ...consume, userId: "user_2" }).success, false);
+
+    const started = { contractVersion: 1, roomId: "room_1", stateVersion: 1 };
+    assert.equal(SessionStartedRequestSchema.safeParse(started).success, true);
+    assert.equal(SessionStartedRequestSchema.safeParse({ ...started, stateVersion: 0 }).success, false);
+    assert.equal(SessionStartedRequestSchema.safeParse({ ...started, roomInstanceId: "forged" }).success, false);
 
     const settlement = {
       contractVersion: 1,

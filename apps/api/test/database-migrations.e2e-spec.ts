@@ -73,6 +73,7 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       { name: "0002-idempotent-operation-outcomes.sql", checksum_length: 64 },
       { name: "0003-session-admission-invariants.sql", checksum_length: 64 },
       { name: "0004-session-release-and-cancellation.sql", checksum_length: 64 },
+      { name: "0005-internal-session-transitions.sql", checksum_length: 64 },
     ]);
     const owners = await pool.query<{ tableowner: string }>(`
       SELECT DISTINCT tableowner
@@ -286,7 +287,27 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       await client.query("SELECT * FROM realtime.api_settlement_proofs");
       await client.query("BEGIN");
       try {
-        await client.query("UPDATE game.game_sessions SET lifecycle = 'cancelled' WHERE id = 'game_1'");
+        await client.query(`
+          INSERT INTO game.realtime_tickets
+            (id, token_hash, user_id, game_session_id, room_id, reservation_id, player_id, role, expires_at)
+          VALUES ('ticket_expiry_probe', decode(repeat('6b', 32), 'hex'), 'user_1', 'game_1', 'room_1',
+                  'reservation_1', 'player_1', 'player', clock_timestamp() + interval '1 minute')
+        `);
+        await assert.rejects(
+          client.query(`
+            UPDATE game.realtime_tickets
+            SET consumed_at = expires_at + interval '1 second', consumed_by_room_instance = 'direct'
+            WHERE id = 'ticket_expiry_probe'
+          `),
+          (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "23514",
+        );
+      } finally {
+        await client.query("ROLLBACK");
+      }
+      await client.query("BEGIN");
+      try {
+        await client.query("UPDATE game.game_sessions SET lifecycle = 'cancelling' WHERE id = 'game_1'");
+        await client.query("UPDATE game.game_sessions SET lifecycle = 'cancelled', cancelled_at = now() WHERE id = 'game_1'");
         await assert.rejects(
           client.query("SET CONSTRAINTS game.cancelled_session_admission_closed IMMEDIATE"),
           (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "23514",
@@ -299,9 +320,9 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
         await client.query(`
           INSERT INTO game.game_sessions
             (id, room_id, game_definition_id, game_definition_version, creator_user_id, lifecycle,
-             policy_snapshot, policy_hash, maximum_players, entry_coin)
+             policy_snapshot, policy_hash, maximum_players, entry_coin, cancelled_at)
           VALUES ('game_closed', 'room_closed', 'standard', 1, 'user_1', 'cancelled', '{}',
-                  decode(repeat('10', 32), 'hex'), 4, 100)
+                  decode(repeat('10', 32), 'hex'), 4, 100, clock_timestamp() + interval '1 millisecond')
         `);
         await client.query(`
           INSERT INTO economy.coin_operations
@@ -412,7 +433,10 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
 
       await cancelClient.query("BEGIN");
       await admissionClient.query("BEGIN");
-      await cancelClient.query("UPDATE game.game_sessions SET lifecycle = 'cancelled' WHERE id = 'game_cancel_first'");
+      await cancelClient.query("UPDATE game.game_sessions SET lifecycle = 'cancelling' WHERE id = 'game_cancel_first'");
+      await cancelClient.query(
+        "UPDATE game.game_sessions SET lifecycle = 'cancelled', cancelled_at = now() WHERE id = 'game_cancel_first'",
+      );
       let lateInsertSettled = false;
       const lateInsert = admissionClient.query(`
         INSERT INTO economy.coin_reservations
@@ -435,9 +459,12 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
         VALUES ('reservation_admit_first', 'op_admit_first_reserve', 'user_1', 'game_admit_first', 100, 'reserved')
       `);
       let lateCancellationSettled = false;
-      const lateCancellation = cancelClient.query(
-        "UPDATE game.game_sessions SET lifecycle = 'cancelled' WHERE id = 'game_admit_first'",
-      ).finally(() => { lateCancellationSettled = true; });
+      const lateCancellation = (async () => {
+        await cancelClient.query("UPDATE game.game_sessions SET lifecycle = 'cancelling' WHERE id = 'game_admit_first'");
+        await cancelClient.query(
+          "UPDATE game.game_sessions SET lifecycle = 'cancelled', cancelled_at = now() WHERE id = 'game_admit_first'",
+        );
+      })().finally(() => { lateCancellationSettled = true; });
       await new Promise((resolveWait) => setTimeout(resolveWait, 50));
       assert.equal(lateCancellationSettled, false, "lifecycle update must wait for the admission writer");
       await admissionClient.query("COMMIT");
@@ -477,12 +504,12 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       await cp(resolve(process.cwd(), "src/database/roles/provision.sql"), rolesFile);
       const options = { migrationsDirectory, rolesFile };
 
-      await writeFile(join(migrationsDirectory, "0005-noop.sql"), "SELECT 1;\n");
+      await writeFile(join(migrationsDirectory, "0006-noop.sql"), "SELECT 1;\n");
       await runMigrations(databaseUrl, options);
-      await rm(join(migrationsDirectory, "0005-noop.sql"));
+      await rm(join(migrationsDirectory, "0006-noop.sql"));
       await assert.rejects(runMigrations(databaseUrl, options), /Applied migration files are missing/);
 
-      await writeFile(join(migrationsDirectory, "0005-noop.sql"), "SELECT 1;\n");
+      await writeFile(join(migrationsDirectory, "0006-noop.sql"), "SELECT 1;\n");
       await writeFile(join(migrationsDirectory, "0000-retroactive.sql"), "SELECT 1;\n");
       await assert.rejects(runMigrations(databaseUrl, options), /Retroactive migrations are not allowed/);
       await rm(join(migrationsDirectory, "0000-retroactive.sql"));

@@ -5,12 +5,14 @@ import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { LoggerModule } from "nestjs-pino";
 
 import { AuthModule } from "./auth/auth.module";
+import { InternalAuthGuard } from "./auth/internal-auth.guard";
 import { PrivyAuthGuard } from "./auth/privy-auth.guard";
 import { parseApiEnvironment } from "./config/api-config";
 import { DatabaseModule } from "./database/database.module";
 import { EconomyModule } from "./economy/economy.module";
 import { GameSessionsModule } from "./game-sessions/game-sessions.module";
 import { HealthModule } from "./health/health.module";
+import { InternalModule } from "./internal/internal.module";
 import { loggerConfig } from "./observability/logger.config";
 
 @Module({
@@ -22,10 +24,12 @@ import { loggerConfig } from "./observability/logger.config";
     DatabaseModule,
     EconomyModule,
     GameSessionsModule,
+    InternalModule,
     HealthModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: PrivyAuthGuard },
+    { provide: APP_GUARD, useClass: InternalAuthGuard },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })

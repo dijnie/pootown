@@ -40,7 +40,7 @@ export const TicketConsumeResponseSchema = z.strictObject({
 export const SessionStartedRequestSchema = z.strictObject({
   contractVersion: ContractVersionSchema,
   roomId: RoomIdSchema,
-  stateVersion: StateVersionSchema,
+  stateVersion: StateVersionSchema.refine((value) => value > 0, "must be positive"),
 });
 
 export const SettlementRequestSchema = z.strictObject({

@@ -11,11 +11,13 @@ import { runMigrations } from "../src/database/migration-runner";
 import { EconomyService } from "../src/economy/economy.service";
 import { GameSessionsService } from "../src/game-sessions/game-sessions.service";
 import { IdentityService } from "../src/identity/identity.service";
+import { InternalSessionService } from "../src/internal/internal-session.service";
 
 let container: StartedPostgreSqlContainer;
 let pool: Pool;
 let economy: EconomyService;
 let sessions: GameSessionsService;
+let internalSessions: InternalSessionService;
 
 function principal(id: string): AuthenticatedPrincipal {
   return { privyDid: `did:privy:${id}`, privySessionId: `session_${id}` };
@@ -101,6 +103,7 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
     });
     economy = new EconomyService(pool, config, new IdentityService());
     sessions = new GameSessionsService(pool, config, economy);
+    internalSessions = new InternalSessionService(pool);
     await pool.query(`
       INSERT INTO game.game_definitions
         (id, policy_version, display_name, maximum_players, entry_coin, time_limit_ms, policy_snapshot, policy_hash)
@@ -533,7 +536,7 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
       new Date("2026-08-11T19:00:01.000Z"),
     );
     await pool.query(
-      "UPDATE game.game_sessions SET lifecycle = 'active', started_at = $2 WHERE id = $1",
+      "UPDATE game.game_sessions SET lifecycle = 'active', state_version = 1, started_at = $2 WHERE id = $1",
       [created.session.gameId, new Date("2026-08-11T19:00:02.000Z")],
     );
     await assert.rejects(
@@ -598,5 +601,165 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
       reconnect_operations: 1,
       unused_tickets: 1,
     }]);
+  });
+
+  it("consumes one-use tickets with exact binding, replay, and expiry semantics", async () => {
+    const created = await sessions.createSession(
+      principal("consume-owner"),
+      "classic_100",
+      "create:consume-owner",
+      new Date("2026-08-11T20:00:00.000Z"),
+    );
+    const joined = await sessions.joinSession(
+      principal("consume-player"),
+      created.session.gameId,
+      "join:consume-player",
+      new Date("2026-08-11T20:00:01.000Z"),
+    );
+    const request = {
+      contractVersion: 1 as const,
+      ticket: joined.admission.ticket,
+      gameId: created.session.gameId,
+      roomId: created.session.roomId,
+      roomInstanceId: "room-instance-1",
+    };
+    const consumed = await internalSessions.consumeTicket(request, "consume:player", new Date("2026-08-11T20:00:02.000Z"));
+    const retry = await internalSessions.consumeTicket(request, "consume:player", new Date("2026-08-11T20:00:03.000Z"));
+    assert.deepEqual(retry, consumed);
+    assert.equal(consumed.reused, false);
+    assert.equal(consumed.seatIndex, 1);
+    const reused = await internalSessions.consumeTicket(request, "consume:player:reattach", new Date("2026-08-11T20:00:04.000Z"));
+    assert.equal(reused.reused, true);
+    await assert.rejects(
+      internalSessions.consumeTicket(
+        { ...request, roomInstanceId: "room-instance-2" },
+        "consume:player:wrong-instance",
+        new Date("2026-08-11T20:00:05.000Z"),
+      ),
+      (error: unknown) => apiCode(error) === "TICKET_REPLAYED",
+    );
+
+    const other = await sessions.createSession(principal("consume-other-owner"), "classic_100", "create:consume-other-owner");
+    await assert.rejects(
+      internalSessions.consumeTicket(
+        { ...request, gameId: other.session.gameId, roomId: other.session.roomId },
+        "consume:player:wrong-binding",
+      ),
+      (error: unknown) => apiCode(error) === "TICKET_INVALID",
+    );
+    const expiring = await sessions.joinSession(
+      principal("consume-expired"),
+      created.session.gameId,
+      "join:consume-expired",
+      new Date("2026-08-11T20:00:06.000Z"),
+    );
+    await assert.rejects(
+      internalSessions.consumeTicket({
+        contractVersion: 1,
+        ticket: expiring.admission.ticket,
+        gameId: created.session.gameId,
+        roomId: created.session.roomId,
+        roomInstanceId: "room-instance-1",
+      }, "consume:expired", new Date("2026-08-11T20:01:06.000Z")),
+      (error: unknown) => apiCode(error) === "TICKET_EXPIRED",
+    );
+    const stored = await pool.query<{ response_snapshot: unknown }>(`
+      SELECT operation.response_snapshot
+      FROM economy.coin_operations operation
+      WHERE operation.operation_scope = 'consumeTicket'
+        AND operation.idempotency_key IN ('consume:player', 'consume:player:reattach')
+      ORDER BY operation.idempotency_key
+    `);
+    assert.equal(stored.rows.length, 2);
+    assert.equal(JSON.stringify(stored.rows).includes(joined.admission.ticket), false);
+    await sessions.releaseJoinIntent(
+      principal("consume-player"),
+      created.session.gameId,
+      "release:consumed-player",
+      new Date("2026-08-11T20:01:07.000Z"),
+    );
+    await assert.rejects(
+      internalSessions.consumeTicket(request, "consume:player", new Date("2026-08-11T20:01:08.000Z")),
+      (error: unknown) => apiCode(error) === "RESERVATION_NOT_FOUND",
+    );
+  });
+
+  it("starts only after every admitted player consumed a ticket and supports active reconnect", async () => {
+    const created = await sessions.createSession(
+      principal("start-owner"),
+      "classic_100",
+      "create:start-owner",
+      new Date("2026-08-11T21:00:00.000Z"),
+    );
+    const joined = await sessions.joinSession(
+      principal("start-player"),
+      created.session.gameId,
+      "join:start-player",
+      new Date("2026-08-11T21:00:01.000Z"),
+    );
+    await assert.rejects(
+      internalSessions.markStarted(created.session.gameId, created.session.roomId, 1, "start:not-ready"),
+      (error: unknown) => apiCode(error) === "SESSION_NOT_READY",
+    );
+    await internalSessions.consumeTicket({
+      contractVersion: 1,
+      ticket: created.admission.ticket,
+      gameId: created.session.gameId,
+      roomId: created.session.roomId,
+      roomInstanceId: "start-room-instance",
+    }, "consume:start-owner", new Date("2026-08-11T21:00:02.000Z"));
+    await internalSessions.consumeTicket({
+      contractVersion: 1,
+      ticket: joined.admission.ticket,
+      gameId: created.session.gameId,
+      roomId: created.session.roomId,
+      roomInstanceId: "start-room-instance",
+    }, "consume:start-player", new Date("2026-08-11T21:00:02.000Z"));
+    await assert.rejects(
+      internalSessions.markStarted(created.session.gameId, "wrong-room", 1, "start:wrong-room"),
+      (error: unknown) => apiCode(error) === "REQUEST_INVALID",
+    );
+    const started = await internalSessions.markStarted(
+      created.session.gameId,
+      created.session.roomId,
+      1,
+      "start:ready",
+      new Date("2026-08-11T21:00:03.000Z"),
+    );
+    const retry = await internalSessions.markStarted(
+      created.session.gameId,
+      created.session.roomId,
+      1,
+      "start:ready",
+      new Date("2026-08-11T21:00:04.000Z"),
+    );
+    assert.deepEqual(retry, started);
+    await assert.rejects(
+      internalSessions.markStarted(created.session.gameId, created.session.roomId, 2, "start:ready"),
+      (error: unknown) => apiCode(error) === "IDEMPOTENCY_CONFLICT",
+    );
+    const state = await pool.query(
+      "SELECT lifecycle, state_version::text, started_at FROM game.game_sessions WHERE id = $1",
+      [created.session.gameId],
+    );
+    assert.equal(state.rows[0]?.lifecycle, "active");
+    assert.equal(state.rows[0]?.state_version, "1");
+    assert.equal(new Date(state.rows[0]?.started_at as string).getTime(), Date.parse("2026-08-11T21:00:03.000Z"));
+
+    const reconnect = await sessions.reconnectTicket(
+      principal("start-player"),
+      created.session.gameId,
+      "reconnect:active-player",
+      new Date("2026-08-11T21:00:05.000Z"),
+    );
+    const activeConsume = await internalSessions.consumeTicket({
+      contractVersion: 1,
+      ticket: reconnect.admission.ticket,
+      gameId: created.session.gameId,
+      roomId: created.session.roomId,
+      roomInstanceId: "start-room-instance-2",
+    }, "consume:active-player", new Date("2026-08-11T21:00:06.000Z"));
+    assert.equal(activeConsume.playerId, joined.admission.playerId);
+    assert.equal(activeConsume.seatIndex, 1);
   });
 });
