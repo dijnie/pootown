@@ -22,6 +22,7 @@ export * from "./rules/gameplay-jail-transition";
 export * from "./rules/gameplay-property-transition";
 export * from "./rules/gameplay-turn-transition";
 export * from "./rules/gameplay-trade-transition";
+export * from "./rules/gameplay-timeout-transition";
 export * from "./rules/jail-rules";
 export * from "./rules/movement";
 export * from "./rules/property-rules";

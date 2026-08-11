@@ -49,6 +49,8 @@ describe("timeout rules", () => {
     assert.equal(thirty.ok, true);
     if (!thirty.ok) return;
     assert.deepEqual(thirty.turn.emittedWarnings, [30]);
+    assert.equal(emitTimeoutWarning(turn(), 30, 79_999).ok, true);
+    assert.deepEqual(emitTimeoutWarning(turn(), 30, 80_000), { ok: false, code: "WARNING_NOT_REACHED" });
     assert.deepEqual(emitTimeoutWarning(thirty.turn, 30, 60_001), {
       ok: false,
       code: "WARNING_ALREADY_EMITTED",

@@ -130,7 +130,12 @@ export function emitTimeoutWarning(
     return { ok: false, code: "WARNING_ALREADY_EMITTED" };
   }
   const warningAtMs = turn.deadlineAtMs - (warningSeconds * 1_000);
-  if (nowMs < warningAtMs || nowMs >= turn.deadlineAtMs) {
+  const nextWarningAtMs = turn.deadlineAtMs - 10_000;
+  if (
+    nowMs < warningAtMs ||
+    nowMs >= turn.deadlineAtMs ||
+    (warningSeconds === 30 && nowMs >= nextWarningAtMs)
+  ) {
     return { ok: false, code: "WARNING_NOT_REACHED" };
   }
   return {

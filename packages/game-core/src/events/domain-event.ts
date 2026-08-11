@@ -107,4 +107,8 @@ export type GameplayDomainEvent =
   | { readonly type: "tradeAccepted"; readonly tradeId: string; readonly proposerId: PlayerId; readonly receiverId: PlayerId }
   | { readonly type: "tradeRejected"; readonly tradeId: string; readonly rejecterId: PlayerId }
   | { readonly type: "tradeCancelled"; readonly tradeId: string; readonly cancellerId: PlayerId }
-  | { readonly type: "tradeExpired"; readonly tradeId: string };
+  | { readonly type: "tradeExpired"; readonly tradeId: string }
+  | { readonly type: "timeoutWarning"; readonly playerId: PlayerId; readonly remainingSeconds: 30 | 10 }
+  | { readonly type: "timeoutPenalty"; readonly playerId: PlayerId; readonly missedTurns: 1 | 2 | 3 }
+  | { readonly type: "forcedTurnEnd"; readonly timedOutPlayerId: PlayerId; readonly nextPlayerId: PlayerId }
+  | { readonly type: "timeoutForfeit"; readonly playerId: PlayerId; readonly totalMissedTurns: 3 };

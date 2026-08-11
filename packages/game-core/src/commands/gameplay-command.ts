@@ -98,6 +98,17 @@ export type GameplayTradeCommand =
   | CancelTradeGameplayCommand
   | CleanupExpiredTradesGameplayCommand;
 
+export interface WarnTurnThirtySecondsGameplayCommand extends VersionedGameplayCommand { readonly type: "warnTurnThirtySeconds"; readonly payload: Record<string, never> }
+export interface WarnTurnTenSecondsGameplayCommand extends VersionedGameplayCommand { readonly type: "warnTurnTenSeconds"; readonly payload: Record<string, never> }
+export interface HandleTurnTimeoutGameplayCommand extends VersionedGameplayCommand { readonly type: "handleTurnTimeout"; readonly payload: Record<string, never> }
+export interface EnforceGameTimeLimitGameplayCommand extends VersionedGameplayCommand { readonly type: "enforceGameTimeLimit"; readonly payload: Record<string, never> }
+
+export type GameplayTimeoutCommand =
+  | WarnTurnThirtySecondsGameplayCommand
+  | WarnTurnTenSecondsGameplayCommand
+  | HandleTurnTimeoutGameplayCommand
+  | EnforceGameTimeLimitGameplayCommand;
+
 export interface BuyPropertyGameplayCommand extends PositionedGameplayCommand {
   readonly type: "buyProperty";
 }
@@ -149,7 +160,8 @@ export type GameplayCommand =
   | GameplayJailCommand
   | GameplayCardCommand
   | DeclareBankruptcyGameplayCommand
-  | GameplayTradeCommand;
+  | GameplayTradeCommand
+  | GameplayTimeoutCommand;
 
 export type GameplayCommandActor =
   | { readonly kind: "player"; readonly playerId: PlayerId }
