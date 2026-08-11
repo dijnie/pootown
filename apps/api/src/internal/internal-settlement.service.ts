@@ -102,7 +102,7 @@ export class InternalSettlementService {
       const response = OperationResponseSchema.parse({ contractVersion: CONTRACT_VERSION, operationId, committed: true });
       const total = reservations.reduce((sum, reservation) => sum + BigInt(reservation.amount), 0n);
       await this.assertPayoutFits(client, winner.user_id, total);
-      await this.insertOperation(client, operationId, session.creator_user_id, "settleSession", idempotencyKey, hash);
+      await this.insertOperation(client, operationId, session.creator_user_id, "settleSession", idempotencyKey, hash, now);
       for (const reservation of reservations) {
         await this.captureReservation(client, operationId, reservation, now);
       }
@@ -150,7 +150,7 @@ export class InternalSettlementService {
       const reservations = await this.lockParticipants(client, gameId);
       const operationId = randomUUID();
       const response = OperationResponseSchema.parse({ contractVersion: CONTRACT_VERSION, operationId, committed: true });
-      await this.insertOperation(client, operationId, session.creator_user_id, "abortSession", idempotencyKey, hash);
+      await this.insertOperation(client, operationId, session.creator_user_id, "abortSession", idempotencyKey, hash, now);
       for (const reservation of reservations) {
         await this.releaseReservation(client, operationId, reservation, now);
       }
@@ -435,14 +435,15 @@ export class InternalSettlementService {
     scope: string,
     idempotencyKey: string,
     hash: Buffer,
+    now: Date,
   ): Promise<unknown> {
     return client.query(
       `
         INSERT INTO economy.coin_operations
-          (id, actor_user_id, operation_scope, idempotency_key, request_hash)
-        VALUES ($1, $2, $3, $4, $5)
+          (id, actor_user_id, operation_scope, idempotency_key, request_hash, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
       `,
-      [operationId, actorUserId, scope, idempotencyKey, hash],
+      [operationId, actorUserId, scope, idempotencyKey, hash, now],
     );
   }
 

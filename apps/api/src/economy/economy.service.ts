@@ -208,6 +208,17 @@ export class EconomyService {
           CASE
             WHEN operation.operation_scope IN ('createSession', 'joinIntent') THEN 'reserve'
             WHEN operation.operation_scope IN ('releaseJoinIntent', 'cancelSession') THEN 'release'
+            WHEN operation.operation_scope = 'abortSession' THEN 'release'
+            WHEN operation.operation_scope = 'settleSession' AND EXISTS (
+              SELECT 1
+              FROM economy.coin_ledger_entries settlement_entry
+              JOIN economy.ledger_accounts settlement_ledger ON settlement_ledger.id = settlement_entry.ledger_account_id
+              WHERE settlement_entry.operation_id = operation.id
+                AND settlement_ledger.owner_user_id = $1
+                AND settlement_ledger.kind = 'user_available'
+                AND settlement_entry.amount > 0
+            ) THEN 'payout'
+            WHEN operation.operation_scope = 'settleSession' THEN 'capture'
             ELSE operation.operation_scope
           END AS operation_kind,
           operation.created_at,
@@ -220,7 +231,7 @@ export class EconomyService {
           AND operation.status = 'committed'
           AND operation.operation_scope IN (
             'initialGrant', 'rescueGrant', 'createSession', 'joinIntent', 'releaseJoinIntent', 'cancelSession',
-            'reserve', 'release', 'capture', 'payout'
+            'settleSession', 'abortSession', 'reserve', 'release', 'capture', 'payout'
           )
           AND ($2::timestamptz IS NULL OR (operation.created_at, operation.id) < ($2::timestamptz, $3::varchar))
         GROUP BY operation.id

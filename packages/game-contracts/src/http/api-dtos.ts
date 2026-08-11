@@ -201,7 +201,7 @@ export const PublicMutationContractSchemas = {
 } as const;
 
 export const LeaderboardEntrySchema = z.strictObject({
-  rank: z.number().int().positive().max(10_000_000),
+  rank: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   playerId: PlayerIdSchema,
   displayName: boundedLabel.nullable(),
   gamesPlayed: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
@@ -262,3 +262,5 @@ export type SessionDetail = z.infer<typeof SessionDetailSchema>;
 export type SessionListResponse = z.infer<typeof SessionListResponseSchema>;
 export type TicketGrant = z.infer<typeof TicketGrantSchema>;
 export type AdmissionResponse = z.infer<typeof AdmissionResponseSchema>;
+export type LeaderboardResponse = z.infer<typeof LeaderboardResponseSchema>;
+export type SessionHistoryResponse = z.infer<typeof SessionHistoryResponseSchema>;

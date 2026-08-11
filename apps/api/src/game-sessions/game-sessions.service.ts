@@ -290,6 +290,17 @@ export class GameSessionsService {
         `,
         [gameId, now],
       );
+      await client.query(
+        `
+          INSERT INTO readmodel.session_history
+            (game_session_id, user_id, player_id, result, account_coin_delta, finished_at)
+          SELECT game_session_id, user_id, player_id, 'cancelled', 0, $2
+          FROM game.session_players
+          WHERE game_session_id = $1 AND active = true
+          ON CONFLICT (game_session_id, user_id) DO NOTHING
+        `,
+        [gameId, now],
+      );
       await client.query("DELETE FROM game.session_players WHERE game_session_id = $1", [gameId]);
       await client.query(
         `

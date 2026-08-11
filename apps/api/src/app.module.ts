@@ -14,6 +14,7 @@ import { GameSessionsModule } from "./game-sessions/game-sessions.module";
 import { HealthModule } from "./health/health.module";
 import { InternalModule } from "./internal/internal.module";
 import { loggerConfig } from "./observability/logger.config";
+import { ReadModelsModule } from "./read-models/read-models.module";
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { loggerConfig } from "./observability/logger.config";
     EconomyModule,
     GameSessionsModule,
     InternalModule,
+    ReadModelsModule,
     HealthModule,
   ],
   providers: [

@@ -14,12 +14,15 @@ import { GameSessionsService } from "../src/game-sessions/game-sessions.service"
 import { IdentityService } from "../src/identity/identity.service";
 import { InternalSessionService } from "../src/internal/internal-session.service";
 import { InternalSettlementService } from "../src/internal/internal-settlement.service";
+import { ReadModelsService } from "../src/read-models/read-models.service";
 
 let container: StartedPostgreSqlContainer;
 let pool: Pool;
 let sessions: GameSessionsService;
 let internalSessions: InternalSessionService;
 let settlements: InternalSettlementService;
+let economy: EconomyService;
+let readModels: ReadModelsService;
 
 function principal(id: string): AuthenticatedPrincipal {
   return { privyDid: `did:privy:${id}`, privySessionId: `session_${id}` };
@@ -123,10 +126,11 @@ describe("internal settlement authority", { timeout: 120_000 }, () => {
       RESCUE_WINDOW_MS: 86_400_000,
       REALTIME_TICKET_TTL_MS: 60_000,
     });
-    const economy = new EconomyService(pool, config, new IdentityService());
+    economy = new EconomyService(pool, config, new IdentityService());
     sessions = new GameSessionsService(pool, config, economy);
     internalSessions = new InternalSessionService(pool);
     settlements = new InternalSettlementService(pool);
+    readModels = new ReadModelsService(pool, economy);
     await pool.query(`
       INSERT INTO game.game_definitions
         (id, policy_version, display_name, maximum_players, entry_coin,
@@ -205,6 +209,68 @@ describe("internal settlement authority", { timeout: 120_000 }, () => {
       games_won: "1",
       account_coin_won: "200",
     });
+
+    const publicPage = await readModels.leaderboard(1, 1, new Date(now.getTime() + 7));
+    assert.equal(publicPage.data.pagination.total, 2);
+    assert.equal(publicPage.data.pagination.totalPages, 2);
+    assert.equal(publicPage.data.data[0]?.playerId, game.winnerPlayerId);
+    assert.equal(JSON.stringify(publicPage).includes("wallet"), false);
+    const history = await readModels.history(principal("complete-joiner"), 20);
+    assert.deepEqual(history.items, [{
+      gameId: game.gameId,
+      playerId: game.winnerPlayerId,
+      result: "won",
+      accountCoinDelta: "100",
+      finishedAtMs: now.getTime() + 6,
+    }]);
+    const winnerOperations = await economy.listOperations(principal("complete-joiner"), 20);
+    assert.deepEqual(winnerOperations.items[0], {
+      operationId: results[0]?.operationId,
+      kind: "payout",
+      availableDelta: "200",
+      reservedDelta: "-100",
+      createdAtMs: now.getTime() + 6,
+    });
+    const loserOperations = await economy.listOperations(principal("complete-creator"), 20);
+    assert.deepEqual(loserOperations.items[0], {
+      operationId: results[0]?.operationId,
+      kind: "capture",
+      availableDelta: "0",
+      reservedDelta: "-100",
+      createdAtMs: now.getTime() + 6,
+    });
+    await assert.rejects(
+      readModels.history(principal("complete-joiner"), 20, Buffer.from('{"finishedAt":"0","id":"1"}').toString("base64url")),
+      (error: unknown) => apiCode(error) === "REQUEST_INVALID",
+    );
+    await pool.query(
+      `
+        INSERT INTO game.game_sessions
+          (id, room_id, game_definition_id, game_definition_version, creator_user_id, lifecycle,
+           policy_snapshot, policy_hash, maximum_players, entry_coin, cancelled_at)
+        VALUES ('history_tie_game', 'history_tie_room', 'classic_100', 1, $1, 'cancelled',
+                '{"rules":"classic"}', decode(repeat('77', 32), 'hex'), 4, 100, clock_timestamp())
+      `,
+      [game.joinerUserId],
+    );
+    await pool.query(
+      `
+        INSERT INTO readmodel.session_history
+          (game_session_id, user_id, player_id, result, account_coin_delta, finished_at)
+        VALUES ('history_tie_game', $1, 'history_tie_player', 'cancelled', 0, $2)
+      `,
+      [game.joinerUserId, new Date(now.getTime() + 6)],
+    );
+    const firstHistoryPage = await readModels.history(principal("complete-joiner"), 1);
+    assert.equal(firstHistoryPage.items[0]?.gameId, "history_tie_game");
+    assert.notEqual(firstHistoryPage.nextCursor, null);
+    const secondHistoryPage = await readModels.history(
+      principal("complete-joiner"),
+      1,
+      firstHistoryPage.nextCursor ?? undefined,
+    );
+    assert.equal(secondHistoryPage.items[0]?.gameId, game.gameId);
+    assert.equal(secondHistoryPage.nextCursor, null);
   });
 
   it("refunds an explicitly aborted active game once and cannot later settle it", async () => {
@@ -241,6 +307,14 @@ describe("internal settlement authority", { timeout: 120_000 }, () => {
       released: 2,
       history: 2,
     }]);
+    const abortOperations = await economy.listOperations(principal("abort-joiner"), 20);
+    assert.deepEqual(abortOperations.items[0], {
+      operationId: results[0]?.operationId,
+      kind: "release",
+      availableDelta: "100",
+      reservedDelta: "-100",
+      createdAtMs: now.getTime() + 5,
+    });
     await assert.rejects(
       settlements.settle(
         game.gameId,

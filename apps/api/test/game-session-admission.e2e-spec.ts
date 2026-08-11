@@ -397,7 +397,9 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
          WHERE game_session_id = $1 AND status = 'reserved') AS active_reservations,
         (SELECT count(*)::int FROM economy.coin_reservations
          WHERE game_session_id = $1 AND status = 'released' AND terminal_operation_id = $2) AS released_reservations,
-        (SELECT count(*)::int FROM economy.coin_ledger_entries WHERE operation_id = $2) AS refund_entries
+        (SELECT count(*)::int FROM economy.coin_ledger_entries WHERE operation_id = $2) AS refund_entries,
+        (SELECT count(*)::int FROM readmodel.session_history
+         WHERE game_session_id = $1 AND result = 'cancelled' AND account_coin_delta = 0) AS history
     `, [created.session.gameId, cancelled.operationId]);
     assert.deepEqual(state.rows, [{
       lifecycle: "cancelled",
@@ -405,6 +407,7 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
       active_reservations: 0,
       released_reservations: 2,
       refund_entries: 4,
+      history: 2,
     }]);
     const balances = await pool.query(`
       SELECT account.available_coin::text, account.reserved_coin::text
