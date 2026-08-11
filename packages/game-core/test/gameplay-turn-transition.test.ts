@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   gameId,
   initializeGameplayAggregate,
+  isValidActiveGameplayAggregateState,
   matchCash,
   playerId,
   transitionGameplayTurn,
@@ -253,6 +254,34 @@ describe("gameplay turn transition", () => {
       assert.equal(result.ok, false);
       assert.strictEqual(result.state, input);
     }
+  });
+
+  it("cannot end a turn before rolling or while bankruptcy is required", () => {
+    const initial = aggregate();
+    const beforeRoll = {
+      ...initial,
+      turn: { phase: "awaitingEndTurn", currentSeatIndex: 0, startedAtMs: 2_000, deadlineAtMs: 92_000, emittedWarnings: [] },
+    } as ActiveGameplayAggregateState;
+    assert.equal(isValidActiveGameplayAggregateState(beforeRoll), false);
+    const invalid = transitionGameplayTurn(beforeRoll, command("endTurn"), {
+      actor: { kind: "player", playerId: firstPlayer }, nowMs: 3_000, randomSource: new DiceSource([]),
+    });
+    assert.equal(invalid.ok, false);
+    assert.strictEqual(invalid.state, beforeRoll);
+
+    const required = {
+      ...initial,
+      turn: { phase: "awaitingEndTurn", currentSeatIndex: 0, startedAtMs: 2_500, deadlineAtMs: 92_500, emittedWarnings: [] },
+      lastDice: { dice: [1, 2] as const, total: 3, isDoubles: false },
+      bankruptcyRequiredSeatIndex: 0,
+    } as ActiveGameplayAggregateState;
+    assert.equal(isValidActiveGameplayAggregateState(required), true);
+    const blocked = transitionGameplayTurn(required, command("endTurn"), {
+      actor: { kind: "player", playerId: firstPlayer }, nowMs: 3_000, randomSource: new DiceSource([]),
+    });
+    assert.equal(blocked.ok, false);
+    assert.strictEqual(blocked.state, required);
+    if (!blocked.ok) assert.equal(blocked.error.code, "INVALID_PHASE");
   });
 
   it("rejects unknown command shapes and isolates failed random attempts from the supplied source", () => {

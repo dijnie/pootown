@@ -11,7 +11,11 @@ export type GameCoreErrorCode =
   | "PLAYER_NOT_FOUND"
   | "GAME_FULL"
   | "CREATOR_CANNOT_LEAVE"
-  | "COMMAND_UNSUPPORTED";
+  | "COMMAND_UNSUPPORTED"
+  | "INVALID_PHASE"
+  | "PROPERTY_NOT_AVAILABLE"
+  | "INSUFFICIENT_CASH"
+  | "ARITHMETIC_OVERFLOW";
 
 export interface GameCoreError {
   readonly code: GameCoreErrorCode;

@@ -16,6 +16,10 @@ export const GameErrorCodeSchema = z.enum([
   "GAME_FULL",
   "CREATOR_CANNOT_LEAVE",
   "COMMAND_UNSUPPORTED",
+  "INVALID_PHASE",
+  "PROPERTY_NOT_AVAILABLE",
+  "INSUFFICIENT_CASH",
+  "ARITHMETIC_OVERFLOW",
 ]);
 
 const safeDetailKey = z

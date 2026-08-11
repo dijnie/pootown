@@ -199,6 +199,7 @@ export function isValidActiveGameplayAggregateState(value: unknown): value is Ac
     !Number.isSafeInteger(state.rng.bytesConsumed) ||
     state.rng.bytesConsumed < 0 ||
     (state.lastDice !== null && !validDice(state.lastDice)) ||
+    (state.turn.phase !== "awaitingRoll" && state.lastDice === null) ||
     cleanupExpiredTrades(state.activeTrades, 0) === null ||
     !isValidBankruptcyState(
       state.players,

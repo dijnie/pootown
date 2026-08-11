@@ -4,6 +4,10 @@ interface VersionedGameplayCommand {
   readonly expectedStateVersion: number;
 }
 
+interface PositionedGameplayCommand extends VersionedGameplayCommand {
+  readonly payload: { readonly position: number };
+}
+
 export interface RollDiceGameplayCommand extends VersionedGameplayCommand {
   readonly type: "rollDice";
   readonly payload: Record<string, never>;
@@ -23,6 +27,53 @@ export type GameplayTurnCommand =
   | RollDiceGameplayCommand
   | ResolveRandomDiceGameplayCommand
   | EndTurnGameplayCommand;
+
+export interface BuyPropertyGameplayCommand extends PositionedGameplayCommand {
+  readonly type: "buyProperty";
+}
+
+export interface DeclinePropertyGameplayCommand extends PositionedGameplayCommand {
+  readonly type: "declineProperty";
+}
+
+export interface PayRentGameplayCommand extends PositionedGameplayCommand {
+  readonly type: "payRent";
+}
+
+export interface BuildHouseGameplayCommand extends PositionedGameplayCommand {
+  readonly type: "buildHouse";
+}
+
+export interface BuildHotelGameplayCommand extends PositionedGameplayCommand {
+  readonly type: "buildHotel";
+}
+
+export interface SellBuildingGameplayCommand extends VersionedGameplayCommand {
+  readonly type: "sellBuilding";
+  readonly payload: { readonly position: number; readonly buildingType: "house" | "hotel" };
+}
+
+export interface PayMevTaxGameplayCommand extends VersionedGameplayCommand {
+  readonly type: "payMevTax";
+  readonly payload: Record<string, never>;
+}
+
+export interface PayPriorityFeeTaxGameplayCommand extends VersionedGameplayCommand {
+  readonly type: "payPriorityFeeTax";
+  readonly payload: Record<string, never>;
+}
+
+export type GameplayPropertyCommand =
+  | BuyPropertyGameplayCommand
+  | DeclinePropertyGameplayCommand
+  | PayRentGameplayCommand
+  | BuildHouseGameplayCommand
+  | BuildHotelGameplayCommand
+  | SellBuildingGameplayCommand
+  | PayMevTaxGameplayCommand
+  | PayPriorityFeeTaxGameplayCommand;
+
+export type GameplayCommand = GameplayTurnCommand | GameplayPropertyCommand;
 
 export type GameplayCommandActor =
   | { readonly kind: "player"; readonly playerId: PlayerId }

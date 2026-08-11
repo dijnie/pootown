@@ -28,4 +28,35 @@ export type GameplayDomainEvent =
       readonly passedGo: boolean;
       readonly salaryCollected: bigint;
     }
-  | { readonly type: "jailEntered"; readonly playerId: PlayerId; readonly reason: "space" | "threeDoubles" };
+  | { readonly type: "jailEntered"; readonly playerId: PlayerId; readonly reason: "space" | "threeDoubles" }
+  | { readonly type: "propertyPurchased"; readonly playerId: PlayerId; readonly position: number; readonly price: bigint }
+  | { readonly type: "propertyDeclined"; readonly playerId: PlayerId; readonly position: number; readonly price: bigint }
+  | {
+      readonly type: "rentPaid";
+      readonly payerId: PlayerId;
+      readonly ownerId: PlayerId;
+      readonly position: number;
+      readonly amount: bigint;
+    }
+  | {
+      readonly type: "buildingBuilt";
+      readonly playerId: PlayerId;
+      readonly position: number;
+      readonly buildingType: "house" | "hotel";
+      readonly houseCount: number;
+      readonly cost: bigint;
+    }
+  | {
+      readonly type: "buildingSold";
+      readonly playerId: PlayerId;
+      readonly position: number;
+      readonly buildingType: "house" | "hotel";
+      readonly salePrice: bigint;
+    }
+  | {
+      readonly type: "taxPaid";
+      readonly playerId: PlayerId;
+      readonly position: number;
+      readonly taxKind: "mev" | "priorityFee";
+      readonly amount: bigint;
+    };

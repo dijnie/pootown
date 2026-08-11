@@ -114,7 +114,7 @@ function checkpointAdvanced(previous: RandomCheckpoint, next: RandomCheckpoint):
   );
 }
 
-function activePlayer(state: ActiveGameplayAggregateState): GameplayPlayerState | null {
+export function activeGameplayPlayer(state: ActiveGameplayAggregateState): GameplayPlayerState | null {
   const player = state.players[state.turn.currentSeatIndex];
   return player?.status === "active" ? player : null;
 }
@@ -127,7 +127,7 @@ function nextActiveSeat(state: ActiveGameplayAggregateState, currentSeatIndex: n
   return null;
 }
 
-function clockedTurn(
+export function createClockedGameplayTurn(
   phase: ActiveGameplayAggregateTurn["phase"],
   seatIndex: number,
   nowMs: number,
@@ -153,7 +153,7 @@ function phaseForLanding(
   rolledDoubles: boolean,
 ): ActiveGameplayAggregateTurn | null {
   const definition = BOARD_SPACES[position];
-  const clock = clockedTurn(rolledDoubles ? "awaitingRoll" : "awaitingEndTurn", currentSeatIndex, nowMs);
+  const clock = createClockedGameplayTurn(rolledDoubles ? "awaitingRoll" : "awaitingEndTurn", currentSeatIndex, nowMs);
   if (definition === undefined || clock === null) return null;
   const base = {
     currentSeatIndex,
@@ -189,7 +189,7 @@ function phaseForLanding(
   return clock;
 }
 
-function freezeState(
+export function freezeActiveGameplayState(
   state: ActiveGameplayAggregateState,
   update: Partial<ActiveGameplayAggregateState>,
 ): ActiveGameplayAggregateState {
@@ -221,7 +221,7 @@ function playerActorAuthorized(
   context: GameplayTransitionContext,
 ): boolean {
   if (command.type === "resolveRandomDice") return context.actor.kind === "internal";
-  const current = activePlayer(state);
+  const current = activeGameplayPlayer(state);
   return context.actor.kind === "player" && current?.playerId === context.actor.playerId;
 }
 
@@ -231,7 +231,7 @@ function advanceTurn(
 ): { readonly turn: ActiveGameplayAggregateTurn; readonly nextSeatIndex: number } | null {
   const nextSeatIndex = nextActiveSeat(state, state.turn.currentSeatIndex);
   if (nextSeatIndex === null || nextSeatIndex === state.turn.currentSeatIndex) return null;
-  const turn = clockedTurn("awaitingRoll", nextSeatIndex, nowMs);
+  const turn = createClockedGameplayTurn("awaitingRoll", nextSeatIndex, nowMs);
   return turn === null ? null : { turn, nextSeatIndex };
 }
 
@@ -256,7 +256,7 @@ export function transitionGameplayTurn(
     return reject(state, "STALE_STATE_VERSION", "expected state version is stale", true);
   }
   if (state.stateVersion >= MAX_STATE_VERSION) return reject(state, "INVALID_STATE", "state version cannot advance");
-  const current = activePlayer(state);
+  const current = activeGameplayPlayer(state);
   if (current === null) return reject(state, "INVALID_STATE", "turn does not reference an active player");
   if (!playerActorAuthorized(command, state, context)) {
     return reject(state, "UNAUTHORIZED_ACTOR", "actor cannot execute this turn command");
@@ -266,13 +266,19 @@ export function transitionGameplayTurn(
     if (state.turn.phase !== "awaitingEndTurn") {
       return reject(state, "INVALID_COMMAND", "turn cannot end while an action is pending");
     }
+    if (state.lastDice === null) {
+      return reject(state, "INVALID_STATE", "turn cannot end before dice have been rolled");
+    }
+    if (state.bankruptcyRequiredSeatIndex !== null) {
+      return reject(state, "INVALID_PHASE", "bankruptcy must be resolved before the turn can end");
+    }
     const advanced = advanceTurn(state, context.nowMs);
     if (advanced === null) return reject(state, "INVALID_STATE", "no next active player is available");
     const players = state.players.map((player, index) => player === null ? null : {
       ...player,
       consecutiveDoubles: index === state.turn.currentSeatIndex ? 0 : player.consecutiveDoubles,
     });
-    const next = freezeState(state, {
+    const next = freezeActiveGameplayState(state, {
       stateVersion: state.stateVersion + 1,
       players,
       turn: advanced.turn,
@@ -319,7 +325,7 @@ export function transitionGameplayTurn(
     const players = state.players.map((player, index) => player === null ? null : index === current.seatIndex
       ? { ...player, position: GAMEPLAY_POLICY.jailPosition, inJail: true, jailTurns: 0, consecutiveDoubles: 0 }
       : player);
-    const next = freezeState(state, {
+    const next = freezeActiveGameplayState(state, {
       stateVersion: state.stateVersion + 1,
       players,
       turn: advanced.turn,
@@ -358,7 +364,7 @@ export function transitionGameplayTurn(
           consecutiveDoubles: 0,
         }
       : player);
-    const next = freezeState(state, {
+    const next = freezeActiveGameplayState(state, {
       stateVersion: state.stateVersion + 1,
       players,
       turn: advanced.turn,
@@ -387,7 +393,7 @@ export function transitionGameplayTurn(
   const players = state.players.map((player, index) => player === null ? null : index === current.seatIndex
     ? { ...player, cash, position: movement.to, consecutiveDoubles: doubles.consecutiveDoubles }
     : player);
-  const next = freezeState(state, {
+  const next = freezeActiveGameplayState(state, {
     stateVersion: state.stateVersion + 1,
     players,
     turn,
