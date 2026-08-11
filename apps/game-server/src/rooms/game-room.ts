@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   Client,
   Room,
@@ -6,6 +7,11 @@ import {
   RoomAdmissionOptionsSchema,
   PlayerPrivateStateMessageSchema,
   PlayerPrivateStateRequestSchema,
+  RoomCommandSchema,
+  SessionStatusSchema,
+  type DomainEventEnvelope,
+  type GameplayDomainEventEnvelope,
+  type OperationResponse,
 } from "@pootown/game-contracts";
 import {
   parseGameplaySnapshot,
@@ -15,26 +21,43 @@ import {
   type GameplayAggregateState,
 } from "@pootown/game-core";
 
-import type { SessionBootstrapResponse, TicketConsumeRequest, TicketConsumeResponse } from "@pootown/game-contracts/internal";
+import type {
+  SessionBootstrapResponse,
+  TicketConsumeRequest,
+  TicketConsumeResponse,
+} from "@pootown/game-contracts/internal";
 import {
   TicketAuthenticationError,
   TicketAuthenticator,
   type AuthenticatedRoomPlayer,
 } from "../auth/ticket-auth.js";
+import {
+  InvalidRoomCommandError,
+  RoomCommandHandler,
+} from "../commands/command-handler.js";
 import { CheckpointRepository, CorruptCheckpointError } from "../persistence/checkpoint-repository.js";
+import { CommandRepository } from "../persistence/command-repository.js";
 import { RoomLeaseRepository, type RoomLease } from "../persistence/room-lease.js";
 import { SecureRandomSource } from "../random/secure-random-source.js";
 import { createWaitingState } from "./bootstrap-state.js";
 import {
   createGameRoomState,
+  type GameRoomStateInstance,
+  updateGameRoomState,
 } from "./game-room-state.js";
 
 export interface GameRoomDependencies {
   readonly api: {
     bootstrap(gameId: string): Promise<SessionBootstrapResponse>;
     consumeTicket(request: TicketConsumeRequest, idempotencyKey: string): Promise<TicketConsumeResponse>;
+    markStarted(
+      gameId: string,
+      request: { readonly contractVersion: 1; readonly roomId: string; readonly stateVersion: number },
+      idempotencyKey: string,
+    ): Promise<OperationResponse>;
   };
   readonly checkpoints: CheckpointRepository;
+  readonly commands: CommandRepository;
   readonly leaseRenewMs: number;
   readonly leases: RoomLeaseRepository;
 }
@@ -64,10 +87,19 @@ function parseCheckpointState(serializedState: string): GameState | GameplayAggr
 export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoomConstructor {
   return class GameRoom extends Room {
     private readonly activeSessions = new Map<string, ActiveSession>();
+    private authenticationsInFlight = 0;
+    private readonly authenticationWaiters = new Set<() => void>();
     private authenticator: TicketAuthenticator | undefined;
+    private commandDeliveryQueue: Promise<void> = Promise.resolve();
+    private commandHandler: RoomCommandHandler | undefined;
     private gameId: string | undefined;
     private lease: RoomLease | undefined;
     private logicalRoomId: string | undefined;
+    private pendingStartPublication: {
+      readonly requestId: string;
+      readonly events: readonly (DomainEventEnvelope | GameplayDomainEventEnvelope)[];
+    } | undefined;
+    private starting = false;
 
     public override async onCreate(rawOptions: unknown): Promise<void> {
       const options = RoomAdmissionOptionsSchema.parse(rawOptions);
@@ -93,6 +125,18 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
             throw new CorruptCheckpointError("Room checkpoint belongs to another game");
           }
         }
+        const gameplayCheckpoint = "players" in privateState;
+        if (bootstrap.stateVersion > privateState.stateVersion ||
+            (!gameplayCheckpoint && bootstrap.lifecycle !== "open")) {
+          throw new CorruptCheckpointError("Room checkpoint is behind API lifecycle authority");
+        }
+        if (gameplayCheckpoint && bootstrap.lifecycle === "open") {
+          await dependencies.api.markStarted(bootstrap.gameId, {
+            contractVersion: 1,
+            roomId: bootstrap.roomId,
+            stateVersion: privateState.stateVersion,
+          }, startIdempotencyKey(bootstrap.gameId, bootstrap.roomId));
+        }
       } catch (error) {
         await dependencies.leases.release(lease).catch(() => false);
         throw error;
@@ -101,6 +145,14 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
       this.logicalRoomId = bootstrap.roomId;
       this.lease = lease;
       this.setState(createGameRoomState(privateState));
+      this.commandHandler = new RoomCommandHandler({
+        initialState: privateState,
+        lease,
+        store: dependencies.commands,
+        onCommitted: (state) => {
+          updateGameRoomState(this.state as GameRoomStateInstance, state);
+        },
+      });
       this.authenticator = new TicketAuthenticator({
         consumeTicket: (request, idempotencyKey) => dependencies.api.consumeTicket(request, idempotencyKey),
       }, lease.instanceId, bootstrap.roomId);
@@ -114,17 +166,43 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
         const privateMessage = playerPrivateStateMessage(client.userData);
         client.send(privateMessage.type, privateMessage);
       });
+      this.onMessage("command", async (client: GameClient, payload: unknown) => {
+        await this.enqueueRoomCommand(client, payload);
+      });
       this.clock.setInterval(() => {
         void this.renewLease();
       }, dependencies.leaseRenewMs);
+      if ("players" in privateState) await this.lock();
     }
 
     public override async onAuth(client: Client, rawOptions: unknown): Promise<AuthenticatedRoomPlayer> {
+      if (this.starting) throw new TicketAuthenticationError("Room start is being finalized");
+      this.authenticationsInFlight += 1;
+      try {
+        return await this.authenticateClient(client, rawOptions);
+      } finally {
+        this.authenticationsInFlight -= 1;
+        if (this.authenticationsInFlight === 0) {
+          for (const resolve of this.authenticationWaiters) resolve();
+          this.authenticationWaiters.clear();
+        }
+      }
+    }
+
+    private async authenticateClient(client: Client, rawOptions: unknown): Promise<AuthenticatedRoomPlayer> {
       const options = RoomAdmissionOptionsSchema.parse(rawOptions);
       if (options.gameId !== this.gameId || this.logicalRoomId === undefined || this.authenticator === undefined) {
         throw new TicketAuthenticationError("Admission does not target this room");
       }
       const authenticated = await this.authenticator.authenticate(options);
+      const bootstrap = await dependencies.api.bootstrap(authenticated.gameId);
+      const admitted = bootstrap.players.find((player) => player.playerId === authenticated.playerId);
+      if (bootstrap.roomId !== authenticated.roomId || admitted?.seatIndex !== authenticated.seatIndex ||
+          this.commandHandler === undefined) {
+        throw new TicketAuthenticationError("API admission is not present in the room bootstrap");
+      }
+      const admissionEvents = await this.commandHandler.ensureAdmittedPlayer(authenticated, admitted.joinedAtMs);
+      for (const event of admissionEvents) this.broadcast(event.type, event);
       if (this.activeSessions.has(authenticated.playerId)) {
         throw new TicketAuthenticationError("Player already has an active room connection");
       }
@@ -172,7 +250,94 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
         await this.disconnect();
       }
     }
+
+    private async handleRoomCommand(client: GameClient, payload: unknown): Promise<void> {
+      if (client.userData === undefined || this.commandHandler === undefined) {
+        client.error(4401, "Room client is not authenticated");
+        return;
+      }
+      const parsedCommand = RoomCommandSchema.safeParse(payload);
+      const startsGame = parsedCommand.success && parsedCommand.data.type === "startGame";
+      if (this.starting && (!startsGame ||
+          this.pendingStartPublication?.requestId !== parsedCommand.data.requestId)) {
+        client.error(4503, "Room start is awaiting API confirmation");
+        return;
+      }
+      try {
+        if (startsGame) {
+          this.starting = true;
+          await this.lock();
+          await this.waitForAuthentications();
+        }
+        const result = await this.commandHandler.handle(client.userData, payload);
+        if (!result.accepted) {
+          if (startsGame) {
+            this.starting = false;
+            await this.unlock();
+          }
+          client.send(result.rejection.type, result.rejection);
+          return;
+        }
+        let events = result.events;
+        if (startsGame) {
+          if (this.gameId === undefined || this.logicalRoomId === undefined) {
+            throw new InvalidRoomCommandError("Started room binding is unavailable");
+          }
+          if (!result.replayed) {
+            this.pendingStartPublication = {
+              requestId: result.acknowledgement.requestId,
+              events: result.events,
+            };
+          } else if (this.pendingStartPublication?.requestId === result.acknowledgement.requestId) {
+            events = this.pendingStartPublication.events;
+          }
+          await dependencies.api.markStarted(this.gameId, {
+            contractVersion: 1,
+            roomId: this.logicalRoomId,
+            stateVersion: result.acknowledgement.stateVersion,
+          }, startIdempotencyKey(this.gameId, this.logicalRoomId));
+          this.starting = false;
+          this.pendingStartPublication = undefined;
+        }
+        client.send(result.acknowledgement.type, result.acknowledgement);
+        for (const event of events) this.broadcast(event.type, event);
+      } catch (error) {
+        if (error instanceof InvalidRoomCommandError) {
+          if (startsGame && this.pendingStartPublication === undefined) {
+            this.starting = false;
+            await this.unlock();
+          }
+          client.error(4400, "Room command is invalid");
+          return;
+        }
+        if (!startsGame) await this.lock();
+        const status = SessionStatusSchema.parse({
+          type: "session.status",
+          status: "reconnecting",
+          reason: "command-finalization-pending",
+        });
+        client.send(status.type, status);
+      }
+    }
+
+    private enqueueRoomCommand(client: GameClient, payload: unknown): Promise<void> {
+      const work = this.commandDeliveryQueue.then(
+        () => this.handleRoomCommand(client, payload),
+        () => this.handleRoomCommand(client, payload),
+      );
+      this.commandDeliveryQueue = work.then(() => undefined, () => undefined);
+      return work;
+    }
+
+    private waitForAuthentications(): Promise<void> {
+      if (this.authenticationsInFlight === 0) return Promise.resolve();
+      return new Promise((resolve) => this.authenticationWaiters.add(resolve));
+    }
   };
+}
+
+function startIdempotencyKey(gameId: string, roomId: string): string {
+  return `realtime-start-${createHash("sha256").update(`${gameId}\0${roomId}`).digest("hex")}`;
 }
 
 export function playerPrivateStateMessage(authenticated: AuthenticatedRoomPlayer) {

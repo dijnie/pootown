@@ -21,12 +21,34 @@ const authenticated: AuthenticatedRoomPlayer = Object.freeze({
 });
 
 function createRoom(): TestRoom {
-  const RoomClass = createGameRoomClass({} as never);
+  const RoomClass = createGameRoomClass({
+    api: {
+      async bootstrap() {
+        return {
+          contractVersion: 1,
+          gameId: authenticated.gameId,
+          gameDefinitionId: "classic_100",
+          gameDefinitionVersion: 1,
+          rulesetId: "pootown-rust-source-v1",
+          roomId: authenticated.roomId,
+          lifecycle: "open",
+          stateVersion: 0,
+          creatorPlayerId: authenticated.playerId,
+          maximumPlayers: 4,
+          timeLimitMs: null,
+          createdAtMs: 1,
+          startedAtMs: null,
+          players: [{ playerId: authenticated.playerId, seatIndex: 0, joinedAtMs: 1 }],
+        } as never;
+      },
+    },
+  } as never);
   const room = new RoomClass() as TestRoom;
   Object.assign(room, {
     gameId: authenticated.gameId,
     logicalRoomId: authenticated.roomId,
     authenticator: { authenticate: async () => authenticated },
+    commandHandler: { ensureAdmittedPlayer: async () => [] },
     seatReservationTimeout: 0,
   });
   return room;

@@ -3,8 +3,11 @@ import {
   CONTRACT_VERSION,
   GameIdSchema,
   IdempotencyKeySchema,
+  OperationResponseSchema,
+  type OperationResponse,
 } from "@pootown/game-contracts";
 import {
+  SessionStartedRequestSchema,
   SessionBootstrapResponseSchema,
   TicketConsumeRequestSchema,
   TicketConsumeResponseSchema,
@@ -65,6 +68,25 @@ export class InternalApiClient {
         body: JSON.stringify(request),
       },
       TicketConsumeResponseSchema,
+    );
+  }
+
+  public markStarted(
+    gameIdValue: string,
+    requestValue: z.input<typeof SessionStartedRequestSchema>,
+    idempotencyKeyValue: string,
+  ): Promise<OperationResponse> {
+    const gameId = GameIdSchema.parse(gameIdValue);
+    const request = SessionStartedRequestSchema.parse(requestValue);
+    const idempotencyKey = IdempotencyKeySchema.parse(idempotencyKeyValue);
+    return this.request(
+      `/internal/v1/game-sessions/${encodeURIComponent(gameId)}/started`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "idempotency-key": idempotencyKey },
+        body: JSON.stringify(request),
+      },
+      OperationResponseSchema,
     );
   }
 

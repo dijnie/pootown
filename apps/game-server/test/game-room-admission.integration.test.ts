@@ -5,10 +5,17 @@ import { Server as ColyseusServer } from "@colyseus/core";
 import { Client as ColyseusClient, type Room as ClientRoom } from "@colyseus/sdk";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import type { SessionBootstrapResponse, TicketConsumeResponse } from "@pootown/game-contracts/internal";
-import { PlayerPrivateStateMessageSchema } from "@pootown/game-contracts";
+import {
+  CommandAcknowledgementSchema,
+  CommandRejectionSchema,
+  DomainEventEnvelopeSchema,
+  PlayerPrivateStateMessageSchema,
+  SessionStatusSchema,
+} from "@pootown/game-contracts";
 import express from "express";
 
 import { CheckpointRepository } from "../src/persistence/checkpoint-repository.js";
+import { CommandRepository } from "../src/persistence/command-repository.js";
 import { RoomLeaseRepository } from "../src/persistence/room-lease.js";
 import { createGameRoomClass } from "../src/rooms/game-room.js";
 import type { GameRoomStateInstance } from "../src/rooms/game-room-state.js";
@@ -22,18 +29,35 @@ import {
 const ownerTicket = "A".repeat(43);
 const secondTicket = `${"B".repeat(42)}A`;
 
+function within<T>(promise: Promise<T>, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Timed out waiting for ${label}`)), 10_000);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error: unknown) => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
+
 describe("live Colyseus ticket admission", { timeout: 120_000 }, () => {
   let database: TestDatabase;
   let gameServer: ColyseusServer;
   let httpServer: HttpServer;
   let endpoint: string;
+  let bootstrapCalls = 0;
+  let startedCalls = 0;
+  let releaseSecondConsume: (() => void) | undefined;
+  let secondConsumeStarted: Promise<void>;
+  let signalSecondConsumeStarted: (() => void) | undefined;
   const rooms: ClientRoom[] = [];
 
   before(async () => {
+    secondConsumeStarted = new Promise((resolve) => { signalSecondConsumeStarted = resolve; });
     database = await startTestDatabase();
     await seedGameSession(database.pool, "game_admission", "room_admission");
     const leases = new RoomLeaseRepository(database.pool, "admission-instance", 30_000);
     const checkpoints = new CheckpointRepository(database.pool, leases);
+    const commands = new CommandRepository(database.pool, leases);
     const bootstrap: SessionBootstrapResponse = {
       contractVersion: 1,
       gameId: "game_admission" as SessionBootstrapResponse["gameId"],
@@ -71,16 +95,35 @@ describe("live Colyseus ticket admission", { timeout: 120_000 }, () => {
       api: {
         async bootstrap(gameId) {
           assert.equal(gameId, bootstrap.gameId);
-          return bootstrap;
+          bootstrapCalls += 1;
+          return bootstrapCalls === 1 ? { ...bootstrap, players: [bootstrap.players[0]!] } : bootstrap;
         },
         async consumeTicket(request) {
           assert.equal(request.gameId, bootstrap.gameId);
           assert.equal(request.roomId, bootstrap.roomId);
           assert.match(request.roomInstanceId, /^admission-instance:/);
+          if (request.ticket === secondTicket) {
+            signalSecondConsumeStarted?.();
+            await new Promise<void>((resolve) => { releaseSecondConsume = resolve; });
+          }
           return responseFor(request.ticket);
+        },
+        async markStarted(gameId, request, idempotencyKey) {
+          assert.equal(gameId, bootstrap.gameId);
+          assert.equal(request.roomId, bootstrap.roomId);
+          assert.equal(request.stateVersion, 3);
+          assert.match(idempotencyKey, /^realtime-start-[a-f0-9]{64}$/);
+          startedCalls += 1;
+          if (startedCalls === 1) throw new Error("simulated post-commit API outage");
+          return {
+            contractVersion: 1,
+            operationId: "operation_started" as never,
+            committed: true,
+          };
         },
       },
       checkpoints,
+      commands,
       leaseRenewMs: 10_000,
       leases,
     })).filterBy(["gameId"]);
@@ -91,9 +134,9 @@ describe("live Colyseus ticket admission", { timeout: 120_000 }, () => {
   });
 
   after(async () => {
-    await Promise.all(rooms.splice(0).map((room) => room.leave().catch(() => undefined)));
-    await gameServer?.gracefullyShutdown(false);
-    await stopTestDatabase(database);
+    await Promise.allSettled(rooms.splice(0).map((room) => within(room.leave(), "room leave")));
+    await within(gameServer.gracefullyShutdown(false), "server shutdown");
+    await within(stopTestDatabase(database), "database shutdown");
   });
 
   it("attaches only API-bound players and rejects a duplicate active player", async () => {
@@ -102,7 +145,10 @@ describe("live Colyseus ticket admission", { timeout: 120_000 }, () => {
       gameId: "game_admission",
       ticket,
     });
-    const owner = await new ColyseusClient(endpoint).joinOrCreate("game", options(ownerTicket));
+    const owner = await within(
+      new ColyseusClient(endpoint).joinOrCreate("game", options(ownerTicket)),
+      "owner room join",
+    );
     rooms.push(owner);
     let ownerState = owner.state as unknown as GameRoomStateInstance;
     for (let attempt = 0; attempt < 100 && ownerState.stateVersion === undefined; attempt += 1) {
@@ -111,31 +157,94 @@ describe("live Colyseus ticket admission", { timeout: 120_000 }, () => {
     }
     assert.equal(ownerState.stateVersion, 1);
     assert.equal(JSON.parse(ownerState.publicStateJson).gameId, "game_admission");
+    assert.equal(JSON.parse(ownerState.publicStateJson).seats[1], null);
     assert.doesNotMatch(ownerState.publicStateJson, /rng|seed|ticket|reservation|userId/i);
     const ownerPrivate = new Promise<unknown>((resolve) => owner.onMessage("player.private", resolve));
     owner.send("player.private.sync", {});
-    assert.equal(PlayerPrivateStateMessageSchema.parse(await ownerPrivate).view.playerId, "player_owner");
-    const second = await new ColyseusClient(endpoint).joinOrCreate("game", options(secondTicket));
-    rooms.push(second);
-    const secondPrivate = new Promise<unknown>((resolve) => second.onMessage("player.private", resolve));
-    second.send("player.private.sync", {});
-    assert.equal(PlayerPrivateStateMessageSchema.parse(await secondPrivate).view.playerId, "player_second");
-    assert.equal(second.roomId, owner.roomId);
-    await assert.rejects(new ColyseusClient(endpoint).joinOrCreate("game", options(ownerTicket)));
-    await assert.rejects(new ColyseusClient(endpoint).joinOrCreate("game", {
+    assert.equal(PlayerPrivateStateMessageSchema.parse(await within(ownerPrivate, "owner private state")).view.playerId, "player_owner");
+    await assert.rejects(within(
+      new ColyseusClient(endpoint).joinOrCreate("game", options(ownerTicket)),
+      "duplicate owner rejection",
+    ));
+    await assert.rejects(within(new ColyseusClient(endpoint).joinOrCreate("game", {
       ...options(secondTicket),
       playerId: "player_attacker",
-    }));
+    }), "forged admission rejection"));
+    const joinedEvent = new Promise<unknown>((resolve) => owner.onMessage("domain.event", resolve));
+    const secondJoin = new ColyseusClient(endpoint).joinOrCreate("game", options(secondTicket));
+    await within(secondConsumeStarted, "second ticket consume");
+    const racedStartRejection = new Promise<unknown>((resolve) => owner.onMessage("command.reject", resolve));
+    owner.send("command", {
+      requestId: "00000000-0000-4000-8000-000000000300",
+      expectedStateVersion: 1,
+      type: "startGame",
+      payload: {},
+    });
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    releaseSecondConsume?.();
+    const second = await within(secondJoin, "second room join");
+    rooms.push(second);
+    assert.equal(DomainEventEnvelopeSchema.parse(await within(joinedEvent, "player joined event")).payload.type, "playerJoined");
+    assert.equal(CommandRejectionSchema.parse(await within(racedStartRejection, "raced start rejection")).code, "STALE_STATE_VERSION");
+    const secondPrivate = new Promise<unknown>((resolve) => second.onMessage("player.private", resolve));
+    second.send("player.private.sync", {});
+    assert.equal(PlayerPrivateStateMessageSchema.parse(await within(secondPrivate, "second private state")).view.playerId, "player_second");
 
+    const requestId = "00000000-0000-4000-8000-000000000301";
+    const ownerAck = new Promise<unknown>((resolve) => owner.onMessage("command.ack", resolve));
+    const secondEvent = new Promise<unknown>((resolve) => second.onMessage("domain.event", resolve));
+    const startDeferred = new Promise<unknown>((resolve) => owner.onMessage("session.status", resolve));
+    owner.send("command", {
+      requestId,
+      expectedStateVersion: 2,
+      type: "startGame",
+      payload: {},
+    });
+    assert.deepEqual(SessionStatusSchema.parse(await within(startDeferred, "deferred start status")), {
+      type: "session.status",
+      status: "reconnecting",
+      reason: "command-finalization-pending",
+    });
+    owner.send("command", {
+      requestId,
+      expectedStateVersion: 2,
+      type: "startGame",
+      payload: {},
+    });
+    const acknowledgement = CommandAcknowledgementSchema.parse(await within(ownerAck, "start acknowledgement"));
+    const event = DomainEventEnvelopeSchema.parse(await within(secondEvent, "start event"));
+    assert.equal(acknowledgement.stateVersion, 3);
+    assert.equal(event.payload.type, "gameStarted");
+    for (let attempt = 0; attempt < 100 && ownerState.stateVersion !== 3; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      ownerState = owner.state as unknown as GameRoomStateInstance;
+    }
+    assert.equal(ownerState.stateVersion, 3);
+    assert.equal(JSON.parse(ownerState.publicStateJson).turn.phase, "awaitingRoll");
+
+    const replayAck = new Promise<unknown>((resolve) => owner.onMessage("command.ack", resolve));
+    owner.send("command", {
+      requestId,
+      expectedStateVersion: 2,
+      type: "startGame",
+      payload: {},
+    });
+    assert.deepEqual(CommandAcknowledgementSchema.parse(await within(replayAck, "replay acknowledgement")), acknowledgement);
+    assert.equal(startedCalls, 3);
+    assert.equal(second.roomId, owner.roomId);
     const durable = await database.pool.query(
       `
-        SELECT checkpoint.state_version::int, lease.instance_id
+        SELECT checkpoint.state_version::int, lease.instance_id,
+          (SELECT count(*)::int FROM realtime.room_commands command WHERE command.room_id = checkpoint.room_id) AS commands,
+          (SELECT count(*)::int FROM realtime.room_events event WHERE event.room_id = checkpoint.room_id) AS events
         FROM realtime.room_checkpoints checkpoint
         JOIN realtime.room_leases lease USING (room_id, game_session_id, fencing_token)
         WHERE checkpoint.room_id = 'room_admission'
       `,
     );
-    assert.equal(durable.rows[0]?.state_version, 1);
+    assert.equal(durable.rows[0]?.state_version, 3);
+    assert.equal(durable.rows[0]?.commands, 2);
+    assert.equal(durable.rows[0]?.events, 2);
     assert.match(durable.rows[0]?.instance_id as string, /^admission-instance:/);
   });
 });

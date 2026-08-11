@@ -103,4 +103,30 @@ describe("internal API client", () => {
       error instanceof InternalApiRequestError && error.status === 401 && error.code === "TICKET_EXPIRED");
     assert.equal(requests.length, 1);
   });
+
+  it("marks the exact committed room revision started with an idempotency key", async () => {
+    let observed: { input: string; init?: RequestInit } | undefined;
+    const client = new InternalApiClient({
+      baseUrl: "https://api.pootown.example",
+      credentialProvider: { async issue() { return "signed-service-token"; } },
+      fetchImplementation: async (input, init) => {
+        observed = { input: String(input), ...(init === undefined ? {} : { init }) };
+        return Response.json({ contractVersion: 1, operationId: "operation_started", committed: true });
+      },
+    });
+    const response = await client.markStarted("game_1", {
+      contractVersion: 1,
+      roomId: "room_1",
+      stateVersion: 7,
+    }, "realtime-start-key");
+    assert.equal(response.committed, true);
+    assert.equal(observed?.input, "https://api.pootown.example/internal/v1/game-sessions/game_1/started");
+    assert.equal(observed?.init?.method, "POST");
+    assert.deepEqual(JSON.parse(observed?.init?.body as string), {
+      contractVersion: 1,
+      roomId: "room_1",
+      stateVersion: 7,
+    });
+    assert.equal((observed?.init?.headers as Record<string, string>)["idempotency-key"], "realtime-start-key");
+  });
 });
