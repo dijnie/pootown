@@ -58,6 +58,8 @@ import {
   updateGameRoomState,
 } from "./game-room-state.js";
 
+const FINISHED_ROOM_RETENTION_MS = 600_000;
+
 export interface GameRoomDependencies {
   readonly api: {
     bootstrap(gameId: string): Promise<SessionBootstrapResponse>;
@@ -85,6 +87,7 @@ export interface GameRoomDependencies {
   };
   readonly leaseRenewMs: number;
   readonly leases: RoomLeaseRepository;
+  readonly nowMs?: () => number;
   readonly onLeaseLost?: (error: unknown) => void;
   readonly presence: PresenceRepository;
 }
@@ -120,6 +123,7 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
     private commandDeliveryQueue: Promise<void> = Promise.resolve();
     private commandHandler: RoomCommandHandler | undefined;
     private disposed = false;
+    private finishedDisposalScheduled = false;
     private gameId: string | undefined;
     private lease: RoomLease | undefined;
     private leaseLost = false;
@@ -453,11 +457,23 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
     }
 
     private scheduleSettlement(state: GameState | GameplayAggregateState): void {
-      if (!("players" in state) || state.lifecycle !== "finished" || this.settlementInFlight ||
-          this.settlementRetryTimer !== undefined || this.disposed) return;
+      if (!("players" in state) || state.lifecycle !== "finished" || this.disposed) return;
+      this.scheduleFinishedDisposal(state.terminal.endedAtMs);
+      if (this.settlementInFlight || this.settlementRetryTimer !== undefined) return;
       this.roomClock?.stop();
       void this.lock();
       void this.settleFinishedState(state);
+    }
+
+    private scheduleFinishedDisposal(endedAtMs: number): void {
+      if (this.finishedDisposalScheduled) return;
+      this.finishedDisposalScheduled = true;
+      const nowMs = dependencies.nowMs?.() ?? Date.now();
+      const elapsedMs = Math.max(0, nowMs - endedAtMs);
+      const remainingMs = Math.max(0, FINISHED_ROOM_RETENTION_MS - elapsedMs);
+      this.clock.setTimeout(() => {
+        if (!this.disposed) void this.disconnect();
+      }, remainingMs);
     }
 
     private async settleFinishedState(state: Extract<GameplayAggregateState, { lifecycle: "finished" }>): Promise<void> {
