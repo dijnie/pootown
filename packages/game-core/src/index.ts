@@ -18,6 +18,7 @@ export * from "./rules/jail-rules";
 export * from "./rules/movement";
 export * from "./rules/property-rules";
 export * from "./rules/terminal-rules";
+export * from "./rules/timeout-rules";
 export * from "./rules/trade-rules";
 export * from "./serialization/replay";
 export * from "./serialization/snapshot";

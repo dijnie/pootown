@@ -90,7 +90,7 @@ function validPlayer(player: BankruptcyPlayerState, index: number): boolean {
   );
 }
 
-function validState(
+export function isValidBankruptcyState(
   players: readonly (BankruptcyPlayerState | null)[],
   properties: readonly PropertyState[],
   inventory: BuildingInventory,
@@ -131,7 +131,7 @@ export function resolveBankruptcy(
   bankruptSeatIndex: number,
 ): BankruptcyResolutionResult {
   if (
-    !validState(players, properties, inventory, bankCash) ||
+    !isValidBankruptcyState(players, properties, inventory, bankCash) ||
     !Number.isInteger(bankruptSeatIndex) ||
     bankruptSeatIndex < 0 ||
     bankruptSeatIndex >= GAMEPLAY_POLICY.maximumPlayers

@@ -7,6 +7,10 @@ import {
 import { BOARD_SPACES } from "./board-definition";
 import { GAMEPLAY_POLICY } from "./gameplay-policy";
 import { isValidPropertyStates, type PropertyState } from "./property-rules";
+import {
+  isVerifiedTimeoutForfeit,
+  type TimeoutResolution,
+} from "./timeout-rules";
 
 export type TerminalEndReason = "lastPlayerStanding" | "timeLimit" | "manual" | "timeoutForfeit";
 
@@ -126,7 +130,7 @@ export function calculatePlayerNetWorth(
 function deriveRankedTerminalOutcome(
   players: readonly (TerminalPlayerState | null)[],
   properties: readonly PropertyState[],
-  reason: "lastPlayerStanding" | "timeLimit",
+  reason: "lastPlayerStanding" | "timeLimit" | "timeoutForfeit",
   endedAtMs: number,
 ): TerminalOutcomeResult {
   if (
@@ -138,7 +142,7 @@ function deriveRankedTerminalOutcome(
     (player): player is TerminalPlayerState => player !== null && player.status === "active",
   );
   if (activePlayers.length === 0) return { ok: false, code: "NO_ACTIVE_PLAYERS" };
-  if (reason === "lastPlayerStanding" && activePlayers.length !== 1) {
+  if ((reason === "lastPlayerStanding" || reason === "timeoutForfeit") && activePlayers.length !== 1) {
     return { ok: false, code: "END_CONDITION_NOT_MET" };
   }
   const ranked: { readonly seatIndex: number; readonly netWorth: MatchCash }[] = [];
@@ -211,6 +215,24 @@ export function deriveBankruptcyTerminalOutcome(
     resolution.players,
     resolution.properties,
     "lastPlayerStanding",
+    endedAtMs,
+  );
+}
+
+export function deriveTimeoutForfeitTerminalOutcome(
+  resolution: TimeoutResolution,
+  endedAtMs: number,
+): TerminalOutcomeResult {
+  if (!isVerifiedTimeoutForfeit(resolution)) {
+    return { ok: false, code: "INVALID_TERMINAL_STATE" };
+  }
+  if (!resolution.bankruptcy.endConditionMet || resolution.bankruptcy.winnerSeatIndex === null) {
+    return { ok: false, code: "END_CONDITION_NOT_MET" };
+  }
+  return deriveRankedTerminalOutcome(
+    resolution.bankruptcy.players,
+    resolution.bankruptcy.properties,
+    "timeoutForfeit",
     endedAtMs,
   );
 }
