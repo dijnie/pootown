@@ -19,6 +19,7 @@ import {
 import type { PlayerId } from "../model/identifiers";
 import { matchCash } from "../model/money";
 import type { RandomCheckpoint, RandomSource } from "../ports/random-source";
+import { GAMEPLAY_RULESET_ID } from "./gameplay-policy";
 
 export interface TransitionContext {
   readonly actorId: PlayerId;
@@ -142,6 +143,7 @@ function createGame(command: Extract<GameCommand, { type: "createGame" }>, conte
   seats[0] = createSeat(context.actorId, 0, context.nowMs);
   const state: WaitingGameState = {
     schemaVersion: GAME_SCHEMA_VERSION,
+    rulesetId: GAMEPLAY_RULESET_ID,
     stateVersion: 1,
     gameId: command.payload.gameId,
     creatorId: context.actorId,

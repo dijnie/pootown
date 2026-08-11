@@ -123,8 +123,20 @@ describe("snapshot and replay", () => {
     assert.throws(() => parseSnapshot(corrupt), SnapshotError);
 
     const future = JSON.parse(valid) as Record<string, unknown>;
-    future.schemaVersion = 2;
+    future.schemaVersion = 3;
     assert.throws(() => parseSnapshot(JSON.stringify(future)), /unsupported snapshot schema version/);
+
+    const legacy = JSON.parse(valid) as Record<string, unknown>;
+    legacy.schemaVersion = 1;
+    assert.throws(() => parseSnapshot(JSON.stringify(legacy)), /unsupported snapshot schema version/);
+
+    const unknownRuleset = JSON.parse(valid) as Record<string, unknown>;
+    (unknownRuleset.state as Record<string, unknown>).rulesetId = "invented-rules";
+    assert.throws(() => parseSnapshot(resign(unknownRuleset)), /unsupported gameplay ruleset/);
+
+    const alteredTurnPolicy = JSON.parse(valid) as Record<string, unknown>;
+    (alteredTurnPolicy.state as Record<string, unknown>).turnTimeoutMs = 30_000;
+    assert.throws(() => parseSnapshot(resign(alteredTurnPolicy)), /turnTimeoutMs/);
 
     const invalidMoney = JSON.parse(valid) as Record<string, unknown>;
     (invalidMoney.state as Record<string, unknown>).bankCash = "01";

@@ -15,7 +15,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "eslint src --max-warnings=0 && tsc -p tsconfig.json --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test .test-dist/test/*.test.js"
+    "test": "tsc -p tsconfig.test.json && node --test .test-dist/test/*.test.js",
+    "test:parity": "tsc -p tsconfig.test.json && node --test .test-dist/test/board-definition.test.js .test-dist/test/card-decks.test.js"
   },
   "devDependencies": {
     "@types/node": "24.3.1",

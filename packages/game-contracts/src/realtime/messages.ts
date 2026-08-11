@@ -8,6 +8,7 @@ import {
   RequestIdSchema,
   StateVersionSchema,
 } from "../primitives";
+import { GameplayDomainEventEnvelopeSchema } from "./gameplay-events";
 
 export const CommandAcknowledgementSchema = z.strictObject({
   type: z.literal("command.ack"),
@@ -65,6 +66,7 @@ export const ServerMessageSchema = z.union([
   CommandAcknowledgementSchema,
   CommandRejectionSchema,
   DomainEventEnvelopeSchema,
+  GameplayDomainEventEnvelopeSchema,
   SessionStatusSchema,
   ClockSyncSchema,
   AuthStatusSchema,

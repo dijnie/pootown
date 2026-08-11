@@ -5,6 +5,7 @@ import {
   RequestIdSchema,
   StateVersionSchema,
 } from "../primitives";
+import { PlayerGameplayCommandSchema } from "./gameplay-commands";
 
 const baseEnvelope = {
   requestId: RequestIdSchema,
@@ -45,13 +46,15 @@ export const StartGameCommandSchema = z.strictObject({
   payload: z.strictObject({}),
 });
 
-export const RoomCommandSchema = z.discriminatedUnion("type", [
+export const LifecycleRoomCommandSchema = z.discriminatedUnion("type", [
   CreateGameCommandSchema,
   JoinGameCommandSchema,
   LeaveGameCommandSchema,
   CancelGameCommandSchema,
   StartGameCommandSchema,
 ]);
+
+export const RoomCommandSchema = z.union([LifecycleRoomCommandSchema, PlayerGameplayCommandSchema]);
 
 export type CreateGameCommand = z.infer<typeof CreateGameCommandSchema>;
 export type JoinGameCommand = z.infer<typeof JoinGameCommandSchema>;

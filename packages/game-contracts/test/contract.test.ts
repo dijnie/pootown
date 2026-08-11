@@ -15,7 +15,7 @@ import {
 } from "../src";
 
 describe("game contracts", () => {
-  it("strictly parses supported lifecycle commands", () => {
+  it("strictly parses supported room commands", () => {
     assert.equal(RoomCommandSchema.parse(lifecycleContractFixture.create).type, "createGame");
     assert.equal(RoomCommandSchema.parse(lifecycleContractFixture.join).type, "joinGame");
     assert.equal(RoomCommandSchema.parse(lifecycleContractFixture.leave).type, "leaveGame");
@@ -27,7 +27,7 @@ describe("game contracts", () => {
       false,
     );
     assert.equal(
-      RoomCommandSchema.safeParse({ ...lifecycleContractFixture.join, type: "rollDice" }).success,
+      RoomCommandSchema.safeParse({ ...lifecycleContractFixture.join, type: "startAuction" }).success,
       false,
     );
     assert.equal(

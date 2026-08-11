@@ -40,7 +40,7 @@ Authority precedence: accepted CEO decisions and this implementation plan overri
 |---|---|---|---|
 | 1 | [Workspace and behavioral baseline](./phase-01-start.md) | - | Complete |
 | 2 | [Shared contracts and core lifecycle](./phase-02-shared-contracts-and-core-lifecycle.md) | 1 | Complete |
-| 3 | [Complete executed rules port](./phase-03-complete-game-rules-port.md) | 2 | Pending |
+| 3 | [Complete executed rules port](./phase-03-complete-game-rules-port.md) | 2 | In progress |
 | 4 | [NestJS identity, economy, and sessions](./phase-04-nestjs-identity-economy-and-sessions.md) | 2 | Pending |
 | 5 | [Colyseus rooms and recovery](./phase-05-colyseus-rooms-and-recovery.md) | 3, 4 | Pending |
 | 6 | [Frontend runtime cutover](./phase-06-frontend-runtime-cutover.md) | 4, 5 | Pending |

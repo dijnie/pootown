@@ -11,6 +11,7 @@ import {
 } from "../model/game-state";
 import { gameId, playerId } from "../model/identifiers";
 import { matchCash } from "../model/money";
+import { GAMEPLAY_POLICY, GAMEPLAY_RULESET_ID } from "../rules/gameplay-policy";
 
 interface SnapshotEnvelope {
   readonly schemaVersion: number;
@@ -127,7 +128,7 @@ function hydrateState(value: unknown): GameState {
   exactKeys(
     state,
     [
-      "schemaVersion", "stateVersion", "gameId", "creatorId", "lifecycle", "minimumPlayers",
+      "schemaVersion", "rulesetId", "stateVersion", "gameId", "creatorId", "lifecycle", "minimumPlayers",
       "maximumPlayers", "seats", "bankCash", "freeParkingPool", "housesRemaining",
       "hotelsRemaining", "createdAtMs", "startedAtMs", "cancelledAtMs", "timeLimitMs",
       "gameEndAtMs", "turnTimeoutMs", "turn", "rng",
@@ -135,6 +136,7 @@ function hydrateState(value: unknown): GameState {
     "state",
   );
   if (state.schemaVersion !== GAME_SCHEMA_VERSION) throw new SnapshotError("unsupported game schema version");
+  if (state.rulesetId !== GAMEPLAY_RULESET_ID) throw new SnapshotError("unsupported gameplay ruleset");
   if (state.minimumPlayers !== MINIMUM_PLAYERS) throw new SnapshotError("minimum player rule is invalid");
   const maximumPlayers = integer(state.maximumPlayers, "maximumPlayers", MINIMUM_PLAYERS, MAXIMUM_PLAYERS);
   if (!Array.isArray(state.seats) || state.seats.length !== MAXIMUM_PLAYERS) {
@@ -149,6 +151,7 @@ function hydrateState(value: unknown): GameState {
   const turn = record(state.turn, "turn");
   const common = {
     schemaVersion: GAME_SCHEMA_VERSION,
+    rulesetId: GAMEPLAY_RULESET_ID,
     stateVersion: integer(state.stateVersion, "stateVersion", 1, MAX_STATE_VERSION),
     gameId: gameId(opaqueIdentifier(state.gameId, "gameId")),
     creatorId: playerId(opaqueIdentifier(state.creatorId, "creatorId")),
@@ -161,7 +164,7 @@ function hydrateState(value: unknown): GameState {
     hotelsRemaining: integer(state.hotelsRemaining, "hotelsRemaining", 0, 12),
     createdAtMs: integer(state.createdAtMs, "createdAtMs"),
     timeLimitMs: nullableTimeLimit(state.timeLimitMs),
-    turnTimeoutMs: integer(state.turnTimeoutMs, "turnTimeoutMs", 1, 86_400_000),
+    turnTimeoutMs: integer(state.turnTimeoutMs, "turnTimeoutMs", GAMEPLAY_POLICY.turnTimeoutMs, GAMEPLAY_POLICY.turnTimeoutMs),
     rng: {
       algorithm: text(rng.algorithm, "rng.algorithm", 64),
       state: text(rng.state, "rng.state", 4_096),

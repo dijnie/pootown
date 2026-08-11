@@ -1,13 +1,14 @@
 import type { GameId, PlayerId } from "./identifiers";
 import type { MatchCash } from "./money";
 import type { RandomCheckpoint } from "../ports/random-source";
+import type { GameplayRulesetId } from "../rules/gameplay-policy";
 
-export const GAME_SCHEMA_VERSION = 1 as const;
+export const GAME_SCHEMA_VERSION = 2 as const;
 export const MINIMUM_PLAYERS = 2 as const;
 export const MAXIMUM_PLAYERS = 4 as const;
 export const STARTING_MATCH_CASH = 1_500n;
 export const STARTING_BANK_CASH = 1_000_000n;
-export const DEFAULT_TURN_TIMEOUT_MS = 30_000;
+export const DEFAULT_TURN_TIMEOUT_MS = 90_000;
 export const MAX_STATE_VERSION = 2_147_483_647;
 
 export interface PlayerSeat {
@@ -24,6 +25,7 @@ export type SeatSlot = PlayerSeat | null;
 
 interface GameStateBase {
   readonly schemaVersion: typeof GAME_SCHEMA_VERSION;
+  readonly rulesetId: GameplayRulesetId;
   readonly stateVersion: number;
   readonly gameId: GameId;
   readonly creatorId: PlayerId;

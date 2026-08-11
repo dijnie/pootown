@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 
 import {
   gameId,
+  DEFAULT_TURN_TIMEOUT_MS,
   MAX_STATE_VERSION,
   occupiedSeats,
   playerId,
@@ -368,7 +369,7 @@ describe("core lifecycle", () => {
       phase: "awaitingRoll",
       currentSeatIndex: 0,
       startedAtMs: 20_000,
-      deadlineAtMs: 50_000,
+      deadlineAtMs: 20_000 + DEFAULT_TURN_TIMEOUT_MS,
     });
     assert.deepEqual(started.events, [{ type: "gameStarted", totalPlayers: 2 }]);
   });
