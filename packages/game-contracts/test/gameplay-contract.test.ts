@@ -154,6 +154,14 @@ describe("gameplay transport contracts", () => {
     }
   });
 
+  it("represents pending bankruptcy as an explicit public turn phase", () => {
+    const result = GameplayPublicStateSchema.safeParse({
+      ...publicState,
+      turn: { phase: "awaitingBankruptcy", currentSeatIndex: 0, startedAtMs: 100, deadlineAtMs: 90_100 },
+    });
+    assert.equal(result.success, true);
+  });
+
   it("strictly bounds command identifiers, board positions, money, and envelopes", () => {
     assert.equal(PlayerGameplayCommandSchema.safeParse(command("buyProperty", { position: 40 })).success, false);
     assert.equal(PlayerGameplayCommandSchema.safeParse(command("buyProperty", { position: -1 })).success, false);

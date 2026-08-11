@@ -187,7 +187,7 @@ export function transitionGameplayProperty(
     if (turn === null) return reject(state, "INVALID_STATE", "rent payment has no valid continuation");
     const payerCash = checkedSubtractMatchCash(current.cash, amount);
     if (payerCash === null) {
-      const bankruptcyTurn = createClockedGameplayTurn("awaitingEndTurn", current.seatIndex, context.nowMs);
+      const bankruptcyTurn = createClockedGameplayTurn("awaitingBankruptcy", current.seatIndex, context.nowMs);
       if (bankruptcyTurn === null) return reject(state, "INVALID_STATE", "bankruptcy deadline exceeds limits");
       return {
         ok: true,
@@ -233,7 +233,7 @@ export function transitionGameplayProperty(
       if (taxKind === "priorityFee") {
         return reject(state, "INSUFFICIENT_CASH", "player cannot afford the priority fee tax");
       }
-      const turn = createClockedGameplayTurn("awaitingEndTurn", current.seatIndex, context.nowMs);
+      const turn = createClockedGameplayTurn("awaitingBankruptcy", current.seatIndex, context.nowMs);
       if (turn === null) return reject(state, "INVALID_STATE", "bankruptcy deadline exceeds limits");
       return {
         ok: true,

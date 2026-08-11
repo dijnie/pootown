@@ -141,7 +141,7 @@ describe("gameplay property transition", () => {
     assert.equal(bankruptcy.state.players[0]?.cash, 1n);
     assert.equal(bankruptcy.state.players[1]?.cash, 1_500n);
     assert.equal(bankruptcy.state.bankruptcyRequiredSeatIndex, 0);
-    assert.equal(bankruptcy.state.turn.phase, "awaitingEndTurn");
+    assert.equal(bankruptcy.state.turn.phase, "awaitingBankruptcy");
     assert.deepEqual(bankruptcy.events, []);
     assert.equal(isValidActiveGameplayAggregateState(bankruptcy.state), true);
   });

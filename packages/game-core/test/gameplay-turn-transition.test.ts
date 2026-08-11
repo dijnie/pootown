@@ -250,7 +250,7 @@ describe("gameplay turn transition", () => {
     assert.equal(result.state.players[0]?.cash, 0n);
     assert.equal(result.state.players[0]?.inJail, false);
     assert.equal(result.state.bankruptcyRequiredSeatIndex, 0);
-    assert.equal(result.state.turn.phase, "awaitingEndTurn");
+    assert.equal(result.state.turn.phase, "awaitingBankruptcy");
     assert.equal(isValidActiveGameplayAggregateState(result.state), true);
   });
 
@@ -321,7 +321,7 @@ describe("gameplay turn transition", () => {
 
     const required = {
       ...initial,
-      turn: { phase: "awaitingEndTurn", currentSeatIndex: 0, startedAtMs: 2_500, deadlineAtMs: 92_500, emittedWarnings: [] },
+      turn: { phase: "awaitingBankruptcy", currentSeatIndex: 0, startedAtMs: 2_500, deadlineAtMs: 92_500, emittedWarnings: [] },
       lastDice: { dice: [1, 2] as const, total: 3, isDoubles: false },
       bankruptcyRequiredSeatIndex: 0,
     } as ActiveGameplayAggregateState;

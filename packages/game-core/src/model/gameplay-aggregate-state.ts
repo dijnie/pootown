@@ -49,6 +49,7 @@ export type ActiveGameplayAggregateTurn =
   | ({ readonly phase: "awaitingRentPayment"; readonly propertyPosition: number } & ActiveTurnClock)
   | ({ readonly phase: "awaitingCardDraw"; readonly deck: CardDeck } & ActiveTurnClock)
   | ({ readonly phase: "awaitingTaxPayment"; readonly taxKind: "mev" | "priorityFee" } & ActiveTurnClock)
+  | ({ readonly phase: "awaitingBankruptcy" } & ActiveTurnClock)
   | ({ readonly phase: "awaitingEndTurn" } & ActiveTurnClock);
 
 export type GameplayAggregateTurn = ActiveGameplayAggregateTurn | { readonly phase: "finished" };
@@ -128,7 +129,7 @@ function validTurn(turn: ActiveGameplayAggregateTurn): boolean {
         ? "taxKind"
         : null;
   if (
-    !["awaitingRoll", "awaitingPropertyDecision", "awaitingRentPayment", "awaitingCardDraw", "awaitingTaxPayment", "awaitingEndTurn"].includes(turn.phase) ||
+    !["awaitingRoll", "awaitingPropertyDecision", "awaitingRentPayment", "awaitingCardDraw", "awaitingTaxPayment", "awaitingBankruptcy", "awaitingEndTurn"].includes(turn.phase) ||
     !hasExactOwnKeys(turn, payloadKey === null ? baseKeys : [...baseKeys, payloadKey]) ||
     !Number.isInteger(turn.currentSeatIndex) ||
     turn.currentSeatIndex < 0 ||
@@ -199,7 +200,7 @@ export function isValidActiveGameplayAggregateState(value: unknown): value is Ac
     !Number.isSafeInteger(state.rng.bytesConsumed) ||
     state.rng.bytesConsumed < 0 ||
     (state.lastDice !== null && !validDice(state.lastDice)) ||
-    (state.turn.phase !== "awaitingRoll" && state.lastDice === null) ||
+    (state.turn.phase !== "awaitingRoll" && state.turn.phase !== "awaitingBankruptcy" && state.lastDice === null) ||
     cleanupExpiredTrades(state.activeTrades, 0) === null ||
     !isValidBankruptcyState(
       state.players,
@@ -233,8 +234,10 @@ export function isValidActiveGameplayAggregateState(value: unknown): value is Ac
     if (
       !Number.isInteger(state.bankruptcyRequiredSeatIndex) ||
       state.bankruptcyRequiredSeatIndex !== state.turn.currentSeatIndex ||
-      state.turn.phase !== "awaitingEndTurn"
+      state.turn.phase !== "awaitingBankruptcy"
     ) return false;
+  } else if (state.turn.phase === "awaitingBankruptcy") {
+    return false;
   }
   if (state.turn.phase === "awaitingPropertyDecision" || state.turn.phase === "awaitingRentPayment") {
     const property = state.properties[state.turn.propertyPosition];

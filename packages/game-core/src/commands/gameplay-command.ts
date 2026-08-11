@@ -28,6 +28,20 @@ export type GameplayTurnCommand =
   | ResolveRandomDiceGameplayCommand
   | EndTurnGameplayCommand;
 
+export interface PayJailFineGameplayCommand extends VersionedGameplayCommand {
+  readonly type: "payJailFine";
+  readonly payload: Record<string, never>;
+}
+
+export interface UseJailCardGameplayCommand extends VersionedGameplayCommand {
+  readonly type: "useJailCard";
+  readonly payload: Record<string, never>;
+}
+
+export type GameplayJailCommand =
+  | PayJailFineGameplayCommand
+  | UseJailCardGameplayCommand;
+
 export interface BuyPropertyGameplayCommand extends PositionedGameplayCommand {
   readonly type: "buyProperty";
 }
@@ -73,7 +87,7 @@ export type GameplayPropertyCommand =
   | PayMevTaxGameplayCommand
   | PayPriorityFeeTaxGameplayCommand;
 
-export type GameplayCommand = GameplayTurnCommand | GameplayPropertyCommand;
+export type GameplayCommand = GameplayTurnCommand | GameplayPropertyCommand | GameplayJailCommand;
 
 export type GameplayCommandActor =
   | { readonly kind: "player"; readonly playerId: PlayerId }

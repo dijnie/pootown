@@ -142,6 +142,7 @@ export function createClockedGameplayTurn(
     emittedWarnings: Object.freeze([]),
   };
   if (phase === "awaitingRoll") return Object.freeze({ phase, ...clock });
+  if (phase === "awaitingBankruptcy") return Object.freeze({ phase, ...clock });
   if (phase === "awaitingEndTurn") return Object.freeze({ phase, ...clock });
   return null;
 }
@@ -226,7 +227,7 @@ function playerActorAuthorized(
   return context.actor.kind === "player" && current?.playerId === context.actor.playerId;
 }
 
-function advanceTurn(
+export function advanceGameplayTurn(
   state: ActiveGameplayAggregateState,
   nowMs: number,
 ): { readonly turn: ActiveGameplayAggregateTurn; readonly nextSeatIndex: number } | null {
@@ -264,16 +265,16 @@ export function transitionGameplayTurn(
   }
 
   if (command.type === "endTurn") {
+    if (state.bankruptcyRequiredSeatIndex !== null) {
+      return reject(state, "INVALID_PHASE", "bankruptcy must be resolved before the turn can end");
+    }
     if (state.turn.phase !== "awaitingEndTurn") {
       return reject(state, "INVALID_COMMAND", "turn cannot end while an action is pending");
     }
     if (state.lastDice === null) {
       return reject(state, "INVALID_STATE", "turn cannot end before dice have been rolled");
     }
-    if (state.bankruptcyRequiredSeatIndex !== null) {
-      return reject(state, "INVALID_PHASE", "bankruptcy must be resolved before the turn can end");
-    }
-    const advanced = advanceTurn(state, context.nowMs);
+    const advanced = advanceGameplayTurn(state, context.nowMs);
     if (advanced === null) return reject(state, "INVALID_STATE", "no next active player is available");
     const players = state.players.map((player, index) => player === null ? null : {
       ...player,
@@ -324,7 +325,7 @@ export function transitionGameplayTurn(
       ? { ...player, ...jail.state }
       : player);
     if (jail.outcome === "remains") {
-      const advanced = advanceTurn(state, context.nowMs);
+      const advanced = advanceGameplayTurn(state, context.nowMs);
       if (advanced === null) return reject(state, "INVALID_STATE", "no next active player is available");
       return {
         ok: true,
@@ -339,7 +340,7 @@ export function transitionGameplayTurn(
       };
     }
     if (jail.outcome === "bankruptcyRequired") {
-      const turn = createClockedGameplayTurn("awaitingEndTurn", current.seatIndex, context.nowMs);
+      const turn = createClockedGameplayTurn("awaitingBankruptcy", current.seatIndex, context.nowMs);
       if (turn === null) return reject(state, "INVALID_STATE", "bankruptcy deadline exceeds limits");
       return {
         ok: true,
@@ -385,7 +386,7 @@ export function transitionGameplayTurn(
   }
 
   if (doubles.sentToJail) {
-    const advanced = advanceTurn(state, context.nowMs);
+    const advanced = advanceGameplayTurn(state, context.nowMs);
     if (advanced === null) return reject(state, "INVALID_STATE", "no next active player is available");
     const players = state.players.map((player, index) => player === null ? null : index === current.seatIndex
       ? { ...player, position: GAMEPLAY_POLICY.jailPosition, inJail: true, jailTurns: 0, consecutiveDoubles: 0 }
@@ -417,7 +418,7 @@ export function transitionGameplayTurn(
     cash = nextCash;
   }
   if (movement.to === GAMEPLAY_POLICY.goToJailPosition) {
-    const advanced = advanceTurn(state, context.nowMs);
+    const advanced = advanceGameplayTurn(state, context.nowMs);
     if (advanced === null) return reject(state, "INVALID_STATE", "no next active player is available");
     const players = state.players.map((player, index) => player === null ? null : index === current.seatIndex
       ? {

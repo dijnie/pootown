@@ -120,6 +120,7 @@ export const GameplayTurnStateSchema = z.discriminatedUnion("phase", [
     ...activeTurnBase,
     taxKind: TaxKindSchema,
   }),
+  z.strictObject({ phase: z.literal("awaitingBankruptcy"), ...activeTurnBase }),
   z.strictObject({ phase: z.literal("awaitingEndTurn"), ...activeTurnBase }),
   z.strictObject({ phase: z.literal("finished") }),
 ]);
