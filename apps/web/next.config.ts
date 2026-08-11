@@ -1,11 +1,28 @@
 import type { NextConfig } from "next";
 
+import { normalizeApiOrigin } from "./services/api-origin";
+
+type SvgFileRule = {
+  exclude?: RegExp;
+  issuer?: unknown;
+  resourceQuery: { not: unknown[] };
+  test: RegExp;
+};
+
+function isSvgFileRule(rule: unknown): rule is SvgFileRule {
+  if (typeof rule !== "object" || rule === null) return false;
+  const candidate = rule as Partial<SvgFileRule>;
+  return candidate.test instanceof RegExp &&
+    typeof candidate.resourceQuery === "object" &&
+    candidate.resourceQuery !== null &&
+    Array.isArray(candidate.resourceQuery.not);
+}
+
 const nextConfig: NextConfig = {
   webpack(config) {
     // Grab the existing rule that handles SVG imports
-    const fileLoaderRule = config.module.rules.find((rule: any) =>
-      rule.test?.test?.(".svg")
-    );
+    const fileLoaderRule = config.module.rules.find(isSvgFileRule);
+    if (fileLoaderRule === undefined) throw new Error("Next.js SVG file-loader rule was not found");
 
     config.module.rules.push(
       // Reapply the existing rule, but only for svg imports ending in ?url
@@ -32,11 +49,11 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   async rewrites() {
-    const origin = process.env.NEXT_PUBLIC_INDEXER_API_URL || "http://localhost:8080";
+    const origin = normalizeApiOrigin(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080");
     return [
       {
-        source: "/api/leaderboard/:path*",
-        destination: `${origin}/api/leaderboard/:path*`,
+        source: "/api/v1/leaderboard/:path*",
+        destination: `${origin}/v1/leaderboard/:path*`,
       },
     ];
   },

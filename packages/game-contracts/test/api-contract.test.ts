@@ -270,6 +270,18 @@ describe("HTTP API contracts", () => {
       timestamp: 1,
     };
     assert.equal(LeaderboardResponseSchema.safeParse(response).success, true);
+    for (const [gamesPlayed, gamesWon, accepted] of [[0, 1, false], [1, 2, false], [2, 2, true]] as const) {
+      assert.equal(
+        LeaderboardResponseSchema.safeParse({
+          ...response,
+          data: {
+            ...response.data,
+            data: [{ ...response.data.data[0], gamesPlayed, gamesWon }],
+          },
+        }).success,
+        accepted,
+      );
+    }
     assert.equal(
       LeaderboardResponseSchema.safeParse({
         ...response,

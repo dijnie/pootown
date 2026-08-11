@@ -200,14 +200,20 @@ export const PublicMutationContractSchemas = {
   cancelSession: { headers: MutationHeadersSchema, body: CancelSessionRequestSchema },
 } as const;
 
-export const LeaderboardEntrySchema = z.strictObject({
-  rank: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  playerId: PlayerIdSchema,
-  displayName: boundedLabel.nullable(),
-  gamesPlayed: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  gamesWon: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  accountCoinWon: AccountCoinStringSchema,
-});
+export const LeaderboardEntrySchema = z
+  .strictObject({
+    rank: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    playerId: PlayerIdSchema,
+    displayName: boundedLabel.nullable(),
+    gamesPlayed: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    gamesWon: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    accountCoinWon: AccountCoinStringSchema,
+  })
+  .superRefine((entry, context) => {
+    if (entry.gamesWon > entry.gamesPlayed) {
+      context.addIssue({ code: "custom", message: "cannot exceed games played", path: ["gamesWon"] });
+    }
+  });
 
 export const LeaderboardResponseSchema = z.strictObject({
   success: z.literal(true),

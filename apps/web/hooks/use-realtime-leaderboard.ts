@@ -1,19 +1,25 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { fetchTopPlayers, fetchAnalytics, type RankingBy, type TimeRange, type TopPlayerItem, type GameAnalytics } from "@/services/leaderboard";
+import { useCallback, useEffect, useRef, useState } from "react";
+
 import env from "@/configs/env";
+import {
+  fetchTopPlayers,
+  type LeaderboardPagination,
+  type TopPlayerItem,
+} from "@/services/leaderboard";
+import { createPollingLifecycle } from "@/services/polling-lifecycle";
 
 interface UseRealtimeLeaderboardOptions {
-  rankingBy: RankingBy;
-  timeRange: TimeRange;
   enabled?: boolean;
-  pollingInterval?: number; 
+  limit?: number;
+  page?: number;
+  pollingInterval?: number;
 }
 
 interface UseRealtimeLeaderboardReturn {
   players: TopPlayerItem[];
-  analytics: GameAnalytics | null;
+  pagination: LeaderboardPagination | null;
   loading: boolean;
   error: string | null;
   lastUpdated: Date | null;
@@ -22,145 +28,90 @@ interface UseRealtimeLeaderboardReturn {
 }
 
 export function useRealtimeLeaderboard({
-  rankingBy,
-  timeRange,
   enabled = true,
+  limit = 20,
+  page = 1,
   pollingInterval,
-}: UseRealtimeLeaderboardOptions): UseRealtimeLeaderboardReturn {
+}: UseRealtimeLeaderboardOptions = {}): UseRealtimeLeaderboardReturn {
   const [players, setPlayers] = useState<TopPlayerItem[]>([]);
-  const [analytics, setAnalytics] = useState<GameAnalytics | null>(null);
+  const [pagination, setPagination] = useState<LeaderboardPagination | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const lifecycleRef = useRef<ReturnType<typeof createPollingLifecycle> | null>(null);
+  const lifecycleTokenRef = useRef(0);
+  const requestGenerationRef = useRef(0);
+  if (lifecycleRef.current === null) lifecycleRef.current = createPollingLifecycle(() => document.hidden);
 
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const pollIntervalMs = pollingInterval ?? env.NEXT_PUBLIC_LEADERBOARD_POLL_INTERVAL_MS ?? 60_000;
+  const pollOffsetMs = env.NEXT_PUBLIC_LEADERBOARD_POLL_OFFSET_MS ?? 5_000;
 
-  const pollIntervalMs = typeof pollingInterval === "number"
-    ? pollingInterval
-    : (env.NEXT_PUBLIC_LEADERBOARD_POLL_INTERVAL_MS ?? 60000);
-  const pollOffsetMs = env.NEXT_PUBLIC_LEADERBOARD_POLL_OFFSET_MS ?? 5000; 
-  const scheduleNext = useCallback(() => {
-    if (!enabled || pollIntervalMs <= 0) return;
-
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    const now = Date.now();
-    const remainder = now % pollIntervalMs;
-    let delay = pollIntervalMs - remainder + pollOffsetMs;
-    if (delay < 0) delay += pollIntervalMs;
-
-    timerRef.current = setTimeout(async () => {
-      await fetchData(false);
-      scheduleNext();
-    }, delay);
-  }, [enabled, pollIntervalMs, pollOffsetMs]);
-
-  const fetchData = useCallback(async (isInitial = false) => {
-    if (!enabled) return;
-
+  const fetchData = useCallback(async (isInitial = false, lifecycle = lifecycleTokenRef.current) => {
+    const polling = lifecycleRef.current;
+    if (!enabled || polling === null || !polling.isActive(lifecycle)) return;
+    const generation = ++requestGenerationRef.current;
     try {
-      if (isInitial) {
-        setLoading(true);
-      }
+      if (isInitial) setLoading(true);
       setError(null);
-
-      // Cancel previous request if still pending
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-
-      abortControllerRef.current = new AbortController();
-
-      const [playersResponse, analyticsResponse] = await Promise.all([
-        fetchTopPlayers({ rankingBy, timeRange }),
-        fetchAnalytics({ timeRange })
-      ]);
-
-      // Check if request was aborted
-      if (abortControllerRef.current.signal.aborted) {
-        return;
-      }
-
-      setPlayers(playersResponse.data.data);
-      setAnalytics(analyticsResponse);
+      const response = await fetchTopPlayers({ limit, page });
+      if (!polling.isActive(lifecycle) || generation !== requestGenerationRef.current) return;
+      setPlayers(response.data.data);
+      setPagination(response.data.pagination);
       setLastUpdated(new Date());
       setIsConnected(true);
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        return; // Request was cancelled, ignore
-      }
-      console.error("Failed to fetch leaderboard data:", err);
-      setError(err instanceof Error ? err.message : "Failed to fetch data");
+    } catch (caught) {
+      if (!polling.isActive(lifecycle) || generation !== requestGenerationRef.current) return;
+      setError(caught instanceof Error ? caught.message : "Failed to load leaderboard");
       setIsConnected(false);
     } finally {
-      if (isInitial) {
-        setLoading(false);
-      }
+      if (isInitial && polling.isActive(lifecycle)) setLoading(false);
     }
-  }, [rankingBy, timeRange, enabled]);
+  }, [enabled, limit, page]);
 
-  const refresh = useCallback(async () => {
-    await fetchData(true);
-  }, [fetchData]);
+  const scheduleNext = useCallback((lifecycle: number) => {
+    const polling = lifecycleRef.current;
+    if (!enabled || pollIntervalMs <= 0 || polling === null || !polling.isActive(lifecycle)) return;
+    const remainder = Date.now() % pollIntervalMs;
+    const delay = (pollIntervalMs - remainder + pollOffsetMs) % pollIntervalMs || pollIntervalMs;
+    polling.schedule(lifecycle, delay, () => {
+      void fetchData(false, lifecycle).then(() => scheduleNext(lifecycle));
+    });
+  }, [enabled, fetchData, pollIntervalMs, pollOffsetMs]);
 
-  // Initial fetch
+  const refresh = useCallback(
+    () => fetchData(true, lifecycleTokenRef.current),
+    [fetchData],
+  );
+
   useEffect(() => {
-    if (enabled) {
-      fetchData(true).then(() => scheduleNext());
+    const polling = lifecycleRef.current;
+    if (polling === null) return;
+    const lifecycle = polling.begin();
+    lifecycleTokenRef.current = lifecycle;
+    if (enabled && document.hidden) {
+      setLoading(false);
+      setIsConnected(false);
+    } else if (enabled) {
+      void fetchData(true, lifecycle).then(() => scheduleNext(lifecycle));
     }
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [fetchData, enabled, scheduleNext]);
-
-  // Align polling with page visibility
-  useEffect(() => {
-    if (!enabled) return;
-
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        if (timerRef.current) {
-          clearTimeout(timerRef.current);
-          timerRef.current = null;
-        }
+        polling.pause();
+        requestGenerationRef.current += 1;
         setIsConnected(false);
-      } else {
-        setIsConnected(true);
-        fetchData(false).then(() => scheduleNext());
+        setLoading(false);
+        return;
       }
+      void fetchData(false, lifecycle).then(() => scheduleNext(lifecycle));
     };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    if (enabled) document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      polling.invalidate(lifecycle);
+      requestGenerationRef.current += 1;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [enabled, scheduleNext, fetchData]);
+  }, [enabled, fetchData, scheduleNext]);
 
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, []);
-
-  return {
-    players,
-    analytics,
-    loading,
-    error,
-    lastUpdated,
-    isConnected,
-    refresh,
-  };
+  return { error, isConnected, lastUpdated, loading, pagination, players, refresh };
 }

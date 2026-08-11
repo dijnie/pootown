@@ -1,8 +1,10 @@
 import { z } from "zod";
 
+import { normalizeApiOrigin } from "@/services/api-origin";
+
 const configSchema = z.object({
   NEXT_PUBLIC_PRIVY_APP_ID: z.string(),
-  // PRIVY_APP_SECRET: z.string(),
+  NEXT_PUBLIC_API_URL: z.string().transform(normalizeApiOrigin),
   NEXT_PUBLIC_MAINNET_RPC_URL: z.string(),
   NEXT_PUBLIC_DEVNET_RPC_URL: z.string(),
 
@@ -12,7 +14,6 @@ const configSchema = z.object({
   NEXT_PUBLIC_ER_RPC_SUBSCRIPTIONS_URL: z.string(),
 
   NEXT_PUBLIC_AUTH_ID_PRIVY: z.string(),
-  NEXT_PUBLIC_AUTH_PRIVATE_KEY_PRIVY: z.string(),
 
   NEXT_PUBLIC_LEADERBOARD_POLL_INTERVAL_MS: z
     .preprocess((v) => (v === undefined ? undefined : Number(v)), z.number().optional()),
@@ -24,7 +25,7 @@ const configSchema = z.object({
 
 const configProject = configSchema.safeParse({
   NEXT_PUBLIC_PRIVY_APP_ID: process.env.NEXT_PUBLIC_PRIVY_APP_ID,
-  // PRIVY_APP_SECRET: process.env.PRIVY_APP_SECRET,
+  NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
   NEXT_PUBLIC_MAINNET_RPC_URL: process.env.NEXT_PUBLIC_MAINNET_RPC_URL,
   NEXT_PUBLIC_DEVNET_RPC_URL: process.env.NEXT_PUBLIC_DEVNET_RPC_URL,
 
@@ -36,8 +37,6 @@ const configProject = configSchema.safeParse({
     process.env.NEXT_PUBLIC_ER_RPC_SUBSCRIPTIONS_URL,
 
   NEXT_PUBLIC_AUTH_ID_PRIVY: process.env.NEXT_PUBLIC_AUTH_ID_PRIVY,
-  NEXT_PUBLIC_AUTH_PRIVATE_KEY_PRIVY:
-    process.env.NEXT_PUBLIC_AUTH_PRIVATE_KEY_PRIVY,
 
   NEXT_PUBLIC_LEADERBOARD_POLL_INTERVAL_MS:
     process.env.NEXT_PUBLIC_LEADERBOARD_POLL_INTERVAL_MS,
