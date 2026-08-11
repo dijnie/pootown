@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Complete Executed Game Rules Port"
-status: in-progress
+status: complete
 priority: P1
 effort: "2-2.5 weeks"
 dependencies: [2]
@@ -70,11 +70,11 @@ pnpm --filter @pootown/game-core build
 
 ## Success Criteria
 
-- [ ] All Phase 1 executed-rule fixtures pass against pure core.
-- [ ] Full negative/invariant/determinism suite passes without framework or network.
-- [ ] Auction returns `COMMAND_UNSUPPORTED`; missing effects are neither exposed nor invented.
-- [ ] Room policy rules and deterministic tie behavior are explicit and tested.
-- [ ] Account coin never appears in core board-money operations.
+- [x] All Phase 1 executed-rule fixtures pass against pure core.
+- [x] Full negative/invariant/determinism suite passes without framework or network.
+- [x] Auction returns `COMMAND_UNSUPPORTED`; missing effects are neither exposed nor invented.
+- [x] Room policy rules and deterministic tie behavior are explicit and tested.
+- [x] Account coin never appears in core board-money operations.
 
 ## Risk Assessment
 
