@@ -39,14 +39,12 @@ describe("game contracts", () => {
   it("rejects unknown, oversized, and non-canonical transport values", () => {
     const validCreateRequest = {
       contractVersion: 1,
-      maximumPlayers: 4,
-      entryCoin: "0",
-      timeLimitMs: null,
+      gameDefinitionId: "classic_100",
     };
     assert.equal(CreateGameRequestSchema.safeParse(validCreateRequest).success, true);
     assert.equal(CreateGameRequestSchema.safeParse({ ...validCreateRequest, contractVersion: 2 }).success, false);
-    assert.equal(CreateGameRequestSchema.safeParse({ ...validCreateRequest, maximumPlayers: 5 }).success, false);
-    assert.equal(CreateGameRequestSchema.safeParse({ ...validCreateRequest, entryCoin: "01" }).success, false);
+    assert.equal(CreateGameRequestSchema.safeParse({ ...validCreateRequest, maximumPlayers: 4 }).success, false);
+    assert.equal(CreateGameRequestSchema.safeParse({ ...validCreateRequest, entryCoin: "1" }).success, false);
     assert.equal(CreateGameRequestSchema.safeParse({ ...validCreateRequest, extra: true }).success, false);
     assert.equal(AccountCoinStringSchema.safeParse("9".repeat(79)).success, false);
     assert.equal(InMatchCashStringSchema.safeParse("-1").success, false);

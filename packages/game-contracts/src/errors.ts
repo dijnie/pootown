@@ -22,6 +22,31 @@ export const GameErrorCodeSchema = z.enum([
   "ARITHMETIC_OVERFLOW",
 ]);
 
+export const ApiErrorCodeSchema = z.enum([
+  "AUTH_TOKEN_MISSING",
+  "AUTH_TOKEN_INVALID",
+  "AUTH_TOKEN_EXPIRED",
+  "AUTH_VERIFIER_UNAVAILABLE",
+  "INTERNAL_CALLER_UNAUTHORIZED",
+  "CONTRACT_VERSION_UNSUPPORTED",
+  "IDEMPOTENCY_KEY_REQUIRED",
+  "IDEMPOTENCY_CONFLICT",
+  "INSUFFICIENT_COINS",
+  "ACCOUNT_NOT_FOUND",
+  "SESSION_NOT_FOUND",
+  "SESSION_FULL",
+  "SESSION_NOT_OPEN",
+  "SESSION_CANCELLING",
+  "ALREADY_SEATED",
+  "RESERVATION_NOT_FOUND",
+  "TICKET_INVALID",
+  "TICKET_EXPIRED",
+  "TICKET_REPLAYED",
+  "TERMINAL_PROOF_INVALID",
+  "SETTLEMENT_ALREADY_COMMITTED",
+  "DATABASE_UNAVAILABLE",
+]);
+
 const safeDetailKey = z
   .string()
   .min(1)
@@ -38,7 +63,7 @@ export const ErrorDetailsSchema = z.record(
 
 export const ApiErrorEnvelopeSchema = z.strictObject({
   error: z.strictObject({
-    code: GameErrorCodeSchema,
+    code: ApiErrorCodeSchema,
     message: z.string().min(1).max(256),
     requestId: RequestIdSchema,
     details: ErrorDetailsSchema.optional(),
@@ -55,5 +80,6 @@ export const CommandRejectionSchema = z.strictObject({
 });
 
 export type GameErrorCode = z.infer<typeof GameErrorCodeSchema>;
+export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>;
 export type ApiErrorEnvelope = z.infer<typeof ApiErrorEnvelopeSchema>;
 export type CommandRejection = z.infer<typeof CommandRejectionSchema>;

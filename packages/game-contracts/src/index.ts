@@ -2,6 +2,7 @@
 export * from "./errors";
 export * from "./fixtures";
 export * from "./http/game-dtos";
+export * from "./http/api-dtos";
 export * from "./primitives";
 export * from "./realtime/commands";
 export * from "./realtime/gameplay-commands";

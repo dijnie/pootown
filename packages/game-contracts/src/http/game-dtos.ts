@@ -5,15 +5,14 @@ import {
   ContractVersionSchema,
   CursorPaginationSchema,
   EpochMillisecondsSchema,
+  GameDefinitionIdSchema,
   GameIdSchema,
   RoomIdSchema,
 } from "../primitives";
 
 export const CreateGameRequestSchema = z.strictObject({
   contractVersion: ContractVersionSchema,
-  maximumPlayers: z.number().int().min(2).max(4).default(4),
-  entryCoin: AccountCoinStringSchema,
-  timeLimitMs: z.number().int().positive().max(86_400_000).nullable().default(null),
+  gameDefinitionId: GameDefinitionIdSchema,
 });
 
 export const AccountCoinViewSchema = z.strictObject({
