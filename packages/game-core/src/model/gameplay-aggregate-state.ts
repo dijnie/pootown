@@ -17,7 +17,7 @@ import { BOARD_SPACES } from "../rules/board-definition";
 import { createPropertyStates, isValidPropertyStates, type PropertyState } from "../rules/property-rules";
 import type { DiceRoll } from "../rules/movement";
 import { cleanupExpiredTrades, type PendingTrade } from "../rules/trade-rules";
-import type { TerminalOutcome } from "../rules/terminal-rules";
+import { calculatePlayerNetWorth, type TerminalOutcome } from "../rules/terminal-rules";
 import type { TimeoutWarningSeconds } from "../rules/timeout-rules";
 
 export const GAMEPLAY_AGGREGATE_SCHEMA_VERSION = 1 as const;
@@ -118,6 +118,32 @@ function validDice(value: unknown): value is DiceRoll {
   );
 }
 
+function validGameplayPlayerSlots(
+  players: readonly (GameplayPlayerState | null)[],
+  startedAtMs: number,
+): boolean {
+  const ids = new Set<string>();
+  for (const [index, player] of players.entries()) {
+    if (player === null) continue;
+    if (
+      !isPlainObject(player) ||
+      !hasExactOwnKeys(player, [
+        "seatIndex", "playerId", "status", "cash", "position", "inJail", "jailTurns",
+        "consecutiveDoubles", "missedTurns", "getOutOfJailCards", "joinedAtMs",
+      ]) ||
+      player.seatIndex !== index ||
+      !validOpaqueId(player.playerId) ||
+      ids.has(player.playerId) ||
+      typeof player.joinedAtMs !== "number" ||
+      !Number.isSafeInteger(player.joinedAtMs) ||
+      player.joinedAtMs < 0 ||
+      player.joinedAtMs > startedAtMs
+    ) return false;
+    ids.add(player.playerId);
+  }
+  return true;
+}
+
 function validTurn(turn: ActiveGameplayAggregateTurn): boolean {
   if (!isPlainObject(turn) || !("phase" in turn)) return false;
   const baseKeys = ["phase", "currentSeatIndex", "startedAtMs", "deadlineAtMs", "emittedWarnings"];
@@ -209,25 +235,7 @@ export function isValidActiveGameplayAggregateState(value: unknown): value is Ac
       state.bankCash,
     )
   ) return false;
-  const ids = new Set<string>();
-  for (const [index, player] of state.players.entries()) {
-    if (player === null) continue;
-    if (
-      !isPlainObject(player) ||
-      !hasExactOwnKeys(player, [
-        "seatIndex", "playerId", "status", "cash", "position", "inJail", "jailTurns",
-        "consecutiveDoubles", "missedTurns", "getOutOfJailCards", "joinedAtMs",
-      ]) ||
-      player.seatIndex !== index ||
-      !validOpaqueId(player.playerId) ||
-      ids.has(player.playerId) ||
-      typeof player.joinedAtMs !== "number" ||
-      !Number.isSafeInteger(player.joinedAtMs) ||
-      player.joinedAtMs < 0 ||
-      player.joinedAtMs > state.startedAtMs
-    ) return false;
-    ids.add(player.playerId);
-  }
+  if (!validGameplayPlayerSlots(state.players, state.startedAtMs)) return false;
   const current = state.players[state.turn.currentSeatIndex];
   if (current === null || current === undefined || current.status !== "active") return false;
   if (state.bankruptcyRequiredSeatIndex !== null) {
@@ -267,6 +275,115 @@ export function isValidActiveGameplayAggregateState(value: unknown): value is Ac
     if (state.turn.taxKind !== expected) return false;
   }
   return true;
+}
+
+/** Validates a terminal aggregate restored from a durable checkpoint. */
+export function isValidFinishedGameplayAggregateState(value: unknown): value is FinishedGameplayAggregateState {
+  if (
+    !isPlainObject(value) ||
+    !hasExactOwnKeys(value, [
+      "schemaVersion", "stateVersion", "gameId", "rulesetId", "lifecycle", "players", "properties",
+      "bankCash", "freeParkingPool", "housesRemaining", "hotelsRemaining", "startedAtMs", "gameEndAtMs",
+      "turn", "bankruptcyRequiredSeatIndex", "activeTrades", "lastDice", "terminal", "rng",
+    ])
+  ) return false;
+  const state = value as unknown as FinishedGameplayAggregateState;
+  if (
+    state.schemaVersion !== GAMEPLAY_AGGREGATE_SCHEMA_VERSION ||
+    state.lifecycle !== "finished" ||
+    state.rulesetId !== GAMEPLAY_RULESET_ID ||
+    !validOpaqueId(state.gameId) ||
+    !Number.isInteger(state.stateVersion) ||
+    state.stateVersion < 1 ||
+    state.stateVersion > MAX_STATE_VERSION ||
+    !Array.isArray(state.players) ||
+    state.players.length !== GAMEPLAY_POLICY.maximumPlayers ||
+    !Array.isArray(state.properties) ||
+    !isValidPropertyStates(state.properties) ||
+    typeof state.freeParkingPool !== "bigint" ||
+    state.freeParkingPool < 0n ||
+    state.freeParkingPool > MAX_MATCH_CASH ||
+    !Number.isSafeInteger(state.startedAtMs) ||
+    state.startedAtMs < 0 ||
+    (state.gameEndAtMs !== null &&
+      (!Number.isSafeInteger(state.gameEndAtMs) || state.gameEndAtMs < state.startedAtMs)) ||
+    !isPlainObject(state.turn) ||
+    !hasExactOwnKeys(state.turn, ["phase"]) ||
+    state.turn.phase !== "finished" ||
+    state.bankruptcyRequiredSeatIndex !== null ||
+    !Array.isArray(state.activeTrades) ||
+    state.activeTrades.length !== 0 ||
+    state.lastDice !== null ||
+    !isPlainObject(state.rng) ||
+    !hasExactOwnKeys(state.rng, ["algorithm", "state", "draws", "bytesConsumed"]) ||
+    typeof state.rng.algorithm !== "string" ||
+    state.rng.algorithm.length < 1 ||
+    state.rng.algorithm.length > 64 ||
+    typeof state.rng.state !== "string" ||
+    state.rng.state.length < 1 ||
+    state.rng.state.length > 4_096 ||
+    !Number.isSafeInteger(state.rng.draws) ||
+    state.rng.draws < 0 ||
+    !Number.isSafeInteger(state.rng.bytesConsumed) ||
+    state.rng.bytesConsumed < 0 ||
+    !isValidBankruptcyState(
+      state.players,
+      state.properties,
+      { housesRemaining: state.housesRemaining, hotelsRemaining: state.hotelsRemaining },
+      state.bankCash,
+    ) ||
+    !validGameplayPlayerSlots(state.players, state.startedAtMs)
+  ) return false;
+
+  const terminal = state.terminal;
+  if (
+    !isPlainObject(terminal) ||
+    !hasExactOwnKeys(terminal, ["reason", "winnerSeatIndex", "endedAtMs", "ranking", "settlementEntitlement"]) ||
+    !["lastPlayerStanding", "timeLimit", "timeoutForfeit"].includes(terminal.reason) ||
+    !Number.isInteger(terminal.winnerSeatIndex) ||
+    terminal.winnerSeatIndex < 0 ||
+    terminal.winnerSeatIndex >= GAMEPLAY_POLICY.maximumPlayers ||
+    !Number.isSafeInteger(terminal.endedAtMs) ||
+    terminal.endedAtMs < state.startedAtMs ||
+    !Array.isArray(terminal.ranking) ||
+    !isPlainObject(terminal.settlementEntitlement) ||
+    !hasExactOwnKeys(terminal.settlementEntitlement, ["winnerSeatIndex", "status"]) ||
+    terminal.settlementEntitlement.winnerSeatIndex !== terminal.winnerSeatIndex ||
+    terminal.settlementEntitlement.status !== "pending" ||
+    (terminal.reason === "timeLimit" &&
+      (state.gameEndAtMs === null || terminal.endedAtMs < state.gameEndAtMs))
+  ) return false;
+
+  const activePlayers = state.players.filter(
+    (player): player is GameplayPlayerState => player !== null && player.status === "active",
+  );
+  if (
+    activePlayers.length === 0 ||
+    ((terminal.reason === "lastPlayerStanding" || terminal.reason === "timeoutForfeit") && activePlayers.length !== 1) ||
+    terminal.ranking.length !== activePlayers.length
+  ) return false;
+  const expectedRanking = activePlayers.map((player) => {
+    const netWorth = calculatePlayerNetWorth(player, state.properties);
+    return netWorth === null ? null : { seatIndex: player.seatIndex, netWorth };
+  });
+  if (expectedRanking.some((entry) => entry === null)) return false;
+  expectedRanking.sort((left, right) => {
+    if (left!.netWorth > right!.netWorth) return -1;
+    if (left!.netWorth < right!.netWorth) return 1;
+    return left!.seatIndex - right!.seatIndex;
+  });
+  for (const [index, entry] of terminal.ranking.entries()) {
+    const expected = expectedRanking[index];
+    if (
+      expected === null || expected === undefined ||
+      !isPlainObject(entry) ||
+      !hasExactOwnKeys(entry, ["rank", "seatIndex", "netWorth"]) ||
+      entry.rank !== index + 1 ||
+      entry.seatIndex !== expected.seatIndex ||
+      entry.netWorth !== expected.netWorth
+    ) return false;
+  }
+  return terminal.winnerSeatIndex === expectedRanking[0]?.seatIndex;
 }
 
 function validLifecycleInput(state: InProgressGameState): boolean {
