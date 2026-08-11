@@ -12,7 +12,7 @@ import {
   type TimeoutResolution,
 } from "./timeout-rules";
 
-export type TerminalEndReason = "lastPlayerStanding" | "timeLimit" | "manual" | "timeoutForfeit";
+export type TerminalEndReason = "lastPlayerStanding" | "timeLimit" | "timeoutForfeit";
 
 export interface TerminalPlayerState {
   readonly seatIndex: number;

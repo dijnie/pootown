@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it } from "node:test";
 
 import {
@@ -11,7 +13,7 @@ import {
   GameplayDomainEventEnvelopeSchema,
   GameplayEventPayloadSchema,
 } from "../src/realtime/gameplay-events";
-import { GameplayPublicStateSchema, TradePublicStateSchema } from "../src/state/gameplay-state";
+import { GameEndReasonSchema, GameplayPublicStateSchema, TradePublicStateSchema } from "../src/state/gameplay-state";
 
 const requestId = "00000000-0000-4000-8000-000000000101";
 
@@ -82,6 +84,10 @@ const publicState = {
 
 describe("gameplay transport contracts", () => {
   it("accepts only the executed player intent command inventory", () => {
+    const legacyUi = JSON.parse(
+      readFileSync(resolve(process.cwd(), "../../tests/fixtures/executed-rules/ui-contracts.json"), "utf8"),
+    ) as { provider: { commands: string[] } };
+    assert.equal(legacyUi.provider.commands.includes("endGame"), true);
     const validCommands = [
       command("rollDice"),
       command("buyProperty", { position: 1 }),
@@ -98,7 +104,6 @@ describe("gameplay transport contracts", () => {
       command("payMevTax"),
       command("payPriorityFeeTax"),
       command("declareBankruptcy"),
-      command("endGame"),
       command("createTrade", {
         tradeType: "moneyForProperty",
         receiverId: "player_2",
@@ -114,6 +119,9 @@ describe("gameplay transport contracts", () => {
       assert.equal(PlayerGameplayCommandSchema.safeParse(candidate).success, true, candidate.type);
       assert.equal(RoomCommandSchema.safeParse(candidate).success, true, candidate.type);
     }
+    assert.equal(PlayerGameplayCommandSchema.safeParse(command("endGame")).success, false);
+    assert.equal(RoomCommandSchema.safeParse(command("endGame")).success, false);
+    assert.equal(GameEndReasonSchema.safeParse("manual").success, false);
 
     for (const type of ["startAuction", "placeBid", "mortgageProperty", "unmortgageProperty", "claimReward"] ) {
       assert.equal(PlayerGameplayCommandSchema.safeParse(command(type)).success, false, type);
@@ -144,7 +152,6 @@ describe("gameplay transport contracts", () => {
       command("drawCommunityChestCard", { cardIndex: 0, effect: "money" }),
       command("buyProperty", { position: 1, price: "1" }),
       command("payRent", { position: 1, ownerId: "player_2", rent: "1" }),
-      command("endGame", { winnerId: "player_1", reward: "999999" }),
       command("declareBankruptcy", { creditorId: "player_2" }),
       command("acceptTrade", { tradeId: "trade_1", proposerId: "player_1" }),
     ];

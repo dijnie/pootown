@@ -32,7 +32,6 @@ export const BuildHotelCommandSchema = positionedPlayerCommand("buildHotel");
 export const PayMevTaxCommandSchema = emptyPlayerCommand("payMevTax");
 export const PayPriorityFeeTaxCommandSchema = emptyPlayerCommand("payPriorityFeeTax");
 export const DeclareBankruptcyCommandSchema = emptyPlayerCommand("declareBankruptcy");
-export const EndGameCommandSchema = emptyPlayerCommand("endGame");
 
 export const SellBuildingCommandSchema = z.strictObject({
   ...commandEnvelope,
@@ -114,7 +113,6 @@ export const PlayerGameplayCommandSchema = z.discriminatedUnion("type", [
   PayMevTaxCommandSchema,
   PayPriorityFeeTaxCommandSchema,
   DeclareBankruptcyCommandSchema,
-  EndGameCommandSchema,
   CreateTradeCommandSchema,
   AcceptTradeCommandSchema,
   RejectTradeCommandSchema,

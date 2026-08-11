@@ -37,6 +37,7 @@ export const GAMEPLAY_POLICY = Object.freeze({
   timeLimitTieBreak: "stableSeat" as const,
   collectFromPlayersEffect: "creditDrawerFromBank" as const,
   bankruptcyAssetDestination: "bank" as const,
+  terminalFinalization: "automatic" as const,
 });
 
 export type GameplayRulesetId = typeof GAMEPLAY_RULESET_ID;

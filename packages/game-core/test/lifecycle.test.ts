@@ -354,6 +354,19 @@ describe("core lifecycle", () => {
   });
 
   it("starts with two players using the frozen source semantics, not the legacy runtime crash", () => {
+    const fixture = JSON.parse(
+      readFileSync(resolve(process.cwd(), "../../tests/fixtures/executed-rules/start.json"), "utf8"),
+    ) as {
+      before: { status: string; currentPlayers: number };
+      attempt: { outcome: string; event: { name: string; totalPlayers: number } };
+      after: { status: string; stateCommitted: boolean; accountsRemainProgramOwned: number };
+    };
+    assert.equal(fixture.before.status, "waitingForPlayers");
+    assert.equal(fixture.before.currentPlayers, 2);
+    assert.equal(fixture.attempt.outcome, "rolledBack");
+    assert.equal(fixture.after.stateCommitted, false);
+    assert.equal(fixture.after.accountsRemainProgramOwned, 3);
+
     const creator = playerId("creator");
     let state = accept(null, createCommand(), context(creator, 10_000));
     state = accept(state, emptyCommand("joinGame", 1), context(playerId("second"), 10_001));
@@ -371,7 +384,10 @@ describe("core lifecycle", () => {
       startedAtMs: 20_000,
       deadlineAtMs: 20_000 + DEFAULT_TURN_TIMEOUT_MS,
     });
-    assert.deepEqual(started.events, [{ type: "gameStarted", totalPlayers: 2 }]);
+    assert.deepEqual(started.events, [{
+      type: fixture.attempt.event.name,
+      totalPlayers: fixture.attempt.event.totalPlayers,
+    }]);
   });
 
   it("rejects commands after start and timestamp overflow without changing state", () => {

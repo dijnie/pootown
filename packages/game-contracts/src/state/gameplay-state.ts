@@ -17,7 +17,6 @@ export const GameplayRulesetIdSchema = z.literal("pootown-rust-source-v1");
 export const GameEndReasonSchema = z.enum([
   "lastPlayerStanding",
   "timeLimit",
-  "manual",
   "timeoutForfeit",
 ]);
 

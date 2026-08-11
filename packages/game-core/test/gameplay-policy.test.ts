@@ -31,5 +31,6 @@ describe("versioned gameplay policy", () => {
     assert.equal(GAMEPLAY_POLICY.timeLimitTieBreak, "stableSeat");
     assert.equal(GAMEPLAY_POLICY.collectFromPlayersEffect, "creditDrawerFromBank");
     assert.equal(GAMEPLAY_POLICY.bankruptcyAssetDestination, "bank");
+    assert.equal(GAMEPLAY_POLICY.terminalFinalization, "automatic");
   });
 });
