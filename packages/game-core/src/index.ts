@@ -17,6 +17,7 @@ export * from "./rules/card-decks";
 export * from "./rules/lifecycle";
 export * from "./rules/gameplay-policy";
 export * from "./rules/gameplay-card-transition";
+export * from "./rules/gameplay-bankruptcy-transition";
 export * from "./rules/gameplay-jail-transition";
 export * from "./rules/gameplay-property-transition";
 export * from "./rules/gameplay-turn-transition";

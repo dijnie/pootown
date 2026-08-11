@@ -62,6 +62,11 @@ export type GameplayCardCommand =
   | DrawCommunityChestCardGameplayCommand
   | ResolveRandomCardGameplayCommand;
 
+export interface DeclareBankruptcyGameplayCommand extends VersionedGameplayCommand {
+  readonly type: "declareBankruptcy";
+  readonly payload: Record<string, never>;
+}
+
 export interface BuyPropertyGameplayCommand extends PositionedGameplayCommand {
   readonly type: "buyProperty";
 }
@@ -107,7 +112,12 @@ export type GameplayPropertyCommand =
   | PayMevTaxGameplayCommand
   | PayPriorityFeeTaxGameplayCommand;
 
-export type GameplayCommand = GameplayTurnCommand | GameplayPropertyCommand | GameplayJailCommand | GameplayCardCommand;
+export type GameplayCommand =
+  | GameplayTurnCommand
+  | GameplayPropertyCommand
+  | GameplayJailCommand
+  | GameplayCardCommand
+  | DeclareBankruptcyGameplayCommand;
 
 export type GameplayCommandActor =
   | { readonly kind: "player"; readonly playerId: PlayerId }

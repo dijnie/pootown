@@ -67,4 +67,28 @@ export type GameplayDomainEvent =
       readonly position: number;
       readonly taxKind: "mev" | "priorityFee";
       readonly amount: bigint;
+    }
+  | {
+      readonly type: "playerBankrupt";
+      readonly playerId: PlayerId;
+      readonly creditorId: PlayerId | null;
+      readonly liquidationValue: bigint;
+      readonly cashTransferred: bigint;
+    }
+  | {
+      readonly type: "gameEnded";
+      readonly reason: "lastPlayerStanding" | "timeLimit" | "timeoutForfeit";
+      readonly winnerId: PlayerId;
+      readonly ranking: readonly {
+        readonly rank: number;
+        readonly seatIndex: number;
+        readonly playerId: PlayerId;
+        readonly netWorth: bigint;
+      }[];
+    }
+  | {
+      readonly type: "settlementEntitled";
+      readonly winnerId: PlayerId;
+      readonly reason: "lastPlayerStanding" | "timeLimit" | "timeoutForfeit";
+      readonly entitlementKey: string;
     };
