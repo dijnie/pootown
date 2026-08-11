@@ -8,6 +8,7 @@ export * from "./model/money";
 export * from "./ports/clock";
 export * from "./ports/random-source";
 export * from "./rules/board-definition";
+export * from "./rules/building-rules";
 export * from "./rules/card-decks";
 export * from "./rules/lifecycle";
 export * from "./rules/gameplay-policy";
