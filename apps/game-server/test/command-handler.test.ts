@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { parseGameplaySnapshot } from "@pootown/game-core";
 import { RoomCommandSchema, type CommandAcknowledgement } from "@pootown/game-contracts";
+import { InternalGameplayCommandSchema } from "@pootown/game-contracts/internal";
 
 import type { AuthenticatedRoomPlayer } from "../src/auth/ticket-auth.js";
 import {
@@ -209,5 +210,59 @@ describe("server-authoritative room command handler", () => {
     assert.equal(!secondResult.accepted && secondResult.rejection.code, "STALE_STATE_VERSION");
     assert.equal(store.commits.length, 2);
     assert.equal(handler.currentState().stateVersion, 3);
+  });
+
+  it("commits trusted timer commands with the internal actor before publication", async () => {
+    const store = new FakeStore();
+    let nowMs = Date.parse("2026-08-11T21:00:01.000Z");
+    const handler = new RoomCommandHandler({
+      initialState: waitingState(),
+      lease,
+      nowMs: () => nowMs,
+      store,
+    });
+    const started = await handler.handle(owner, {
+      requestId: "00000000-0000-4000-8000-000000000208",
+      expectedStateVersion: 1,
+      type: "startGame",
+      payload: {},
+    });
+    assert.equal(started.accepted, true);
+    nowMs += 60_000;
+    const warning = await handler.handleInternal({
+      requestId: "00000000-0000-4000-8000-000000000209",
+      expectedStateVersion: 2,
+      type: "warnTurnThirtySeconds",
+      payload: {},
+    });
+    assert.equal(warning.accepted, true, JSON.stringify(warning));
+    assert.equal(warning.accepted && warning.events[0]?.payload.type, "timeoutWarning");
+    assert.equal(store.commits[1]?.playerId, "system_timer");
+    assert.equal(InternalGameplayCommandSchema.parse(store.commits[1]?.command).type, "warnTurnThirtySeconds");
+    assert.equal(handler.currentState().stateVersion, 3);
+  });
+
+  it("stores terminal proof in the same commit as a finished checkpoint", async () => {
+    const store = new FakeStore();
+    let nowMs = Date.parse("2026-08-11T21:00:01.000Z");
+    const handler = new RoomCommandHandler({ initialState: waitingState(), lease, nowMs: () => nowMs, store });
+    const started = await handler.handle(owner, {
+      requestId: "00000000-0000-4000-8000-000000000210",
+      expectedStateVersion: 1,
+      type: "startGame",
+      payload: {},
+    });
+    assert.equal(started.accepted, true);
+    nowMs += 3_600_000;
+    const finished = await handler.handleInternal({
+      requestId: "00000000-0000-4000-8000-000000000211",
+      expectedStateVersion: 2,
+      type: "enforceGameTimeLimit",
+      payload: {},
+    });
+    assert.equal(finished.accepted, true, JSON.stringify(finished));
+    assert.equal("players" in handler.currentState() && handler.currentState().lifecycle, "finished");
+    assert.equal(store.commits[1]?.terminalProof?.endReason, "timeLimit");
+    assert.match(store.commits[1]?.terminalProof?.winnerPlayerId ?? "", /^player_/);
   });
 });

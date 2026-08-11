@@ -13,6 +13,10 @@ import {
   type RoomCommand,
 } from "@pootown/game-contracts";
 import {
+  InternalGameplayCommandSchema,
+  type InternalGameplayCommand,
+} from "@pootown/game-contracts/internal";
+import {
   initializeGameplayAggregate,
   gameId,
   matchCash,
@@ -239,6 +243,15 @@ function resumableRandomSource(state: GameState | GameplayAggregateState): Rando
   return new SecureRandomSource().fork(state.rng);
 }
 
+function terminalProof(state: GameState | GameplayAggregateState): CommandCommit["terminalProof"] {
+  if (!isGameplayState(state) || state.lifecycle !== "finished") return undefined;
+  const winner = state.players[state.terminal.winnerSeatIndex];
+  if (winner === null || winner === undefined) {
+    throw new InvalidRoomCommandError("Terminal winner is unavailable");
+  }
+  return { endReason: state.terminal.reason, winnerPlayerId: winner.playerId };
+}
+
 export class RoomCommandHandler {
   private state: GameState | GameplayAggregateState;
   private queue: Promise<void> = Promise.resolve();
@@ -254,6 +267,15 @@ export class RoomCommandHandler {
     const work = this.queue.then(
       () => this.handleSerial(authenticated, rawCommand),
       () => this.handleSerial(authenticated, rawCommand),
+    );
+    this.queue = work.then(() => undefined, () => undefined);
+    return work;
+  }
+
+  public handleInternal(rawCommand: unknown): Promise<RoomCommandHandlingResult> {
+    const work = this.queue.then(
+      () => this.handleInternalSerial(rawCommand),
+      () => this.handleInternalSerial(rawCommand),
     );
     this.queue = work.then(() => undefined, () => undefined);
     return work;
@@ -451,6 +473,7 @@ export class RoomCommandHandler {
     const serializedState = isGameplayState(nextState)
       ? serializeGameplaySnapshot(nextState)
       : serializeSnapshot(nextState);
+    const proof = terminalProof(nextState);
     const committed = await this.options.store.commit(this.options.lease, {
       acknowledgement,
       events,
@@ -458,12 +481,82 @@ export class RoomCommandHandler {
       command,
       serializedState,
       stateVersion: nextState.stateVersion,
+      ...(proof === undefined ? {} : { terminalProof: proof }),
     }, now);
     if (committed.duplicate) {
       return { accepted: true, acknowledgement: committed.acknowledgement, events: [], replayed: true };
     }
     this.state = nextState;
     this.options.onCommitted?.(nextState, acknowledgement, events);
+    return { accepted: true, acknowledgement, events, replayed: false };
+  }
+
+  private async handleInternalSerial(rawCommand: unknown): Promise<RoomCommandHandlingResult> {
+    const parsed = InternalGameplayCommandSchema.safeParse(rawCommand);
+    if (!parsed.success) return invalidCommand(rawCommand, this.state.stateVersion);
+    const command: InternalGameplayCommand = parsed.data;
+    const nowMs = this.options.nowMs?.() ?? Date.now();
+    if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
+      throw new InvalidRoomCommandError("Room clock returned an invalid timestamp");
+    }
+    const now = new Date(nowMs);
+    const systemActorId = "system_timer";
+    const replay = await this.options.store.findReplay(this.options.lease, systemActorId, command, now);
+    if (replay !== null) {
+      return { accepted: true, acknowledgement: replay, events: [], replayed: true };
+    }
+    if (!isGameplayState(this.state)) {
+      return {
+        accepted: false,
+        rejection: rejection(command.requestId, this.state.stateVersion, {
+          code: "INVALID_PHASE",
+          message: "Internal gameplay command is unavailable before the game starts",
+          retryable: false,
+        }),
+      };
+    }
+    const randomSource = resumableRandomSource(this.state);
+    if (randomSource === null) {
+      return {
+        accepted: false,
+        rejection: rejection(command.requestId, this.state.stateVersion, {
+          code: "INVALID_STATE",
+          message: "Room random checkpoint cannot be resumed",
+          retryable: false,
+        }),
+      };
+    }
+    const { requestId: _requestId, ...coreCommand } = command;
+    const result = transitionGameplay(this.state, coreCommand as GameplayCommand, {
+      actor: { kind: "internal" },
+      nowMs,
+      randomSource,
+    });
+    if (!result.ok) {
+      return { accepted: false, rejection: rejection(command.requestId, this.state.stateVersion, result.error) };
+    }
+    const events = gameplayEvents(result.events, result.state, command.requestId, nowMs);
+    const proof = terminalProof(result.state);
+    const acknowledgement: CommandAcknowledgement = {
+      type: "command.ack",
+      requestId: command.requestId,
+      stateVersion: result.state.stateVersion,
+      eventIds: events.map((event) => event.eventId),
+    };
+    const committed = await this.options.store.commit(this.options.lease, {
+      acknowledgement,
+      events,
+      playerId: systemActorId,
+      command,
+      serializedState: serializeGameplaySnapshot(result.state),
+      stateVersion: result.state.stateVersion,
+      ...(proof === undefined ? {} : { terminalProof: proof }),
+    }, now);
+    if (committed.duplicate) {
+      return { accepted: true, acknowledgement: committed.acknowledgement, events: [], replayed: true };
+    }
+    this.state = result.state;
+    this.options.onCommitted?.(result.state, acknowledgement, events);
     return { accepted: true, acknowledgement, events, replayed: false };
   }
 }

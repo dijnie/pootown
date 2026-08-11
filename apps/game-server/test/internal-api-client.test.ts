@@ -129,4 +129,32 @@ describe("internal API client", () => {
     });
     assert.equal((observed?.init?.headers as Record<string, string>)["idempotency-key"], "realtime-start-key");
   });
+
+  it("submits only terminal proof identity for idempotent settlement", async () => {
+    let captured: { url: string; init: RequestInit | undefined } | undefined;
+    const client = new InternalApiClient({
+      baseUrl: "https://api.example.test",
+      credentialProvider: { async issue() { return "signed-service-token"; } },
+      fetchImplementation: async (input, init) => {
+        captured = { url: String(input), init };
+        return Response.json({ contractVersion: 1, operationId: "operation_settle", committed: true });
+      },
+    });
+    const response = await client.settleSession("game_api", {
+      contractVersion: 1,
+      roomId: "room_api",
+      terminalStateVersion: 9,
+      checkpointChecksum: "ab".repeat(32),
+    }, "settle-game-api");
+    assert.equal(response.committed, true);
+    assert.equal(captured?.url, "https://api.example.test/internal/v1/game-sessions/game_api/settlement");
+    assert.equal(captured?.init?.method, "POST");
+    assert.equal((captured?.init?.headers as Record<string, string>)["idempotency-key"], "settle-game-api");
+    assert.deepEqual(JSON.parse(String(captured?.init?.body)), {
+      contractVersion: 1,
+      roomId: "room_api",
+      terminalStateVersion: 9,
+      checkpointChecksum: "ab".repeat(32),
+    });
+  });
 });

@@ -8,6 +8,10 @@ import {
   type CommandAcknowledgement,
   type RoomCommand,
 } from "@pootown/game-contracts";
+import {
+  InternalGameplayCommandSchema,
+  type InternalGameplayCommand,
+} from "@pootown/game-contracts/internal";
 import type { Pool } from "pg";
 
 import {
@@ -33,6 +37,10 @@ export interface CommandCommit {
   readonly command: unknown;
   readonly serializedState: string;
   readonly stateVersion: number;
+  readonly terminalProof?: {
+    readonly endReason: "lastPlayerStanding" | "timeLimit" | "timeoutForfeit";
+    readonly winnerPlayerId: string;
+  };
 }
 
 export interface CommandCommitResult {
@@ -65,7 +73,14 @@ function canonicalJson(value: unknown): string {
   return encoded;
 }
 
-function requestHash(command: RoomCommand): string {
+type PersistedRoomCommand = RoomCommand | InternalGameplayCommand;
+
+function parsePersistedCommand(value: unknown): PersistedRoomCommand {
+  const playerCommand = RoomCommandSchema.safeParse(value);
+  return playerCommand.success ? playerCommand.data : InternalGameplayCommandSchema.parse(value);
+}
+
+function requestHash(command: PersistedRoomCommand): string {
   return createHash("sha256").update(canonicalJson(command)).digest("hex");
 }
 
@@ -92,7 +107,7 @@ export class CommandRepository {
     commandValue: unknown,
     now?: Date,
   ): Promise<CommandAcknowledgement | null> {
-    const command = RoomCommandSchema.parse(commandValue);
+    const command = parsePersistedCommand(commandValue);
     const playerId = PlayerIdSchema.parse(playerIdValue);
     const hash = requestHash(command);
     return withTransaction(this.pool, async (client) => {
@@ -115,7 +130,7 @@ export class CommandRepository {
   }
 
   public async commit(lease: RoomLease, value: CommandCommit, now?: Date): Promise<CommandCommitResult> {
-    const command = RoomCommandSchema.parse(value.command);
+    const command = parsePersistedCommand(value.command);
     const playerId = PlayerIdSchema.parse(value.playerId);
     const acknowledgement = CommandAcknowledgementSchema.parse(value.acknowledgement);
     const events = value.events.map((event) => {
@@ -150,7 +165,7 @@ export class CommandRepository {
         return { acknowledgement: stored.acknowledgement, duplicate: true };
       }
 
-      const digest = checkpointChecksum(value.serializedState);
+    const digest = checkpointChecksum(value.serializedState);
       const checkpoint = await client.query(
         `
           UPDATE realtime.room_checkpoints
@@ -195,6 +210,26 @@ export class CommandRepository {
             VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, clock_timestamp()))
           `,
           [event.eventId, lease.roomId, event.stateVersion, event.payload.type, event, now ?? null],
+        );
+      }
+      if (value.terminalProof !== undefined) {
+        const winnerPlayerId = PlayerIdSchema.parse(value.terminalProof.winnerPlayerId);
+        await client.query(
+          `
+            INSERT INTO realtime.terminal_proofs
+              (game_session_id, room_id, state_version, checkpoint_checksum,
+               winner_player_id, end_reason, committed_at)
+            VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::timestamptz, clock_timestamp()))
+          `,
+          [
+            lease.gameId,
+            lease.roomId,
+            value.stateVersion,
+            digest,
+            winnerPlayerId,
+            value.terminalProof.endReason,
+            now ?? null,
+          ],
         );
       }
       await client.query(

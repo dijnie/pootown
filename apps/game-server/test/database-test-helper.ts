@@ -4,9 +4,13 @@ import type { StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import {
   gameId,
+  initializeGameplayAggregate,
+  parseGameplaySnapshot,
   playerId,
+  serializeGameplaySnapshot,
   serializeSnapshot,
   transition,
+  transitionGameplay,
   type GameState,
   type RandomCheckpoint,
   type RandomSource,
@@ -44,6 +48,65 @@ export function lifecycleSnapshot(gameIdValue: string, stateVersion: number): st
   });
   if (!result.ok) throw new Error(result.error.message);
   return serializeSnapshot({ ...(result.state as GameState), stateVersion });
+}
+
+export function gameplaySnapshot(gameIdValue: string, stateVersion: number): string {
+  const randomSource = new DatabaseTestRandomSource();
+  const created = transition(null, {
+    type: "createGame",
+    expectedStateVersion: 0,
+    payload: { gameId: gameId(gameIdValue), maximumPlayers: 4, timeLimitMs: 3_600_000 },
+  }, {
+    actorId: playerId("player_checkpoint"),
+    nowMs: Date.parse("2026-08-11T17:00:00.000Z"),
+    randomSource,
+  });
+  if (!created.ok || created.state === null) throw new Error("Gameplay fixture creation failed");
+  const joined = transition(created.state, {
+    type: "joinGame",
+    expectedStateVersion: created.state.stateVersion,
+    payload: {},
+  }, {
+    actorId: playerId("player_checkpoint_second"),
+    nowMs: Date.parse("2026-08-11T17:00:00.001Z"),
+    randomSource,
+  });
+  if (!joined.ok || joined.state === null) throw new Error("Gameplay fixture admission failed");
+  const started = transition(joined.state, {
+    type: "startGame",
+    expectedStateVersion: joined.state.stateVersion,
+    payload: {},
+  }, {
+    actorId: playerId("player_checkpoint"),
+    nowMs: Date.parse("2026-08-11T17:00:01.000Z"),
+    randomSource,
+  });
+  if (!started.ok || started.state === null || started.state.lifecycle !== "inProgress") {
+    throw new Error("Gameplay fixture start failed");
+  }
+  const gameplay = initializeGameplayAggregate(started.state);
+  if (gameplay === null) throw new Error("Gameplay fixture initialization failed");
+  return serializeGameplaySnapshot({ ...gameplay, stateVersion });
+}
+
+export function finishedGameplaySnapshot(gameIdValue: string, stateVersion: number): string {
+  const active = parseGameplaySnapshot(gameplaySnapshot(gameIdValue, stateVersion - 1));
+  if (active.lifecycle !== "inProgress" || active.gameEndAtMs === null) {
+    throw new Error("Finished gameplay fixture has no active deadline");
+  }
+  const result = transitionGameplay(active, {
+    type: "enforceGameTimeLimit",
+    expectedStateVersion: active.stateVersion,
+    payload: {},
+  }, {
+    actor: { kind: "internal" },
+    nowMs: active.gameEndAtMs,
+    randomSource: new DatabaseTestRandomSource(),
+  });
+  if (!result.ok || result.state.lifecycle !== "finished") {
+    throw new Error("Finished gameplay fixture did not terminate");
+  }
+  return serializeGameplaySnapshot({ ...result.state, stateVersion });
 }
 
 export async function startTestDatabase(): Promise<TestDatabase> {

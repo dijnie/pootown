@@ -9,6 +9,8 @@ import {
 } from "../src/persistence/command-repository.js";
 import { RoomLeaseRepository } from "../src/persistence/room-lease.js";
 import {
+  finishedGameplaySnapshot,
+  gameplaySnapshot,
   lifecycleSnapshot,
   seedGameSession,
   startTestDatabase,
@@ -24,6 +26,7 @@ describe("atomic room command persistence", { timeout: 120_000 }, () => {
     await seedGameSession(database.pool, "game_command", "room_command");
     await seedGameSession(database.pool, "game_command_race", "room_command_race");
     await seedGameSession(database.pool, "game_command_duplicate", "room_command_duplicate");
+    await seedGameSession(database.pool, "game_command_timer", "room_command_timer");
   });
 
   after(async () => stopTestDatabase(database));
@@ -175,5 +178,47 @@ describe("atomic room command persistence", { timeout: 120_000 }, () => {
       [lease.roomId],
     );
     assert.deepEqual(stored.rows, [{ commands: 1, state_version: 5 }]);
+  });
+
+  it("persists deterministic internal timer commands under the system actor", async () => {
+    const leases = new RoomLeaseRepository(database.pool, "command-instance", 30_000);
+    const now = new Date("2026-08-11T20:00:09.000Z");
+    const lease = await leases.acquire("room_command_timer", "game_command_timer", now);
+    await new CheckpointRepository(database.pool, leases).initialize(
+      lease,
+      2,
+      gameplaySnapshot("game_command_timer", 2),
+      now,
+    );
+    const commands = new CommandRepository(database.pool, leases);
+    const command = {
+      requestId: "00000000-0000-4000-8000-000000000105",
+      expectedStateVersion: 2,
+      type: "warnTurnThirtySeconds",
+      payload: {},
+    } as const;
+    const value = {
+      playerId: "system_timer",
+      command,
+      stateVersion: 3,
+      serializedState: finishedGameplaySnapshot("game_command_timer", 3),
+      acknowledgement: { type: "command.ack", requestId: command.requestId, stateVersion: 3, eventIds: [] },
+      events: [],
+      terminalProof: { endReason: "timeLimit", winnerPlayerId: "player_checkpoint" },
+    } as const;
+    const committed = await commands.commit(lease, value, now);
+    assert.equal(committed.duplicate, false);
+    assert.deepEqual(await commands.findReplay(lease, "system_timer", command, now), committed.acknowledgement);
+    const stored = await database.pool.query(
+      `
+        SELECT command.player_id, checkpoint.state_version::int,
+          (SELECT count(*)::int FROM realtime.terminal_proofs proof WHERE proof.room_id = command.room_id) AS proofs
+        FROM realtime.room_commands command
+        JOIN realtime.room_checkpoints checkpoint USING (room_id)
+        WHERE command.room_id = $1
+      `,
+      [lease.roomId],
+    );
+    assert.deepEqual(stored.rows, [{ player_id: "system_timer", state_version: 3, proofs: 1 }]);
   });
 });

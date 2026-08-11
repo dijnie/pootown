@@ -8,6 +8,7 @@ import {
 } from "@pootown/game-contracts";
 import {
   SessionStartedRequestSchema,
+  SettlementRequestSchema,
   SessionBootstrapResponseSchema,
   TicketConsumeRequestSchema,
   TicketConsumeResponseSchema,
@@ -81,6 +82,25 @@ export class InternalApiClient {
     const idempotencyKey = IdempotencyKeySchema.parse(idempotencyKeyValue);
     return this.request(
       `/internal/v1/game-sessions/${encodeURIComponent(gameId)}/started`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "idempotency-key": idempotencyKey },
+        body: JSON.stringify(request),
+      },
+      OperationResponseSchema,
+    );
+  }
+
+  public settleSession(
+    gameIdValue: string,
+    requestValue: z.input<typeof SettlementRequestSchema>,
+    idempotencyKeyValue: string,
+  ): Promise<OperationResponse> {
+    const gameId = GameIdSchema.parse(gameIdValue);
+    const request = SettlementRequestSchema.parse(requestValue);
+    const idempotencyKey = IdempotencyKeySchema.parse(idempotencyKeyValue);
+    return this.request(
+      `/internal/v1/game-sessions/${encodeURIComponent(gameId)}/settlement`,
       {
         method: "POST",
         headers: { "content-type": "application/json", "idempotency-key": idempotencyKey },

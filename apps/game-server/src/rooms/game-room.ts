@@ -16,6 +16,7 @@ import {
 import {
   parseGameplaySnapshot,
   parseSnapshot,
+  serializeGameplaySnapshot,
   serializeSnapshot,
   type GameState,
   type GameplayAggregateState,
@@ -26,6 +27,7 @@ import type {
   TicketConsumeRequest,
   TicketConsumeResponse,
 } from "@pootown/game-contracts/internal";
+import { InternalApiRequestError } from "../api/internal-api-client.js";
 import {
   TicketAuthenticationError,
   TicketAuthenticator,
@@ -35,10 +37,15 @@ import {
   InvalidRoomCommandError,
   RoomCommandHandler,
 } from "../commands/command-handler.js";
-import { CheckpointRepository, CorruptCheckpointError } from "../persistence/checkpoint-repository.js";
+import {
+  CheckpointRepository,
+  CorruptCheckpointError,
+  checkpointChecksum,
+} from "../persistence/checkpoint-repository.js";
 import { CommandRepository } from "../persistence/command-repository.js";
 import { RoomLeaseRepository, type RoomLease } from "../persistence/room-lease.js";
 import { SecureRandomSource } from "../random/secure-random-source.js";
+import { RoomClock } from "../timers/room-clock.js";
 import { createWaitingState } from "./bootstrap-state.js";
 import {
   createGameRoomState,
@@ -53,6 +60,16 @@ export interface GameRoomDependencies {
     markStarted(
       gameId: string,
       request: { readonly contractVersion: 1; readonly roomId: string; readonly stateVersion: number },
+      idempotencyKey: string,
+    ): Promise<OperationResponse>;
+    settleSession(
+      gameId: string,
+      request: {
+        readonly contractVersion: 1;
+        readonly roomId: string;
+        readonly terminalStateVersion: number;
+        readonly checkpointChecksum: string;
+      },
       idempotencyKey: string,
     ): Promise<OperationResponse>;
   };
@@ -92,6 +109,7 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
     private authenticator: TicketAuthenticator | undefined;
     private commandDeliveryQueue: Promise<void> = Promise.resolve();
     private commandHandler: RoomCommandHandler | undefined;
+    private disposed = false;
     private gameId: string | undefined;
     private lease: RoomLease | undefined;
     private logicalRoomId: string | undefined;
@@ -99,6 +117,9 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
       readonly requestId: string;
       readonly events: readonly (DomainEventEnvelope | GameplayDomainEventEnvelope)[];
     } | undefined;
+    private roomClock: RoomClock | undefined;
+    private settlementInFlight = false;
+    private settlementRetryTimer: ReturnType<typeof setTimeout> | undefined;
     private starting = false;
 
     public override async onCreate(rawOptions: unknown): Promise<void> {
@@ -151,8 +172,19 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
         store: dependencies.commands,
         onCommitted: (state) => {
           updateGameRoomState(this.state as GameRoomStateInstance, state);
+          this.roomClock?.synchronize(state);
+          this.scheduleSettlement(state);
         },
       });
+      this.roomClock = new RoomClock({
+        dispatch: (command) => this.enqueueInternalCommand(command),
+        onFailure: async () => {
+          if (this.disposed) return;
+          await this.lock();
+        },
+      });
+      this.roomClock.synchronize(privateState);
+      this.scheduleSettlement(privateState);
       this.authenticator = new TicketAuthenticator({
         consumeTicket: (request, idempotencyKey) => dependencies.api.consumeTicket(request, idempotencyKey),
       }, lease.instanceId, bootstrap.roomId);
@@ -238,6 +270,9 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
     }
 
     public override async onDispose(): Promise<void> {
+      this.disposed = true;
+      this.roomClock?.stop();
+      if (this.settlementRetryTimer !== undefined) clearTimeout(this.settlementRetryTimer);
       if (this.lease !== undefined) await dependencies.leases.release(this.lease).catch(() => false);
     }
 
@@ -246,6 +281,7 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
       try {
         this.lease = await dependencies.leases.renew(this.lease);
       } catch {
+        this.roomClock?.stop();
         await this.lock();
         await this.disconnect();
       }
@@ -329,6 +365,54 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
       return work;
     }
 
+    private enqueueInternalCommand(command: unknown): Promise<boolean> {
+      const work = this.commandDeliveryQueue.then(async () => {
+        if (this.commandHandler === undefined) throw new Error("Room command handler is unavailable");
+        const result = await this.commandHandler.handleInternal(command);
+        if (!result.accepted) {
+          if (result.rejection.code === "STALE_STATE_VERSION") {
+            this.roomClock?.synchronize(this.commandHandler.currentState());
+            return false;
+          }
+          throw new Error(`Room timer command rejected: ${result.rejection.code}`);
+        }
+        for (const event of result.events) this.broadcast(event.type, event);
+        return true;
+      });
+      this.commandDeliveryQueue = work.then(() => undefined, () => undefined);
+      return work;
+    }
+
+    private scheduleSettlement(state: GameState | GameplayAggregateState): void {
+      if (!("players" in state) || state.lifecycle !== "finished" || this.settlementInFlight ||
+          this.settlementRetryTimer !== undefined || this.disposed) return;
+      this.roomClock?.stop();
+      void this.settleFinishedState(state);
+    }
+
+    private async settleFinishedState(state: Extract<GameplayAggregateState, { lifecycle: "finished" }>): Promise<void> {
+      if (this.gameId === undefined || this.logicalRoomId === undefined) return;
+      this.settlementInFlight = true;
+      try {
+        const serializedState = serializeGameplaySnapshot(state);
+        await dependencies.api.settleSession(this.gameId, {
+          contractVersion: 1,
+          roomId: this.logicalRoomId,
+          terminalStateVersion: state.stateVersion,
+          checkpointChecksum: checkpointChecksum(serializedState).toString("hex"),
+        }, settlementIdempotencyKey(this.gameId, this.logicalRoomId));
+      } catch (error) {
+        if (error instanceof InternalApiRequestError && error.code === "SETTLEMENT_ALREADY_COMMITTED") return;
+        if (this.disposed) return;
+        this.settlementRetryTimer = setTimeout(() => {
+          this.settlementRetryTimer = undefined;
+          this.scheduleSettlement(state);
+        }, 5_000);
+      } finally {
+        this.settlementInFlight = false;
+      }
+    }
+
     private waitForAuthentications(): Promise<void> {
       if (this.authenticationsInFlight === 0) return Promise.resolve();
       return new Promise((resolve) => this.authenticationWaiters.add(resolve));
@@ -338,6 +422,10 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
 
 function startIdempotencyKey(gameId: string, roomId: string): string {
   return `realtime-start-${createHash("sha256").update(`${gameId}\0${roomId}`).digest("hex")}`;
+}
+
+function settlementIdempotencyKey(gameId: string, roomId: string): string {
+  return `realtime-settle-${createHash("sha256").update(`${gameId}\0${roomId}`).digest("hex")}`;
 }
 
 export function playerPrivateStateMessage(authenticated: AuthenticatedRoomPlayer) {

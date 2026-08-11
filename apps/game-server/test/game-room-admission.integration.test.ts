@@ -121,6 +121,9 @@ describe("live Colyseus ticket admission", { timeout: 120_000 }, () => {
             committed: true,
           };
         },
+        async settleSession() {
+          throw new Error("Admission test does not finish the game");
+        },
       },
       checkpoints,
       commands,
