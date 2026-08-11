@@ -10,6 +10,11 @@ import { InternalApiClient } from "./api/internal-api-client.js";
 import { parseGameServerEnvironment, type GameServerConfig } from "./app-config.js";
 import { Es256ServiceCredentialProvider } from "./auth/service-credential.js";
 import { registerHealthRoutes, RuntimeReadiness } from "./health.js";
+import {
+  operationalErrorType,
+  registerMetricsRoute,
+  RuntimeMetrics,
+} from "./observability/runtime-metrics.js";
 import { CheckpointRepository } from "./persistence/checkpoint-repository.js";
 import { CommandRepository } from "./persistence/command-repository.js";
 import { PresenceRepository } from "./persistence/presence-repository.js";
@@ -72,8 +77,10 @@ export async function createGameServerRuntime(config: GameServerConfig): Promise
   const commands = new CommandRepository(pool, leases);
   const presence = new PresenceRepository(pool, leases);
   const readiness = new RuntimeReadiness();
+  const metrics = new RuntimeMetrics();
   let shutdownPromise: Promise<void> | undefined;
   registerHealthRoutes(app, pool, readiness);
+  registerMetricsRoute(app, metrics);
   const httpServer = createServer(app);
   const allowedOrigins = new Set(config.origins);
   const transport = new WebSocketTransport({
@@ -90,9 +97,13 @@ export async function createGameServerRuntime(config: GameServerConfig): Promise
     commands,
     leaseRenewMs: config.leaseRenewMs,
     leases,
+    metrics,
     onLeaseLost: (error) => {
       readiness.markLeaseLost();
-      logger.error({ errorType: error instanceof Error ? error.name : "unknown" }, "room lease ownership lost");
+      logger.error({ errorType: operationalErrorType(error) }, "room lease ownership lost");
+    },
+    onOperationalFailure: (event) => {
+      logger.warn(event, "room operation requires durable retry");
     },
     presence,
   })).filterBy(["gameId"]);

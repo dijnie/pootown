@@ -4,6 +4,7 @@ import type { Client, Room } from "@colyseus/core";
 
 import type { AuthenticatedRoomPlayer } from "../src/auth/ticket-auth.js";
 import { createGameRoomClass } from "../src/rooms/game-room.js";
+import { RuntimeMetrics } from "../src/observability/runtime-metrics.js";
 
 interface CrashTestRoom extends Room {
   handleRoomCommand(client: Client, payload: unknown): Promise<void>;
@@ -92,7 +93,11 @@ describe("room delivery crash boundaries", () => {
     let locks = 0;
     let broadcasts = 0;
     const sent: string[] = [];
+    const metrics = new RuntimeMetrics();
+    const operationalFailures: unknown[] = [];
     const RoomClass = createGameRoomClass({
+      metrics,
+      onOperationalFailure: (event: unknown) => { operationalFailures.push(event); },
       api: {
         async finalizeSessionCommand(gameId: string, request: unknown, key: string) {
           finalizeCalls += 1;
@@ -105,7 +110,11 @@ describe("room delivery crash boundaries", () => {
             action: "leave",
           });
           assert.match(key, /^realtime-finalize-[a-f0-9]{64}$/);
-          if (finalizeCalls === 1) throw new Error("simulated API outage after room commit");
+          if (finalizeCalls === 1) {
+            const error = new Error("simulated API outage after room commit");
+            error.name = "ticket_secret/player_secret/".repeat(100);
+            throw error;
+          }
           return { contractVersion: 1, operationId: "operation_leave", committed: true };
         },
       },
@@ -161,6 +170,10 @@ describe("room delivery crash boundaries", () => {
     assert.equal(broadcasts, 1);
     assert.deepEqual(otherErrors, [4503]);
     assert.deepEqual(sent, ["session.status", "command.ack"]);
+    assert.match(metrics.render(), /pootown_realtime_player_commands_committed_total 1/);
+    assert.match(metrics.render(), /pootown_realtime_player_commands_replayed_total 1/);
+    assert.match(metrics.render(), /pootown_realtime_room_finalization_failures_total 1/);
+    assert.deepEqual(operationalFailures, [{ errorType: "error", kind: "room-finalization-pending" }]);
   });
 
   it("waits for an in-flight authentication before committing leave", async () => {

@@ -52,6 +52,11 @@ import {
   RoomLeaseUnavailableError,
   type RoomLease,
 } from "../persistence/room-lease.js";
+import {
+  operationalErrorType,
+  type OperationalErrorType,
+  type RealtimeMetrics,
+} from "../observability/runtime-metrics.js";
 import { SecureRandomSource } from "../random/secure-random-source.js";
 import { RoomClock } from "../timers/room-clock.js";
 import { createWaitingState } from "./bootstrap-state.js";
@@ -95,8 +100,13 @@ export interface GameRoomDependencies {
   };
   readonly leaseRenewMs: number;
   readonly leases: RoomLeaseRepository;
+  readonly metrics?: RealtimeMetrics;
   readonly nowMs?: () => number;
   readonly onLeaseLost?: (error: unknown) => void;
+  readonly onOperationalFailure?: (event: {
+    readonly errorType: OperationalErrorType;
+    readonly kind: "room-finalization-pending" | "settlement-retry-scheduled";
+  }) => void;
   readonly presence: PresenceRepository;
 }
 
@@ -224,6 +234,7 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
       }, lease.instanceId, bootstrap.roomId);
       this.maxClients = bootstrap.maximumPlayers;
       await this.setMetadata({ gameId: bootstrap.gameId, roomId: bootstrap.roomId });
+      dependencies.metrics?.increment("rooms_created_total");
       this.onMessage("player.private.sync", (client: GameClient, payload: unknown) => {
         PlayerPrivateStateRequestSchema.parse(payload);
         if (client.userData === undefined) {
@@ -312,8 +323,12 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
         }
       } catch (error) {
         if (!this.hasAttachedClient()) {
-          await dependencies.presence.markAllOffline(this.lease, previousAllOfflineAt ?? undefined)
-            .catch(() => undefined);
+          try {
+            await dependencies.presence.markAllOffline(this.lease, previousAllOfflineAt ?? undefined);
+            dependencies.metrics?.increment("all_offline_windows_started_total");
+          } catch {
+            // Preserve the original authentication failure; reconciliation repairs presence.
+          }
         }
         throw error;
       }
@@ -337,6 +352,7 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
         if (!this.hasAttachedClient() && this.lease !== undefined) {
           try {
             await dependencies.presence.markAllOffline(this.lease);
+            dependencies.metrics?.increment("all_offline_windows_started_total");
           } catch (error) {
             if (error instanceof RoomLeaseUnavailableError) await this.handleLeaseLoss(error);
             else throw error;
@@ -355,7 +371,12 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
       if (this.settlementRetryTimer !== undefined) clearTimeout(this.settlementRetryTimer);
       const state = this.commandHandler?.currentState();
       if (this.lease !== undefined && state !== undefined && "players" in state && state.lifecycle === "inProgress") {
-        await dependencies.presence.markAllOffline(this.lease).catch(() => undefined);
+        try {
+          await dependencies.presence.markAllOffline(this.lease);
+          dependencies.metrics?.increment("all_offline_windows_started_total");
+        } catch {
+          // Shutdown continues; API reconciliation repairs presence.
+        }
       }
       if (this.lease !== undefined) await dependencies.leases.release(this.lease).catch(() => false);
     }
@@ -373,6 +394,7 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
     private async handleLeaseLoss(error: unknown): Promise<void> {
       if (this.leaseLost) return;
       this.leaseLost = true;
+      dependencies.metrics?.increment("lease_losses_total");
       this.roomClock?.stop();
       dependencies.onLeaseLost?.(error);
       await this.lock().catch(() => undefined);
@@ -421,6 +443,7 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
         if (finalizationAction !== undefined) await this.waitForAuthentications();
         const result = await this.commandHandler.handle(client.userData, payload);
         if (!result.accepted) {
+          dependencies.metrics?.increment("player_command_handler_rejections_total");
           if (startsGame) {
             this.starting = false;
           }
@@ -428,6 +451,9 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
           client.send(result.rejection.type, result.rejection);
           return;
         }
+        dependencies.metrics?.increment(result.replayed
+          ? "player_commands_replayed_total"
+          : "player_commands_committed_total");
         let events = result.events;
         if (finalizationAction !== undefined) {
           if (this.gameId === undefined || this.logicalRoomId === undefined) {
@@ -443,19 +469,28 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
           } else if (this.pendingSessionFinalization?.requestId === result.acknowledgement.requestId) {
             events = this.pendingSessionFinalization.events;
           }
-          await dependencies.api.finalizeSessionCommand(this.gameId, RoomSessionFinalizationRequestSchema.parse({
-            contractVersion: 1,
-            roomId: this.logicalRoomId,
-            playerId: client.userData.playerId,
-            reservationId: client.userData.reservationId,
-            action: finalizationAction,
-          }), sessionFinalizationIdempotencyKey(
-            this.gameId,
-            this.logicalRoomId,
-            client.userData.playerId,
-            result.acknowledgement.requestId,
-            finalizationAction,
-          ));
+          try {
+            await dependencies.api.finalizeSessionCommand(this.gameId, RoomSessionFinalizationRequestSchema.parse({
+              contractVersion: 1,
+              roomId: this.logicalRoomId,
+              playerId: client.userData.playerId,
+              reservationId: client.userData.reservationId,
+              action: finalizationAction,
+            }), sessionFinalizationIdempotencyKey(
+              this.gameId,
+              this.logicalRoomId,
+              client.userData.playerId,
+              result.acknowledgement.requestId,
+              finalizationAction,
+            ));
+          } catch (error) {
+            dependencies.metrics?.increment("room_finalization_failures_total");
+            dependencies.onOperationalFailure?.({
+              errorType: operationalErrorType(error),
+              kind: "room-finalization-pending",
+            });
+            throw error;
+          }
           this.pendingSessionFinalization = undefined;
         }
         if (startsGame) {
@@ -517,12 +552,14 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
         if (this.commandHandler === undefined) throw new Error("Room command handler is unavailable");
         const result = await this.commandHandler.handleInternal(command);
         if (!result.accepted) {
+          dependencies.metrics?.increment("timer_commands_rejected_total");
           if (result.rejection.code === "STALE_STATE_VERSION") {
             this.roomClock?.synchronize(this.commandHandler.currentState());
             return false;
           }
           throw new Error(`Room timer command rejected: ${result.rejection.code}`);
         }
+        dependencies.metrics?.increment("timer_commands_accepted_total");
         for (const event of result.events) this.broadcast(event.type, event);
         return true;
       });
@@ -568,6 +605,11 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
           this.settlementRetryTimer = undefined;
           this.scheduleSettlement(state);
         }, 5_000);
+        dependencies.metrics?.increment("settlement_retries_total");
+        dependencies.onOperationalFailure?.({
+          errorType: operationalErrorType(error),
+          kind: "settlement-retry-scheduled",
+        });
       } finally {
         this.settlementInFlight = false;
       }
