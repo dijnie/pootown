@@ -102,6 +102,23 @@ describe("property rules", () => {
       calculateRent(change(properties, 12, { ownerSeatIndex: 0, hasHotel: true }), 12, 7),
       null,
     );
+    assert.equal(
+      calculateRent(
+        change(properties, 1, { ownerSeatIndex: 0, hasHotel: "false" as unknown as boolean }),
+        1,
+        7,
+      ),
+      null,
+    );
+    assert.equal(
+      calculateRent(
+        change(properties, 1, { ownerSeatIndex: 0, mortgaged: 0 as unknown as boolean }),
+        1,
+        7,
+      ),
+      null,
+    );
+    assert.equal(calculateRent(new Array<PropertyState>(40), 1, 7), null);
   });
 
   it("checks all in-match cash arithmetic without wrapping or underflow", () => {

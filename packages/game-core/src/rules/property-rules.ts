@@ -26,9 +26,12 @@ export function createPropertyStates(): readonly PropertyState[] {
 }
 
 export function isValidPropertyStates(properties: readonly PropertyState[]): boolean {
-  return properties.length === BOARD_SPACES.length && properties.every((property, index) => {
+  return Array.isArray(properties) && properties.length === BOARD_SPACES.length && Array.from(properties).every((property, index) => {
     const definition = BOARD_SPACES[index];
     if (
+      typeof property !== "object" ||
+      property === null ||
+      Array.isArray(property) ||
       definition === undefined ||
       property.position !== index ||
       (property.ownerSeatIndex !== null &&
@@ -36,6 +39,8 @@ export function isValidPropertyStates(properties: readonly PropertyState[]): boo
       !Number.isInteger(property.houses) ||
       property.houses < 0 ||
       property.houses > 4 ||
+      typeof property.hasHotel !== "boolean" ||
+      typeof property.mortgaged !== "boolean" ||
       (property.hasHotel && property.houses !== 0) ||
       (property.mortgaged && (property.houses !== 0 || property.hasHotel)) ||
       (definition.propertyType !== "street" && (property.houses !== 0 || property.hasHotel))
