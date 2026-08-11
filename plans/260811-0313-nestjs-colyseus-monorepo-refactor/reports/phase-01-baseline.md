@@ -76,8 +76,9 @@ or authentication readiness evidence.
 ## Environmental limitations
 
 - Board and authenticated dialogs were not captured because no real Privy
-  application, token, or funded game identity was supplied. This keeps the Phase
-  1 visual gate incomplete; Phase 7 also owns final authenticated interaction E2E.
+  application, token, or funded game identity was supplied. The original Phase 1
+  visual sub-gate is unsatisfied and explicitly deferred under the approved
+  evidence disposition below; Phase 7 also owns final authenticated interaction E2E.
 - Pre-start lifecycle/seating now has executable local Anchor evidence. With the
   current MagicBlock delegation program loaded, a minimum-seat `startGame`
   simulation logs successful delegation and the start event, then hits an SBF
@@ -87,4 +88,17 @@ or authentication readiness evidence.
   can supersede this source-built observation.
 - Turn, property, card, jail, trade, bankruptcy, timeout, and completed-game
   handlers therefore still lack a successfully committed lifecycle path and
-  remain labeled `source-evidenced`; the Phase 1 behavior gate is incomplete.
+  remain labeled `source-evidenced`.
+
+## Approved evidence disposition
+
+On 2026-08-11 the CEO approved using the frozen Rust source together with the
+plan's recorded rule decisions as migration authority for behavior unreachable
+after the legacy start rollback. Repairing or redeploying the legacy Solana
+runtime solely to manufacture stronger parity evidence is out of scope. This is
+an explicit evidence waiver, not a claim that the unavailable runtime paths were
+executed successfully.
+
+Phase 1 is complete under that authority. Authenticated board/dialog visual
+parity is still required before release and remains owned by the Phase 6/7 gates;
+the public-page baseline does not satisfy that later requirement.

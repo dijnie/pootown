@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Shared Contracts and Core Lifecycle"
-status: pending
+status: in-progress
 priority: P1
 effort: "1.5-2 weeks"
 dependencies: [1]
@@ -61,7 +61,7 @@ pnpm --filter @pootown/game-contracts test
 pnpm --filter @pootown/game-core test
 pnpm --filter @pootown/game-core lint
 pnpm --filter @pootown/game-core build
-pnpm exec madge --circular packages/game-core/src packages/game-contracts/src
+pnpm exec madge --extensions ts --circular packages/game-core/src packages/game-contracts/src
 ```
 
 - Contract negatives: unknown command, extra/oversized fields, invalid IDs/version/integer, stale `expectedStateVersion`, private-data serialization.
@@ -86,7 +86,7 @@ pnpm exec madge --circular packages/game-core/src packages/game-contracts/src
 
 ## Rollback Notes
 
-Packages are additive. Revert the focused package commit if public contracts cannot stabilize; Phase 1 runtime remains authoritative and unchanged.
+Packages are additive. Revert the focused package commit if public contracts cannot stabilize; the Phase 1 executable fixtures, frozen source, and approved decisions remain authoritative and unchanged.
 
 ## Security Considerations
 

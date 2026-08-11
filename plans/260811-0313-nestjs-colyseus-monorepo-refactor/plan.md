@@ -1,7 +1,7 @@
 ---
 title: "Pootown NestJS and Colyseus Monorepo Refactor"
 description: "Cleanly replace the Solana runtime with independently deployable NestJS and Colyseus services while preserving the current web experience and executed game rules."
-status: pending
+status: in-progress
 priority: P1
 effort: 10-13 weeks
 issue: null
@@ -30,7 +30,7 @@ Create one root pnpm workspace with `apps/web`, independently deployable `apps/a
 - [Accepted brainstorm](../reports/brainstorm-260811-0246-nestjs-colyseus-monorepo.md)
 - [Rules migration research](./research/researcher-01-rules-migration.md)
 - [Service contracts research](./research/researcher-02-service-contracts.md)
-- Official: [NestJS authentication](https://docs.nestjs.com/security/authentication), [Colyseus rooms](https://docs.colyseus.io/server/room), [Privy token verification](https://docs.privy.io/authentication/user-authentication/tokens), [PostgreSQL transactions](https://www.postgresql.org/docs/current/transaction-iso.html)
+- Official: [NestJS authentication](https://docs.nestjs.com/security/authentication), [Colyseus rooms](https://docs.colyseus.io/room), [Privy token verification](https://docs.privy.io/authentication/user-authentication/tokens), [PostgreSQL transactions](https://www.postgresql.org/docs/current/transaction-iso.html)
 
 Authority precedence: accepted CEO decisions and this implementation plan override exploratory research. Wallet binding, spectators, eight-player rooms, auction commands, production cohorts/dual reads, legacy drain, and legacy fallback proposed in research are superseded and must not be implemented.
 
@@ -38,8 +38,8 @@ Authority precedence: accepted CEO decisions and this implementation plan overri
 
 | Phase | Deliverable | Depends on | Status |
 |---|---|---|---|
-| 1 | [Workspace and behavioral baseline](./phase-01-start.md) | - | Pending |
-| 2 | [Shared contracts and core lifecycle](./phase-02-shared-contracts-and-core-lifecycle.md) | 1 | Pending |
+| 1 | [Workspace and behavioral baseline](./phase-01-start.md) | - | Complete |
+| 2 | [Shared contracts and core lifecycle](./phase-02-shared-contracts-and-core-lifecycle.md) | 1 | In progress |
 | 3 | [Complete executed rules port](./phase-03-complete-game-rules-port.md) | 2 | Pending |
 | 4 | [NestJS identity, economy, and sessions](./phase-04-nestjs-identity-economy-and-sessions.md) | 2 | Pending |
 | 5 | [Colyseus rooms and recovery](./phase-05-colyseus-rooms-and-recovery.md) | 3, 4 | Pending |
@@ -55,7 +55,7 @@ Critical path: `1 -> 2 -> 3/4 -> 5 -> 6 -> 7 -> 8`. Phases 3 and 4 may proceed c
 - [ ] Create, discover, join, start, play, reconnect, finish, settle, review, and leaderboard flows preserve current visible UX with no new action.
 - [ ] Account coin and in-match cash are distinct; ledger, reservations, refunds, and settlements remain atomic and idempotent under retries/concurrency.
 - [ ] Every accepted command commits its full versioned checkpoint before ack/broadcast; lease fencing and restart/restore tests prevent split ownership or lost state.
-- [ ] Executed Rust behavior has characterization/parity evidence; unsupported auction and absent card effects are not invented.
+- [ ] Reachable Rust behavior has executable characterization evidence; the approved frozen-source authority covers runtime paths unreachable after the legacy start rollback. Unsupported auction and absent card effects are not invented.
 - [ ] API, game server, and web build/deploy/restart independently; database-role tests, backup/restore drill, visual regression, crash matrix, and confirmed 200-client/~50-room gate pass.
 - [ ] Browser and production backend contain no Solana, Anchor, Magic Block, indexer, generated SDK, wallet-signing, or public Privy private-key runtime surface.
 
@@ -77,3 +77,4 @@ None.
 - 2026-08-11 — Enable a 1,000-coin initial grant and rescue top-up to 100 at most once per rolling 24 hours, enforced and audited server-side.
 - 2026-08-11 — Confirm release hypothesis: 200 authenticated concurrent players across about 50 four-player rooms for 30 minutes, with the Phase 7 correctness/latency/resource thresholds.
 - 2026-08-11 — Correct the Community Chest “Free Parking” card to move to board position 20 and align the visible copy. Record this as an approved behavior correction from the executed position-21 legacy behavior.
+- 2026-08-11 — Accept the frozen Rust source plus the decisions above as the migration authority where the legacy MagicBlock start path cannot commit. The characterized start attempt emits `GameStarted` and then rolls back byte-for-byte after an access violation; the closed/absent deployed program provides no stronger runtime authority. Do not repair or redeploy legacy Solana solely for parity. Authenticated board/dialog visual parity remains a mandatory Phase 6/7 release gate.

@@ -15,6 +15,6 @@
   ],
   "limitations": [
     "Authenticated dialogs require a real Privy application and funded local game state; no secret or production identity was used for baseline capture.",
-    "Board, dialog, and authenticated interaction baselines remain missing and keep Phase 1 incomplete; invalid blank/error screenshots were removed."
+    "Board, dialog, and authenticated interaction baselines remain missing; the CEO explicitly deferred this Phase 1 sub-gate while retaining it as a mandatory Phase 6/7 release gate. Invalid blank/error screenshots were removed."
   ]
 }

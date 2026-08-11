@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Workspace and Behavioral Baseline"
-status: pending
+status: complete
 priority: P1
 effort: "1-1.5 weeks"
 dependencies: []
@@ -71,11 +71,11 @@ git diff --summary --find-renames=90% -- web apps/web
 
 ## Success Criteria
 
-- [ ] Root install uses one lockfile and existing web builds from `apps/web`.
-- [ ] Every currently executed rule family has a passing fixture or an explicit evidence-backed exclusion.
-- [ ] Auction and absent card effects have no target command/effect.
-- [ ] Existing visuals and interactions match the captured baseline.
-- [ ] Rust/Anchor sources remain intact and runnable for later parity comparison.
+- [x] Root install uses one lockfile and existing web builds from `apps/web`.
+- [x] Every currently executed rule family has a passing fixture or explicit source evidence; the approved source-authority waiver covers families unreachable after the characterized legacy start rollback.
+- [x] Auction and absent card effects have no target command/effect.
+- [x] Moved public visuals match the checksummed baseline. Authenticated board/dialog parity is explicitly deferred as a mandatory Phase 6/7 release gate because no real Privy configuration or committed legacy start path exists.
+- [x] Rust/Anchor sources remain intact and the reachable local characterization harness remains runnable for later comparison.
 
 ## Risk Assessment
 
@@ -95,4 +95,4 @@ Do not print `.env` values, wallets, tokens, or keys while capturing baselines. 
 
 ## Next Steps
 
-Phase 2 consumes these fixtures. No unresolved phase-specific questions.
+Phase 2 consumes the executable fixtures, frozen Rust source, and approved rule decisions. On 2026-08-11 the CEO approved proceeding from those authorities instead of repairing/redeploying the broken legacy start path. No unresolved phase-specific questions.
