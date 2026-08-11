@@ -200,6 +200,9 @@ importers:
       '@codama/renderers-js':
         specifier: ^1.4.2
         version: 1.7.1(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2)
+      '@colyseus/sdk':
+        specifier: 0.17.43
+        version: 0.17.43(@colyseus/core@0.17.42)(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)(zod@4.4.3)
       '@pootown/game-contracts':
         specifier: workspace:^
         version: link:../../packages/game-contracts
