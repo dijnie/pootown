@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "NestJS Identity Economy and Sessions"
-status: in-progress
+status: complete
 priority: P1
 effort: "2-2.5 weeks"
 dependencies: [2]
@@ -75,7 +75,7 @@ pnpm --filter @pootown/api db:migrate:test
 - [x] Auth, economy, sessions, ticket, settlement, leaderboard, health, migration, and role tests pass.
 - [x] API is sole account-coin writer and all operations reconcile under concurrency/retries.
 - [x] Plain tickets and tokens never persist/log; ticket replay cannot create a seat.
-- [ ] Public Privy private-key config is removed; conditional rotation evidence is recorded.
+- [x] Public Privy private-key config is removed; [conditional rotation evidence](./reports/phase-04-privy-key-rotation-evidence.md) is recorded.
 - [x] No legacy record migration or new queue/Redis/admin/spectator capability exists.
 
 ## Risk Assessment

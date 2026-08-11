@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Frontend Runtime Cutover"
-status: pending
+status: in-progress
 priority: P1
 effort: "1.5-2 weeks"
 dependencies: [4, 5]
