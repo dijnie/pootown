@@ -9,7 +9,7 @@ import pino from "pino";
 import { InternalApiClient } from "./api/internal-api-client.js";
 import { parseGameServerEnvironment, type GameServerConfig } from "./app-config.js";
 import { Es256ServiceCredentialProvider } from "./auth/service-credential.js";
-import { registerHealthRoutes } from "./health.js";
+import { registerHealthRoutes, RuntimeReadiness } from "./health.js";
 import { CheckpointRepository } from "./persistence/checkpoint-repository.js";
 import { CommandRepository } from "./persistence/command-repository.js";
 import { PresenceRepository } from "./persistence/presence-repository.js";
@@ -71,9 +71,9 @@ export async function createGameServerRuntime(config: GameServerConfig): Promise
   const checkpoints = new CheckpointRepository(pool, leases);
   const commands = new CommandRepository(pool, leases);
   const presence = new PresenceRepository(pool, leases);
-  let acceptingConnections = false;
+  const readiness = new RuntimeReadiness();
   let shutdownPromise: Promise<void> | undefined;
-  registerHealthRoutes(app, pool, { isAcceptingConnections: () => acceptingConnections });
+  registerHealthRoutes(app, pool, readiness);
   const httpServer = createServer(app);
   const allowedOrigins = new Set(config.origins);
   const transport = new WebSocketTransport({
@@ -90,6 +90,10 @@ export async function createGameServerRuntime(config: GameServerConfig): Promise
     commands,
     leaseRenewMs: config.leaseRenewMs,
     leases,
+    onLeaseLost: (error) => {
+      readiness.markLeaseLost();
+      logger.error({ errorType: error instanceof Error ? error.name : "unknown" }, "room lease ownership lost");
+    },
     presence,
   })).filterBy(["gameId"]);
 
@@ -99,12 +103,12 @@ export async function createGameServerRuntime(config: GameServerConfig): Promise
     internalApiClient,
     async listen() {
       await gameServer.listen(config.port);
-      acceptingConnections = true;
+      readiness.markListening();
       logger.info({ port: config.port, instanceId: config.instanceId }, "game server listening");
     },
     shutdown() {
       if (shutdownPromise !== undefined) return shutdownPromise;
-      acceptingConnections = false;
+      readiness.markStopping();
       shutdownPromise = (async () => {
         await shutdownRuntime(gameServer, pool);
         logger.info({ instanceId: config.instanceId }, "game server stopped");

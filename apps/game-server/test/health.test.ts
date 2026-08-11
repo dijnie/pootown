@@ -4,7 +4,7 @@ import { afterEach, describe, it } from "node:test";
 import express from "express";
 import type { Pool } from "pg";
 
-import { registerHealthRoutes } from "../src/health.js";
+import { registerHealthRoutes, RuntimeReadiness } from "../src/health.js";
 
 const servers: ReturnType<typeof createServer>[] = [];
 
@@ -26,6 +26,19 @@ async function serve(query: () => Promise<unknown>, accepting: boolean): Promise
 }
 
 describe("game server health", () => {
+  it("fails readiness permanently after lease ownership is lost", () => {
+    const readiness = new RuntimeReadiness();
+    assert.equal(readiness.isAcceptingConnections(), false);
+    readiness.markListening();
+    assert.equal(readiness.isAcceptingConnections(), true);
+    readiness.markLeaseLost();
+    assert.equal(readiness.isAcceptingConnections(), false);
+    readiness.markListening();
+    assert.equal(readiness.isAcceptingConnections(), false);
+    readiness.markStopping();
+    assert.equal(readiness.isAcceptingConnections(), false);
+  });
+
   it("keeps liveness independent and readiness bound to startup and PostgreSQL", async () => {
     let queries = 0;
     const starting = await serve(async () => { queries += 1; }, false);

@@ -44,7 +44,11 @@ import {
 } from "../persistence/checkpoint-repository.js";
 import { CommandRepository } from "../persistence/command-repository.js";
 import { PresenceRepository } from "../persistence/presence-repository.js";
-import { RoomLeaseRepository, type RoomLease } from "../persistence/room-lease.js";
+import {
+  RoomLeaseRepository,
+  RoomLeaseUnavailableError,
+  type RoomLease,
+} from "../persistence/room-lease.js";
 import { SecureRandomSource } from "../random/secure-random-source.js";
 import { RoomClock } from "../timers/room-clock.js";
 import { createWaitingState } from "./bootstrap-state.js";
@@ -78,6 +82,7 @@ export interface GameRoomDependencies {
   readonly commands: CommandRepository;
   readonly leaseRenewMs: number;
   readonly leases: RoomLeaseRepository;
+  readonly onLeaseLost?: (error: unknown) => void;
   readonly presence: PresenceRepository;
 }
 
@@ -114,6 +119,7 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
     private disposed = false;
     private gameId: string | undefined;
     private lease: RoomLease | undefined;
+    private leaseLost = false;
     private logicalRoomId: string | undefined;
     private pendingStartPublication: {
       readonly requestId: string;
@@ -213,6 +219,9 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
       this.authenticationsInFlight += 1;
       try {
         return await this.authenticateClient(client, rawOptions);
+      } catch (error) {
+        if (error instanceof RoomLeaseUnavailableError) await this.handleLeaseLoss(error);
+        throw error;
       } finally {
         this.authenticationsInFlight -= 1;
         if (this.authenticationsInFlight === 0) {
@@ -260,7 +269,13 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
         throw new TicketAuthenticationError("Room authentication reservation is no longer active");
       }
       if (this.lease === undefined) throw new TicketAuthenticationError("Room lease is unavailable");
-      const previousAllOfflineAt = await dependencies.presence.markConnected(this.lease);
+      let previousAllOfflineAt: Date | null;
+      try {
+        previousAllOfflineAt = await dependencies.presence.markConnected(this.lease);
+      } catch (error) {
+        if (error instanceof RoomLeaseUnavailableError) await this.handleLeaseLoss(error);
+        throw error;
+      }
       try {
         const bootstrap = await dependencies.api.bootstrap(authenticated.gameId);
         if (bootstrap.roomId !== authenticated.roomId ||
@@ -292,7 +307,12 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
           this.activeSessions.get(authenticated.playerId)?.clientSessionId === client.sessionId) {
         this.activeSessions.delete(authenticated.playerId);
         if (!this.hasAttachedClient() && this.lease !== undefined) {
-          await dependencies.presence.markAllOffline(this.lease);
+          try {
+            await dependencies.presence.markAllOffline(this.lease);
+          } catch (error) {
+            if (error instanceof RoomLeaseUnavailableError) await this.handleLeaseLoss(error);
+            else throw error;
+          }
         }
       }
     }
@@ -313,14 +333,22 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
     }
 
     private async renewLease(): Promise<void> {
-      if (this.lease === undefined) return;
+      if (this.lease === undefined || this.leaseLost || this.disposed) return;
       try {
         this.lease = await dependencies.leases.renew(this.lease);
-      } catch {
-        this.roomClock?.stop();
-        await this.lock();
-        await this.disconnect();
+      } catch (error) {
+        if (this.disposed) return;
+        await this.handleLeaseLoss(error);
       }
+    }
+
+    private async handleLeaseLoss(error: unknown): Promise<void> {
+      if (this.leaseLost) return;
+      this.leaseLost = true;
+      this.roomClock?.stop();
+      dependencies.onLeaseLost?.(error);
+      await this.lock().catch(() => undefined);
+      await this.disconnect().catch(() => undefined);
     }
 
     private async handleRoomCommand(client: GameClient, payload: unknown): Promise<void> {
@@ -372,6 +400,10 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
         client.send(result.acknowledgement.type, result.acknowledgement);
         for (const event of events) this.broadcast(event.type, event);
       } catch (error) {
+        if (error instanceof RoomLeaseUnavailableError) {
+          await this.handleLeaseLoss(error);
+          return;
+        }
         if (error instanceof InvalidRoomCommandError) {
           if (startsGame && this.pendingStartPublication === undefined) {
             this.starting = false;

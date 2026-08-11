@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import type { Client, Room } from "@colyseus/core";
 
 import type { AuthenticatedRoomPlayer } from "../src/auth/ticket-auth.js";
+import { RoomLeaseUnavailableError } from "../src/persistence/room-lease.js";
 import { createGameRoomClass, playerPrivateStateMessage } from "../src/rooms/game-room.js";
 
 interface TestRoom extends Room {
@@ -26,6 +27,9 @@ function createRoom(options: {
   lifecycleAtBootstrap?: (call: number) => "active" | "open" | "settled";
   onMarkAllOffline?: (now?: Date) => void;
   onMarkConnected?: () => void;
+  markConnectedError?: Error;
+  onLeaseLost?: (error: unknown) => void;
+  renewLeaseError?: Error;
 } = {}): TestRoom {
   let bootstrapCalls = 0;
   const RoomClass = createGameRoomClass({
@@ -54,6 +58,7 @@ function createRoom(options: {
     presence: {
       async markConnected() {
         options.onMarkConnected?.();
+        if (options.markConnectedError !== undefined) throw options.markConnectedError;
         return new Date(1);
       },
       async markAllOffline(_lease: unknown, now?: Date) {
@@ -61,6 +66,13 @@ function createRoom(options: {
         return new Date(120_001);
       },
     },
+    leases: {
+      async renew(lease: unknown) {
+        if (options.renewLeaseError !== undefined) throw options.renewLeaseError;
+        return lease;
+      },
+    },
+    onLeaseLost: options.onLeaseLost,
   } as never);
   const room = new RoomClass() as TestRoom;
   Object.assign(room, {
@@ -189,5 +201,51 @@ describe("room authentication reservation", () => {
     await assert.rejects(room.onJoin(reconnectingClient, options, claims), /API unavailable/);
 
     assert.equal(offlineCalls, 0);
+  });
+
+  it("stops room work and reports lease loss exactly once", async () => {
+    const losses: unknown[] = [];
+    let clockStops = 0;
+    let locks = 0;
+    let disconnects = 0;
+    const lost = new Error("lease fenced");
+    const room = createRoom({
+      renewLeaseError: lost,
+      onLeaseLost: (error) => { losses.push(error); },
+    });
+    Object.assign(room, {
+      roomClock: { stop: () => { clockStops += 1; } },
+      lock: async () => { locks += 1; },
+      disconnect: async () => { disconnects += 1; },
+    });
+    const renewLease = (room as unknown as { renewLease(): Promise<void> }).renewLease.bind(room);
+
+    await renewLease();
+    await renewLease();
+
+    assert.deepEqual(losses, [lost]);
+    assert.equal(clockStops, 1);
+    assert.equal(locks, 1);
+    assert.equal(disconnects, 1);
+  });
+
+  it("reports lease loss while attaching a socket", async () => {
+    const losses: unknown[] = [];
+    const lost = new RoomLeaseUnavailableError("lease fenced");
+    const room = createRoom({
+      markConnectedError: lost,
+      onLeaseLost: (error) => { losses.push(error); },
+    });
+    Object.assign(room, {
+      lock: async () => undefined,
+      disconnect: async () => undefined,
+    });
+    const options = { contractVersion: 1, gameId: authenticated.gameId, ticket: "A".repeat(43) };
+    const reconnectingClient = client("session_lease_lost");
+    const claims = await room.onAuth(reconnectingClient, options);
+
+    await assert.rejects(room.onJoin(reconnectingClient, options, claims), RoomLeaseUnavailableError);
+
+    assert.deepEqual(losses, [lost]);
   });
 });
