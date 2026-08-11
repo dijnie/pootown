@@ -204,6 +204,56 @@ describe("gameplay turn transition", () => {
     assert.deepEqual(result.events.map((event) => event.type), ["diceRolled", "playerMoved", "jailEntered"]);
   });
 
+  it("advances after a failed jail roll and resolves doubles release through landing", () => {
+    const initial = aggregate();
+    const jailed = {
+      ...initial,
+      players: initial.players.map((player, index) => index === 0 && player !== null
+        ? { ...player, position: 10, inJail: true }
+        : player),
+    } as ActiveGameplayAggregateState;
+    const remains = transitionGameplayTurn(jailed, command("rollDice"), {
+      actor: { kind: "player", playerId: firstPlayer }, nowMs: 6_000, randomSource: new DiceSource([0, 1]),
+    });
+    assert.equal(remains.ok, true);
+    if (!remains.ok) return;
+    assert.equal(remains.state.players[0]?.inJail, true);
+    assert.equal(remains.state.players[0]?.jailTurns, 1);
+    assert.equal(remains.state.turn.currentSeatIndex, 1);
+    assert.deepEqual(remains.events.map((event) => event.type), ["diceRolled"]);
+
+    const released = transitionGameplayTurn(jailed, command("resolveRandomDice"), {
+      actor: { kind: "internal" }, nowMs: 6_000, randomSource: new DiceSource([2, 2]),
+    });
+    assert.equal(released.ok, true);
+    if (!released.ok) return;
+    assert.equal(released.state.players[0]?.inJail, false);
+    assert.equal(released.state.players[0]?.position, 16);
+    assert.equal(released.state.turn.phase, "awaitingPropertyDecision");
+    assert.deepEqual(released.events.map((event) => event.type), ["diceRolled", "jailExited", "playerMoved"]);
+    assert.equal(isValidActiveGameplayAggregateState(released.state), true);
+  });
+
+  it("records mandatory bankruptcy after an unaffordable third jail roll", () => {
+    const initial = aggregate();
+    const jailed = {
+      ...initial,
+      players: initial.players.map((player, index) => index === 0 && player !== null
+        ? { ...player, cash: matchCash(49n), position: 10, inJail: true, jailTurns: 2 }
+        : player),
+    } as ActiveGameplayAggregateState;
+    const result = transitionGameplayTurn(jailed, command("rollDice"), {
+      actor: { kind: "player", playerId: firstPlayer }, nowMs: 6_500, randomSource: new DiceSource([0, 1]),
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.state.players[0]?.cash, 0n);
+    assert.equal(result.state.players[0]?.inJail, false);
+    assert.equal(result.state.bankruptcyRequiredSeatIndex, 0);
+    assert.equal(result.state.turn.phase, "awaitingEndTurn");
+    assert.equal(isValidActiveGameplayAggregateState(result.state), true);
+  });
+
   it("ends only a completed non-double turn and moves to the next stable active seat", () => {
     const initial = aggregate();
     const rolled = transitionGameplayTurn(initial, command("rollDice"), {

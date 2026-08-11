@@ -29,6 +29,7 @@ export type GameplayDomainEvent =
       readonly salaryCollected: bigint;
     }
   | { readonly type: "jailEntered"; readonly playerId: PlayerId; readonly reason: "space" | "threeDoubles" }
+  | { readonly type: "jailExited"; readonly playerId: PlayerId; readonly method: "doubles" | "fine" | "card" }
   | { readonly type: "propertyPurchased"; readonly playerId: PlayerId; readonly position: number; readonly price: bigint }
   | { readonly type: "propertyDeclined"; readonly playerId: PlayerId; readonly position: number; readonly price: bigint }
   | {

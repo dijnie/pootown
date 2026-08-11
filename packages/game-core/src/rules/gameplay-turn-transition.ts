@@ -15,6 +15,7 @@ import { checkedAddMatchCash, matchCash } from "../model/money";
 import type { RandomCheckpoint, RandomSource } from "../ports/random-source";
 import { BOARD_SPACES } from "./board-definition";
 import { GAMEPLAY_POLICY } from "./gameplay-policy";
+import { resolveJailRoll } from "./jail-rules";
 import { applyDoubles, moveBy, rollDice } from "./movement";
 
 export interface GameplayTransitionContext {
@@ -294,9 +295,6 @@ export function transitionGameplayTurn(
   if (state.turn.phase !== "awaitingRoll") {
     return reject(state, "INVALID_COMMAND", "dice can only be rolled at the start of a turn");
   }
-  if (current.inJail) {
-    return reject(state, "COMMAND_UNSUPPORTED", "jailed dice resolution is handled by the jail transition");
-  }
   const commandRandomSource = forkRandomSource(context.randomSource, state.rng);
   if (commandRandomSource === null) {
     return reject(state, "INVALID_STATE", "random source cannot fork the persisted checkpoint");
@@ -318,6 +316,73 @@ export function transitionGameplayTurn(
     dice: Object.freeze([...dice.dice]) as unknown as readonly [number, number],
   });
   const diceEvent = Object.freeze({ type: "diceRolled" as const, playerId: current.playerId, dice: frozenDice });
+
+  if (current.inJail) {
+    const jail = resolveJailRoll(current, dice);
+    if (!jail.ok) return reject(state, "INVALID_STATE", `jailed dice resolution failed: ${jail.code}`);
+    const players = state.players.map((player, index) => player === null ? null : index === current.seatIndex
+      ? { ...player, ...jail.state }
+      : player);
+    if (jail.outcome === "remains") {
+      const advanced = advanceTurn(state, context.nowMs);
+      if (advanced === null) return reject(state, "INVALID_STATE", "no next active player is available");
+      return {
+        ok: true,
+        state: freezeActiveGameplayState(state, {
+          stateVersion: state.stateVersion + 1,
+          players,
+          turn: advanced.turn,
+          lastDice: dice,
+          rng: nextCheckpoint,
+        }),
+        events: Object.freeze([diceEvent]),
+      };
+    }
+    if (jail.outcome === "bankruptcyRequired") {
+      const turn = createClockedGameplayTurn("awaitingEndTurn", current.seatIndex, context.nowMs);
+      if (turn === null) return reject(state, "INVALID_STATE", "bankruptcy deadline exceeds limits");
+      return {
+        ok: true,
+        state: freezeActiveGameplayState(state, {
+          stateVersion: state.stateVersion + 1,
+          players,
+          turn,
+          bankruptcyRequiredSeatIndex: current.seatIndex,
+          lastDice: dice,
+          rng: nextCheckpoint,
+        }),
+        events: Object.freeze([diceEvent]),
+      };
+    }
+    if (jail.movement === null || jail.releaseMethod === null) {
+      return reject(state, "INVALID_STATE", "jail release did not provide its movement");
+    }
+    const turn = phaseForLanding(state, jail.movement.to, current.seatIndex, context.nowMs, false);
+    if (turn === null) return reject(state, "INVALID_STATE", "jail release landing cannot be resolved");
+    const next = freezeActiveGameplayState(state, {
+      stateVersion: state.stateVersion + 1,
+      players,
+      turn,
+      lastDice: dice,
+      rng: nextCheckpoint,
+    });
+    return {
+      ok: true,
+      state: next,
+      events: Object.freeze([
+        diceEvent,
+        Object.freeze({ type: "jailExited" as const, playerId: current.playerId, method: jail.releaseMethod }),
+        Object.freeze({
+          type: "playerMoved" as const,
+          playerId: current.playerId,
+          fromPosition: jail.movement.from,
+          toPosition: jail.movement.to,
+          passedGo: jail.movement.passedGo,
+          salaryCollected: 0n,
+        }),
+      ]),
+    };
+  }
 
   if (doubles.sentToJail) {
     const advanced = advanceTurn(state, context.nowMs);
