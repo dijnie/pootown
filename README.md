@@ -94,7 +94,7 @@ The project consists of three core components:
    * Handles full game logic
    * Deployable to Solana devnet or localnet
 
-2. **Web Frontend** (`web/`)
+2. **Web Frontend** (`apps/web/`)
 
    * Next.js 15 with React 19
    * Privy authentication
@@ -112,8 +112,8 @@ The project consists of three core components:
 
 ### Core
 
-* **Node.js** ≥ 20.x
-* **pnpm** ≥ 8.x
+* **Node.js** 24.x (pinned in `.node-version`)
+* **pnpm** 11.x (pinned in `package.json`)
 * **Rust** ≥ 1.75.0
 * **Solana CLI** ≥ 1.18.0
 * **Anchor CLI** ≥ 0.31.1
@@ -149,13 +149,7 @@ cd pootown
 pnpm install
 ```
 
-### 3. install web frontend dependencies
-
-```bash
-cd web
-pnpm install
-cd ..
-```
+The root install also installs `apps/web`; the repository uses one root lockfile.
 
 ### 4. install indexer dependencies
 
@@ -239,9 +233,9 @@ chmod +x run.sh
 ### 10. generate frontend sdk
 
 ```bash
-cd web
+cd apps/web
 node codama.mjs
-cd ..
+cd ../..
 ```
 
 ### 11. setup database (indexer)
@@ -272,7 +266,7 @@ pnpm run dev
 * web frontend
 
 ```bash
-cd web
+cd apps/web
 pnpm run dev
 ```
 

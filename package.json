@@ -1,8 +1,20 @@
 {
+  "name": "pootown",
+  "private": true,
   "license": "ISC",
+  "packageManager": "pnpm@11.13.1",
+  "engines": {
+    "node": ">=24.18.0 <25",
+    "pnpm": ">=11.13.1 <12"
+  },
   "scripts": {
-    "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
-    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
+    "build": "pnpm -r --if-present build",
+    "lint": "pnpm -r --if-present lint",
+    "test": "pnpm legacy:characterize && pnpm -r --if-present test",
+    "quality": "pnpm lint && pnpm test && pnpm build",
+    "legacy:test": "anchor test",
+    "legacy:characterize": "ts-mocha -p ./tsconfig.json -t 30000 tests/characterization/**/*.test.ts",
+    "lint:fix": "prettier \"{tests,scripts}/**/*.{js,ts,json,md}\" -w"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.0",

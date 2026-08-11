@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "sourceAuthority": {
+    "constantsSha256": "54ae0ff2cf2fed8ae22fabd8e6b2cbe7860f3586636fcf7464315f2eec424d45",
+    "stateSha256": "e3711de364fdb3282e29b8fe3bfb626bd138e70fbcdb63fa78a6b35cfbb3ce2a"
+  },
+  "frozenDecisions": {
+    "minimumPlayers": 2,
+    "maximumPlayers": 4,
+    "startingInMatchCash": 1500,
+    "boardSize": 40,
+    "chanceCardCount": 5,
+    "communityChestCardCount": 5,
+    "exactTimeLimitTieBreak": "stable-seat-order",
+    "randomnessTarget": "secure-server",
+    "accountCoinIsDistinctFromInMatchCash": true
+  },
+  "ruleFamilies": [
+    { "name": "lifecycle-and-seating", "status": "source-evidenced", "evidence": ["tests/initialize-game.test.ts", "tests/join-game.test.ts", "tests/start-game.test.ts"] },
+    { "name": "turn-and-movement", "status": "source-evidenced", "evidence": ["tests/roll-dice.test.ts", "tests/move-player.test.ts", "tests/end-turn.test.ts"] },
+    { "name": "board-and-property", "status": "source-evidenced", "evidence": ["programs/panda-monopoly/src/constants.rs", "programs/panda-monopoly/src/instructions/property.rs"] },
+    { "name": "chance-and-community-cards", "status": "source-evidenced", "evidence": ["programs/panda-monopoly/src/instructions/special_spaces.rs"] },
+    { "name": "jail", "status": "source-evidenced", "evidence": ["tests/pay-jail-fine.test.ts"] },
+    { "name": "trade", "status": "source-evidenced", "evidence": ["programs/panda-monopoly/src/instructions/trading.rs"] },
+    { "name": "bankruptcy-timeout-and-terminal", "status": "source-evidenced", "evidence": ["programs/panda-monopoly/src/instructions/bankruptcy.rs", "programs/panda-monopoly/src/instructions/permissionless.rs", "programs/panda-monopoly/src/instructions/end_game.rs"] },
+    { "name": "auction", "status": "excluded", "reason": "The legacy instruction is commented out and no current UI action executes it." },
+    { "name": "unreachable-community-effects", "status": "excluded", "reason": "The legacy handler logs these paths as unimplemented; they are not target no-ops." }
+  ],
+  "approvedDivergences": [
+    {
+      "name": "community-chest-free-parking",
+      "legacyDestination": 21,
+      "targetDestination": 20,
+      "reason": "Approved correction to the board's Free Parking position."
+    }
+  ]
+}

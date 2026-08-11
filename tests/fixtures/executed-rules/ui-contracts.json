@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "provider": {
+    "source": "apps/web/components/providers/game-provider.tsx",
+    "identityFields": ["gameAddress", "currentPlayerAddress", "signer"],
+    "stateFields": ["gameState", "players", "properties", "gameLoading", "gameError"],
+    "commands": [
+      "startGame", "resetGame", "closeGame", "joinGame", "leaveGame",
+      "cancelGame", "rollDice", "buyProperty", "skipProperty", "payRent",
+      "endTurn", "drawChanceCard", "drawCommunityChestCard", "payJailFine",
+      "useGetOutOfJailCard", "buildHouse", "buildHotel", "sellBuilding",
+      "payMevTax", "payPriorityFeeTax", "declareBankruptcy", "endGame",
+      "claimReward", "createTrade", "acceptTrade", "rejectTrade", "cancelTrade"
+    ],
+    "visibleGuards": [
+      "isCurrentTurn", "showRollDice", "showEndTurn", "showPayJailFine",
+      "showGetOutOfJailCard", "isCurrentPlayerTurn", "canRollDice", "canPlayerAct"
+    ]
+  },
+  "gameStateHook": {
+    "source": "apps/web/hooks/useGameState.tsx",
+    "inputs": ["gameAddress", "enabled", "subscribeToUpdates"],
+    "outputs": [
+      "gameData", "players", "properties", "error", "isLoading", "isError",
+      "refetch", "playerCount", "isSubscribed"
+    ]
+  },
+  "gameListHook": {
+    "source": "apps/web/hooks/useGames.ts",
+    "inputs": ["enabled", "onError", "onSuccess"],
+    "outputs": ["data", "error", "isLoading", "isError", "refetch"]
+  }
+}

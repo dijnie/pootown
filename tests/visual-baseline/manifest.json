@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-08-11",
+  "source": "unchanged legacy web UI after the web-to-apps/web move",
+  "viewports": {
+    "desktop": { "width": 1440, "height": 900 },
+    "mobile": { "width": 390, "height": 844 }
+  },
+  "artifacts": [
+    { "route": "/", "viewport": "desktop", "file": "desktop/landing.png", "sha256": "65a7ce87ca7e46494743071548506b872086e2b1673ebf6ebd1833e282ac893d" },
+    { "route": "/lobby", "viewport": "desktop", "file": "desktop/lobby.png", "sha256": "7b44af5aba6e06341534734439a4dc89ce969e4aff84974d72b88c9a44942304" },
+    { "route": "/leaderboard", "viewport": "desktop", "file": "desktop/leaderboard.png", "sha256": "854dfb6f695e03a77d70bd6ff7ed51c18e9963d8c9c063e6b69e67d430b756e2" },
+    { "route": "/game-result", "viewport": "desktop", "file": "desktop/game-result.png", "sha256": "9217a549805c065feba35812414d3fcbd66eb491c419be08c3592205b27aa1b5" },
+    { "route": "/", "viewport": "mobile", "file": "mobile/landing.png", "sha256": "f95fb6fed24eccacff0095c52aa0a669a3ec816a6c46887c4fef2b956b627642" }
+  ],
+  "limitations": [
+    "Authenticated dialogs require a real Privy application and funded local game state; no secret or production identity was used for baseline capture.",
+    "Board, dialog, and authenticated interaction baselines remain missing and keep Phase 1 incomplete; invalid blank/error screenshots were removed."
+  ]
+}

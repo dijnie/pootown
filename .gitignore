@@ -7,6 +7,8 @@ test-ledger
 test-ledger-magicblock
 .yarn
 .trae
+tests/utils/devnet-wallets.json
+tests/visual-baseline/actual/
 .next
 # env files
 .env
