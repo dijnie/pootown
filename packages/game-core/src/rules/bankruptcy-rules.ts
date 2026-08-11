@@ -5,6 +5,8 @@ import { isValidBuildingInventory, type BuildingInventory } from "./building-rul
 import { GAMEPLAY_POLICY } from "./gameplay-policy";
 import { isValidPropertyStates, type PropertyState } from "./property-rules";
 
+const verifiedBankruptcyResolutions = new WeakSet<object>();
+
 export interface BankruptcyPlayerState {
   readonly seatIndex: number;
   readonly status: "active" | "eliminated";
@@ -43,6 +45,12 @@ function isPlainObject(value: unknown): boolean {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
+}
+
+export type SuccessfulBankruptcyResolution = Extract<BankruptcyResolutionResult, { readonly ok: true }>;
+
+export function isVerifiedBankruptcyResolution(value: unknown): value is SuccessfulBankruptcyResolution {
+  return isPlainObject(value) && verifiedBankruptcyResolutions.has(value as object);
 }
 
 function validPlayer(player: BankruptcyPlayerState, index: number): boolean {
@@ -141,7 +149,7 @@ export function resolveBankruptcy(
   const nextProperties: PropertyState[] = [];
   for (const property of properties) {
     if (property.ownerSeatIndex !== bankruptSeatIndex) {
-      nextProperties.push(property);
+      nextProperties.push({ ...property });
       continue;
     }
     const definition = BOARD_SPACES[property.position];
@@ -177,7 +185,7 @@ export function resolveBankruptcy(
     return { ok: false, code: "INVALID_BANKRUPTCY_STATE" };
   }
   const nextPlayers = players.map((player, index) => index !== bankruptSeatIndex || player === null
-    ? player
+    ? (player === null ? null : { ...player })
     : {
         ...player,
         status: "eliminated" as const,
@@ -191,11 +199,16 @@ export function resolveBankruptcy(
   const remainingActiveSeatIndexes = nextPlayers.flatMap((player) =>
     player?.status === "active" ? [player.seatIndex] : [],
   );
-  return {
+  const frozenPlayers = Object.freeze(nextPlayers.map((player) =>
+    player === null ? null : Object.freeze(player),
+  ));
+  const frozenProperties = Object.freeze(nextProperties.map((property) => Object.freeze(property)));
+  const frozenInventory = Object.freeze(nextInventory);
+  const result: SuccessfulBankruptcyResolution = Object.freeze({
     ok: true,
-    players: nextPlayers,
-    properties: nextProperties,
-    inventory: nextInventory,
+    players: frozenPlayers,
+    properties: frozenProperties,
+    inventory: frozenInventory,
     bankCash: nextBankCash,
     bankruptSeatIndex,
     liquidationValue,
@@ -204,5 +217,7 @@ export function resolveBankruptcy(
     hotelsReturned,
     endConditionMet: remainingActiveSeatIndexes.length <= 1,
     winnerSeatIndex: remainingActiveSeatIndexes.length === 1 ? remainingActiveSeatIndexes[0]! : null,
-  };
+  });
+  verifiedBankruptcyResolutions.add(result);
+  return result;
 }

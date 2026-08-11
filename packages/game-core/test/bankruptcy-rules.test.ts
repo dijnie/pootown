@@ -81,6 +81,14 @@ describe("bankruptcy rules", () => {
     assert.equal(result.properties[5]?.ownerSeatIndex, null);
     assert.equal(result.endConditionMet, true);
     assert.equal(result.winnerSeatIndex, 1);
+    assert.equal(Object.isFrozen(result), true);
+    assert.equal(Object.isFrozen(result.players), true);
+    assert.equal(Object.isFrozen(result.players[1]), true);
+    assert.equal(Object.isFrozen(result.properties), true);
+    assert.equal(Object.isFrozen(result.properties[0]), true);
+    assert.equal(Object.isFrozen(result.inventory), true);
+    assert.equal(Object.isFrozen(playerStates[1]), false);
+    assert.equal(Object.isFrozen(properties[0]), false);
     assert.strictEqual(playerStates[0]?.status, "active");
     assert.strictEqual(properties[1]?.houses, 2);
   });
