@@ -84,6 +84,17 @@ export class RoomLeaseRepository {
           "UPDATE realtime.room_checkpoints SET fencing_token = $2 WHERE room_id = $1",
           [roomId, fencingToken.toString()],
         );
+        await client.query(
+          `
+            UPDATE realtime.room_presence
+            SET fencing_token = $2,
+                all_offline_at = COALESCE(all_offline_at, $3::timestamptz),
+                abort_deadline_at = COALESCE(abort_deadline_at, $3::timestamptz + interval '120 seconds'),
+                updated_at = $4
+            WHERE room_id = $1
+          `,
+          [roomId, fencingToken.toString(), current.lease_until, effectiveNow],
+        );
       }
       await client.query(
         `

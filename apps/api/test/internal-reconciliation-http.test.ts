@@ -29,6 +29,7 @@ describe("internal reconciliation HTTP route", () => {
                 waitingSessionsCancelled: 0,
                 expiredAdmissionsReleased: 0,
                 terminalSettlementsCommitted: 0,
+                offlineSessionsAborted: 0,
                 sessionsMarkedForRecovery: 0,
                 alreadyRunning: false,
               });
@@ -59,6 +60,7 @@ describe("internal reconciliation HTTP route", () => {
       waitingSessionsCancelled: 0,
       expiredAdmissionsReleased: 0,
       terminalSettlementsCommitted: 0,
+      offlineSessionsAborted: 0,
       sessionsMarkedForRecovery: 0,
       alreadyRunning: false,
     });

@@ -12,6 +12,7 @@ import { Es256ServiceCredentialProvider } from "./auth/service-credential.js";
 import { registerHealthRoutes } from "./health.js";
 import { CheckpointRepository } from "./persistence/checkpoint-repository.js";
 import { CommandRepository } from "./persistence/command-repository.js";
+import { PresenceRepository } from "./persistence/presence-repository.js";
 import { RoomLeaseRepository } from "./persistence/room-lease.js";
 import { createGameRoomClass } from "./rooms/game-room.js";
 
@@ -69,6 +70,7 @@ export async function createGameServerRuntime(config: GameServerConfig): Promise
   const leases = new RoomLeaseRepository(pool, config.instanceId, config.leaseDurationMs);
   const checkpoints = new CheckpointRepository(pool, leases);
   const commands = new CommandRepository(pool, leases);
+  const presence = new PresenceRepository(pool, leases);
   let acceptingConnections = false;
   let shutdownPromise: Promise<void> | undefined;
   registerHealthRoutes(app, pool, { isAcceptingConnections: () => acceptingConnections });
@@ -88,6 +90,7 @@ export async function createGameServerRuntime(config: GameServerConfig): Promise
     commands,
     leaseRenewMs: config.leaseRenewMs,
     leases,
+    presence,
   })).filterBy(["gameId"]);
 
   return {

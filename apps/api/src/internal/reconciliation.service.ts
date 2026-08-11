@@ -56,7 +56,7 @@ export class ReconciliationService implements OnApplicationBootstrap {
   }
 
   public async run(now = new Date()): Promise<ReconciliationResponse> {
-    if (this.running) return this.response(true, 0, 0, 0, 0);
+    if (this.running) return this.response(true, 0, 0, 0, 0, 0);
     this.running = true;
     let lockClient: PoolClient | undefined;
     let lockAcquired = false;
@@ -67,17 +67,19 @@ export class ReconciliationService implements OnApplicationBootstrap {
         [RECONCILIATION_LOCK],
       );
       lockAcquired = lock.rows[0]?.acquired === true;
-      if (!lockAcquired) return this.response(true, 0, 0, 0, 0);
+      if (!lockAcquired) return this.response(true, 0, 0, 0, 0, 0);
 
       const waitingSessionsCancelled = await this.cancelExpiredWaitingSessions(now);
       const expiredAdmissionsReleased = await this.releaseExpiredAdmissions(now);
       const terminal = await this.commitTerminalSettlements(now);
+      const offlineSessionsAborted = await this.abortOfflineSessions(now);
       const sessionsMarkedForRecovery = terminal.markedForRecovery + await this.markUnrecoverableSessions(now);
       return this.response(
         false,
         waitingSessionsCancelled,
         expiredAdmissionsReleased,
         terminal.committed,
+        offlineSessionsAborted,
         sessionsMarkedForRecovery,
       );
     } finally {
@@ -87,6 +89,39 @@ export class ReconciliationService implements OnApplicationBootstrap {
       lockClient?.release();
       this.running = false;
     }
+  }
+
+  private async abortOfflineSessions(now: Date): Promise<number> {
+    const candidates = await this.pool.query<{ game_session_id: string }>(
+      `
+        SELECT candidate.game_session_id
+        FROM realtime.api_offline_abort_candidates candidate
+        JOIN game.game_sessions session ON session.id = candidate.game_session_id
+        LEFT JOIN economy.game_settlements settlement ON settlement.game_session_id = session.id
+        WHERE session.lifecycle IN ('active', 'recovery_required')
+          AND candidate.abort_deadline_at <= $1
+          AND settlement.id IS NULL
+        ORDER BY candidate.abort_deadline_at, candidate.game_session_id
+        LIMIT $2
+      `,
+      [now, RECONCILIATION_BATCH_SIZE],
+    );
+    let count = 0;
+    for (const candidate of candidates.rows) {
+      try {
+        await this.settlements.abort(
+          candidate.game_session_id,
+          { contractVersion: CONTRACT_VERSION, reason: "reconnectWindowExpired" },
+          `reconcile:offline-abort:${candidate.game_session_id}`,
+          now,
+        );
+        count += 1;
+      } catch (error: unknown) {
+        if (this.isSettledRace(error)) continue;
+        this.logger.warn(`Offline abort reconciliation failed for ${candidate.game_session_id}: ${this.safeErrorCode(error)}`);
+      }
+    }
+    return count;
   }
 
   private async cancelExpiredWaitingSessions(now: Date): Promise<number> {
@@ -299,6 +334,7 @@ export class ReconciliationService implements OnApplicationBootstrap {
     waitingSessionsCancelled: number,
     expiredAdmissionsReleased: number,
     terminalSettlementsCommitted: number,
+    offlineSessionsAborted: number,
     sessionsMarkedForRecovery: number,
   ): ReconciliationResponse {
     return ReconciliationResponseSchema.parse({
@@ -306,6 +342,7 @@ export class ReconciliationService implements OnApplicationBootstrap {
       waitingSessionsCancelled,
       expiredAdmissionsReleased,
       terminalSettlementsCommitted,
+      offlineSessionsAborted,
       sessionsMarkedForRecovery,
       alreadyRunning,
     });

@@ -76,6 +76,7 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       { name: "0005-internal-session-transitions.sql", checksum_length: 64 },
       { name: "0006-terminal-settlement-invariants.sql", checksum_length: 64 },
       { name: "0007-reconciliation-recovery-status.sql", checksum_length: 64 },
+      { name: "0008-room-offline-recovery.sql", checksum_length: 64 },
     ]);
     const owners = await pool.query<{ tableowner: string }>(`
       SELECT DISTINCT tableowner
@@ -387,7 +388,9 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
         await client.query("ROLLBACK");
       }
       await denied(() => client.query("SELECT * FROM realtime.room_checkpoints"));
+      await denied(() => client.query("SELECT * FROM realtime.room_presence"));
       await client.query("SELECT game_session_id, room_id, lease_until, checkpoint_state_version, runtime_evidence_at FROM realtime.api_room_recovery_status");
+      await client.query("SELECT game_session_id, room_id, abort_deadline_at FROM realtime.api_offline_abort_candidates");
       const recoveryGrant = await client.query<{ allowed: boolean }>(
         "SELECT has_column_privilege('api_runtime', 'game.game_sessions', 'recovery_required_at', 'UPDATE') AS allowed",
       );
@@ -401,6 +404,12 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
           (room_id, game_session_id, instance_id, lease_until, fencing_token)
         VALUES ('room_1', 'game_1', 'instance_1', now() + interval '1 minute', 1)
       `);
+      await client.query(`
+        INSERT INTO realtime.room_presence
+          (room_id, game_session_id, fencing_token, all_offline_at, abort_deadline_at)
+        VALUES ('room_1', 'game_1', 1, now(), now() + interval '120 seconds')
+      `);
+      await client.query("UPDATE realtime.room_presence SET all_offline_at = NULL, abort_deadline_at = NULL WHERE room_id = 'room_1'");
       for (const statement of [
         "SELECT * FROM identity.users",
         "INSERT INTO identity.users (id, privy_did) VALUES ('attack', 'did:privy:attack')",
@@ -686,12 +695,12 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       await cp(resolve(process.cwd(), "src/database/roles/provision.sql"), rolesFile);
       const options = { migrationsDirectory, rolesFile };
 
-      await writeFile(join(migrationsDirectory, "0008-noop.sql"), "SELECT 1;\n");
+      await writeFile(join(migrationsDirectory, "0009-noop.sql"), "SELECT 1;\n");
       await runMigrations(databaseUrl, options);
-      await rm(join(migrationsDirectory, "0008-noop.sql"));
+      await rm(join(migrationsDirectory, "0009-noop.sql"));
       await assert.rejects(runMigrations(databaseUrl, options), /Applied migration files are missing/);
 
-      await writeFile(join(migrationsDirectory, "0008-noop.sql"), "SELECT 1;\n");
+      await writeFile(join(migrationsDirectory, "0009-noop.sql"), "SELECT 1;\n");
       await writeFile(join(migrationsDirectory, "0000-retroactive.sql"), "SELECT 1;\n");
       await assert.rejects(runMigrations(databaseUrl, options), /Retroactive migrations are not allowed/);
       await rm(join(migrationsDirectory, "0000-retroactive.sql"));

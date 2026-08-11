@@ -125,6 +125,7 @@ export const ReconciliationResponseSchema = z.strictObject({
   waitingSessionsCancelled: z.number().int().nonnegative(),
   expiredAdmissionsReleased: z.number().int().nonnegative(),
   terminalSettlementsCommitted: z.number().int().nonnegative(),
+  offlineSessionsAborted: z.number().int().nonnegative(),
   sessionsMarkedForRecovery: z.number().int().nonnegative(),
   alreadyRunning: z.boolean(),
 });

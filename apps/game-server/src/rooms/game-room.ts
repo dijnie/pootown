@@ -43,6 +43,7 @@ import {
   checkpointChecksum,
 } from "../persistence/checkpoint-repository.js";
 import { CommandRepository } from "../persistence/command-repository.js";
+import { PresenceRepository } from "../persistence/presence-repository.js";
 import { RoomLeaseRepository, type RoomLease } from "../persistence/room-lease.js";
 import { SecureRandomSource } from "../random/secure-random-source.js";
 import { RoomClock } from "../timers/room-clock.js";
@@ -77,6 +78,7 @@ export interface GameRoomDependencies {
   readonly commands: CommandRepository;
   readonly leaseRenewMs: number;
   readonly leases: RoomLeaseRepository;
+  readonly presence: PresenceRepository;
 }
 
 export type GameRoomConstructor = new () => Room;
@@ -204,7 +206,6 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
       this.clock.setInterval(() => {
         void this.renewLease();
       }, dependencies.leaseRenewMs);
-      if ("players" in privateState) await this.lock();
     }
 
     public override async onAuth(client: Client, rawOptions: unknown): Promise<AuthenticatedRoomPlayer> {
@@ -229,7 +230,8 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
       const authenticated = await this.authenticator.authenticate(options);
       const bootstrap = await dependencies.api.bootstrap(authenticated.gameId);
       const admitted = bootstrap.players.find((player) => player.playerId === authenticated.playerId);
-      if (bootstrap.roomId !== authenticated.roomId || admitted?.seatIndex !== authenticated.seatIndex ||
+      if ((bootstrap.lifecycle !== "open" && bootstrap.lifecycle !== "active") ||
+          bootstrap.roomId !== authenticated.roomId || admitted?.seatIndex !== authenticated.seatIndex ||
           this.commandHandler === undefined) {
         throw new TicketAuthenticationError("API admission is not present in the room bootstrap");
       }
@@ -248,31 +250,65 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
       return authenticated;
     }
 
-    public override onJoin(
+    public override async onJoin(
       client: GameClient,
       _options: unknown,
       authenticated: AuthenticatedRoomPlayer,
-    ): void {
+    ): Promise<void> {
       const session = this.activeSessions.get(authenticated.playerId);
       if (session === undefined || session.clientSessionId !== client.sessionId) {
         throw new TicketAuthenticationError("Room authentication reservation is no longer active");
+      }
+      if (this.lease === undefined) throw new TicketAuthenticationError("Room lease is unavailable");
+      const previousAllOfflineAt = await dependencies.presence.markConnected(this.lease);
+      try {
+        const bootstrap = await dependencies.api.bootstrap(authenticated.gameId);
+        if (bootstrap.roomId !== authenticated.roomId ||
+            (bootstrap.lifecycle !== "open" && bootstrap.lifecycle !== "active")) {
+          throw new TicketAuthenticationError("Session is no longer available for attachment");
+        }
+      } catch (error) {
+        if (!this.hasAttachedClient()) {
+          await dependencies.presence.markAllOffline(this.lease, previousAllOfflineAt ?? undefined)
+            .catch(() => undefined);
+        }
+        throw error;
       }
       session.joined = true;
       client.userData = authenticated;
     }
 
-    public override onLeave(client: GameClient): void {
+    public override async onLeave(client: GameClient): Promise<void> {
+      await this.detachClient(client);
+    }
+
+    public override async onDrop(client: GameClient): Promise<void> {
+      await this.detachClient(client);
+    }
+
+    private async detachClient(client: GameClient): Promise<void> {
       const authenticated = client.userData;
       if (authenticated !== undefined &&
           this.activeSessions.get(authenticated.playerId)?.clientSessionId === client.sessionId) {
         this.activeSessions.delete(authenticated.playerId);
+        if (!this.hasAttachedClient() && this.lease !== undefined) {
+          await dependencies.presence.markAllOffline(this.lease);
+        }
       }
+    }
+
+    private hasAttachedClient(): boolean {
+      return [...this.activeSessions.values()].some((session) => session.joined);
     }
 
     public override async onDispose(): Promise<void> {
       this.disposed = true;
       this.roomClock?.stop();
       if (this.settlementRetryTimer !== undefined) clearTimeout(this.settlementRetryTimer);
+      const state = this.commandHandler?.currentState();
+      if (this.lease !== undefined && state !== undefined && "players" in state && state.lifecycle === "inProgress") {
+        await dependencies.presence.markAllOffline(this.lease).catch(() => undefined);
+      }
       if (this.lease !== undefined) await dependencies.leases.release(this.lease).catch(() => false);
     }
 
@@ -302,14 +338,12 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
       try {
         if (startsGame) {
           this.starting = true;
-          await this.lock();
           await this.waitForAuthentications();
         }
         const result = await this.commandHandler.handle(client.userData, payload);
         if (!result.accepted) {
           if (startsGame) {
             this.starting = false;
-            await this.unlock();
           }
           client.send(result.rejection.type, result.rejection);
           return;
@@ -341,7 +375,6 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
         if (error instanceof InvalidRoomCommandError) {
           if (startsGame && this.pendingStartPublication === undefined) {
             this.starting = false;
-            await this.unlock();
           }
           client.error(4400, "Room command is invalid");
           return;
@@ -387,6 +420,7 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
       if (!("players" in state) || state.lifecycle !== "finished" || this.settlementInFlight ||
           this.settlementRetryTimer !== undefined || this.disposed) return;
       this.roomClock?.stop();
+      void this.lock();
       void this.settleFinishedState(state);
     }
 

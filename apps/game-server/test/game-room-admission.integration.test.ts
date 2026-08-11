@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer, type Server as HttpServer } from "node:http";
 import { after, before, describe, it } from "node:test";
-import { Server as ColyseusServer } from "@colyseus/core";
+import { Server as ColyseusServer, matchMaker } from "@colyseus/core";
 import { Client as ColyseusClient, type Room as ClientRoom } from "@colyseus/sdk";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import type { SessionBootstrapResponse, TicketConsumeResponse } from "@pootown/game-contracts/internal";
@@ -16,6 +16,7 @@ import express from "express";
 
 import { CheckpointRepository } from "../src/persistence/checkpoint-repository.js";
 import { CommandRepository } from "../src/persistence/command-repository.js";
+import { PresenceRepository } from "../src/persistence/presence-repository.js";
 import { RoomLeaseRepository } from "../src/persistence/room-lease.js";
 import { createGameRoomClass } from "../src/rooms/game-room.js";
 import type { GameRoomStateInstance } from "../src/rooms/game-room-state.js";
@@ -45,8 +46,10 @@ describe("live Colyseus ticket admission", { timeout: 120_000 }, () => {
   let httpServer: HttpServer;
   let endpoint: string;
   let bootstrapCalls = 0;
+  let apiStarted = false;
   let startedCalls = 0;
   let releaseSecondConsume: (() => void) | undefined;
+  let blockSecondConsume = true;
   let secondConsumeStarted: Promise<void>;
   let signalSecondConsumeStarted: (() => void) | undefined;
   const rooms: ClientRoom[] = [];
@@ -58,6 +61,7 @@ describe("live Colyseus ticket admission", { timeout: 120_000 }, () => {
     const leases = new RoomLeaseRepository(database.pool, "admission-instance", 30_000);
     const checkpoints = new CheckpointRepository(database.pool, leases);
     const commands = new CommandRepository(database.pool, leases);
+    const presence = new PresenceRepository(database.pool, leases);
     const bootstrap: SessionBootstrapResponse = {
       contractVersion: 1,
       gameId: "game_admission" as SessionBootstrapResponse["gameId"],
@@ -96,15 +100,22 @@ describe("live Colyseus ticket admission", { timeout: 120_000 }, () => {
         async bootstrap(gameId) {
           assert.equal(gameId, bootstrap.gameId);
           bootstrapCalls += 1;
-          return bootstrapCalls === 1 ? { ...bootstrap, players: [bootstrap.players[0]!] } : bootstrap;
+          if (bootstrapCalls === 1) return { ...bootstrap, players: [bootstrap.players[0]!] };
+          return apiStarted ? {
+            ...bootstrap,
+            lifecycle: "active",
+            stateVersion: 3,
+            startedAtMs: Date.parse("2026-08-11T21:00:01.000Z"),
+          } : bootstrap;
         },
         async consumeTicket(request) {
           assert.equal(request.gameId, bootstrap.gameId);
           assert.equal(request.roomId, bootstrap.roomId);
           assert.match(request.roomInstanceId, /^admission-instance:/);
-          if (request.ticket === secondTicket) {
+          if (request.ticket === secondTicket && blockSecondConsume) {
             signalSecondConsumeStarted?.();
             await new Promise<void>((resolve) => { releaseSecondConsume = resolve; });
+            blockSecondConsume = false;
           }
           return responseFor(request.ticket);
         },
@@ -115,6 +126,7 @@ describe("live Colyseus ticket admission", { timeout: 120_000 }, () => {
           assert.match(idempotencyKey, /^realtime-start-[a-f0-9]{64}$/);
           startedCalls += 1;
           if (startedCalls === 1) throw new Error("simulated post-commit API outage");
+          apiStarted = true;
           return {
             contractVersion: 1,
             operationId: "operation_started" as never,
@@ -129,6 +141,7 @@ describe("live Colyseus ticket admission", { timeout: 120_000 }, () => {
       commands,
       leaseRenewMs: 10_000,
       leases,
+      presence,
     })).filterBy(["gameId"]);
     await gameServer.listen(0);
     const address = httpServer.address();
@@ -249,5 +262,50 @@ describe("live Colyseus ticket admission", { timeout: 120_000 }, () => {
     assert.equal(durable.rows[0]?.commands, 2);
     assert.equal(durable.rows[0]?.events, 2);
     assert.match(durable.rows[0]?.instance_id as string, /^admission-instance:/);
+
+    await within(second.leave(), "second player disconnect");
+    const serverRoom = await matchMaker.getRoomById(owner.roomId);
+    assert.equal(serverRoom?.locked, false);
+    assert.equal(serverRoom?.clients, 1);
+    const reconnected = await within(
+      new ColyseusClient(endpoint).joinById(owner.roomId, options(secondTicket)),
+      "second player reconnect",
+    );
+    rooms.push(reconnected);
+    const reconnectedPrivate = new Promise<unknown>((resolve) => reconnected.onMessage("player.private", resolve));
+    reconnected.send("player.private.sync", {});
+    assert.equal(
+      PlayerPrivateStateMessageSchema.parse(await within(reconnectedPrivate, "reconnected private state")).view.playerId,
+      "player_second",
+    );
+    let connectedPresence = await database.pool.query(
+      "SELECT abort_deadline_at FROM realtime.room_presence WHERE room_id = $1",
+      ["room_admission"],
+    );
+    for (let attempt = 0; attempt < 100 && connectedPresence.rowCount !== 1; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      connectedPresence = await database.pool.query(
+        "SELECT abort_deadline_at FROM realtime.room_presence WHERE room_id = $1",
+        ["room_admission"],
+      );
+    }
+    assert.deepEqual(connectedPresence.rows, [{ abort_deadline_at: null }]);
+    await within(owner.leave(), "owner disconnect");
+    await within(reconnected.leave(), "last player disconnect");
+    let offlinePresence = await database.pool.query<{ window_ms: string }>(
+      "SELECT extract(epoch FROM (abort_deadline_at - all_offline_at)) * 1000 AS window_ms FROM realtime.room_presence WHERE room_id = $1",
+      ["room_admission"],
+    );
+    for (let attempt = 0; attempt < 100 &&
+      (offlinePresence.rows[0]?.window_ms === null || offlinePresence.rows[0]?.window_ms === undefined);
+      attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      offlinePresence = await database.pool.query<{ window_ms: string }>(
+        "SELECT extract(epoch FROM (abort_deadline_at - all_offline_at)) * 1000 AS window_ms FROM realtime.room_presence WHERE room_id = $1",
+        ["room_admission"],
+      );
+    }
+    assert.equal(Number(offlinePresence.rows[0]?.window_ms), 120_000);
+    rooms.length = 0;
   });
 });

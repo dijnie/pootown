@@ -285,24 +285,19 @@ describe("session reconciliation", { timeout: 120_000 }, () => {
       [missing.gameId, missing.roomId, missing.winnerPlayerId, lateProofAt],
     );
     const atEvidenceBoundary = await reconciliation.run(new Date(recentLeaseExpiry.getTime() + RECOVERY_GRACE_MS));
-    assert.equal(atEvidenceBoundary.sessionsMarkedForRecovery, 1);
+    assert.equal(atEvidenceBoundary.sessionsMarkedForRecovery, 0);
+    assert.equal(atEvidenceBoundary.offlineSessionsAborted, 1);
     assert.equal(atEvidenceBoundary.terminalSettlementsCommitted, 1);
     const expiredState = await pool.query<{ lifecycle: string }>(
       "SELECT lifecycle FROM game.game_sessions WHERE id = $1",
       [recentlyExpired.gameId],
     );
-    assert.deepEqual(expiredState.rows, [{ lifecycle: "recovery_required" }]);
+    assert.deepEqual(expiredState.rows, [{ lifecycle: "settled" }]);
     await settlements.abort(
       healthy.gameId,
       { contractVersion: 1, reason: "operatorDecision" },
       "healthy-runtime:test-cleanup",
       new Date(runAt.getTime() + 1),
-    );
-    await settlements.abort(
-      recentlyExpired.gameId,
-      { contractVersion: 1, reason: "operatorDecision" },
-      "recently-expired-runtime:test-cleanup",
-      new Date(recentLeaseExpiry.getTime() + RECOVERY_GRACE_MS + 1),
     );
   });
 
@@ -392,6 +387,53 @@ describe("session reconciliation", { timeout: 120_000 }, () => {
     );
   });
 
+  it("aborts and refunds only after every player remains offline for the full window", async () => {
+    const startedAt = new Date("2026-08-12T02:00:00.000Z");
+    const game = await startTwoPlayerGame("offline-abort", startedAt);
+    const allOfflineAt = new Date(startedAt.getTime() + 10_000);
+    const deadline = new Date(allOfflineAt.getTime() + 120_000);
+    await insertLiveCheckpoint(game, allOfflineAt, new Date(deadline.getTime() + 60_000));
+    await pool.query(
+      `
+        INSERT INTO realtime.room_presence
+          (room_id, game_session_id, fencing_token, all_offline_at, abort_deadline_at, updated_at)
+        VALUES ($1, $2, 1, $3, $4, $3)
+      `,
+      [game.roomId, game.gameId, allOfflineAt, deadline],
+    );
+
+    const before = await reconciliation.run(new Date(deadline.getTime() - 1));
+    assert.equal(before.offlineSessionsAborted, 0);
+    const atDeadline = await reconciliation.run(deadline);
+    assert.equal(atDeadline.offlineSessionsAborted, 1);
+    const repeated = await reconciliation.run(new Date(deadline.getTime() + 1));
+    assert.equal(repeated.offlineSessionsAborted, 0);
+    const state = await pool.query(
+      `
+        SELECT
+          (SELECT lifecycle FROM game.game_sessions WHERE id = $1) AS lifecycle,
+          (SELECT count(*)::int FROM economy.coin_reservations
+            WHERE game_session_id = $1 AND status = 'released') AS released,
+          (SELECT count(*)::int FROM economy.game_settlements
+            WHERE game_session_id = $1 AND kind = 'aborted') AS aborted
+      `,
+      [game.gameId],
+    );
+    assert.deepEqual(state.rows, [{ lifecycle: "settled", released: 2, aborted: 1 }]);
+
+    const crashed = await startTwoPlayerGame("offline-crash", new Date(deadline.getTime() + 10));
+    const leaseExpiredAt = new Date(deadline.getTime() + 20_000);
+    await insertLiveCheckpoint(crashed, new Date(leaseExpiredAt.getTime() - 1), leaseExpiredAt);
+    assert.equal(
+      (await reconciliation.run(new Date(leaseExpiredAt.getTime() + 119_999))).offlineSessionsAborted,
+      0,
+    );
+    assert.equal(
+      (await reconciliation.run(new Date(leaseExpiredAt.getTime() + 120_000))).offlineSessionsAborted,
+      1,
+    );
+  });
+
   it("uses a database advisory lock across API instances", async () => {
     const client = await pool.connect();
     try {
@@ -402,6 +444,7 @@ describe("session reconciliation", { timeout: 120_000 }, () => {
         waitingSessionsCancelled: 0,
         expiredAdmissionsReleased: 0,
         terminalSettlementsCommitted: 0,
+        offlineSessionsAborted: 0,
         sessionsMarkedForRecovery: 0,
         alreadyRunning: true,
       });

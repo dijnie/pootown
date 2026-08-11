@@ -158,11 +158,13 @@ describe("HTTP API contracts", () => {
       waitingSessionsCancelled: 1,
       expiredAdmissionsReleased: 2,
       terminalSettlementsCommitted: 3,
+      offlineSessionsAborted: 2,
       sessionsMarkedForRecovery: 4,
       alreadyRunning: false,
     };
     assert.equal(ReconciliationResponseSchema.safeParse(response).success, true);
     assert.equal(ReconciliationResponseSchema.safeParse({ ...response, sessionsMarkedForRecovery: -1 }).success, false);
+    assert.equal(ReconciliationResponseSchema.safeParse({ ...response, offlineSessionsAborted: -1 }).success, false);
     assert.equal(ReconciliationResponseSchema.safeParse({ ...response, privateCheckpoint: {} }).success, false);
   });
 
