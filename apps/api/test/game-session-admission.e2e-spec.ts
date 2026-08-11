@@ -19,6 +19,10 @@ let economy: EconomyService;
 let sessions: GameSessionsService;
 let internalSessions: InternalSessionService;
 
+// Keep scenario clocks after database-owned creation timestamps so these tests
+// remain deterministic regardless of the wall-clock time on their run date.
+const SCENARIO_DATE = "2099-08-11";
+
 function principal(id: string): AuthenticatedPrincipal {
   return { privyDid: `did:privy:${id}`, privySessionId: `session_${id}` };
 }
@@ -124,13 +128,13 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
       principal("creator"),
       "classic_100",
       "create:creator:1",
-      new Date("2026-08-11T14:00:00.000Z"),
+      new Date(`${SCENARIO_DATE}T14:00:00.000Z`),
     );
     const replay = await sessions.createSession(
       principal("creator"),
       "classic_100",
       "create:creator:1",
-      new Date("2026-08-11T14:00:01.000Z"),
+      new Date(`${SCENARIO_DATE}T14:00:01.000Z`),
     );
     assert.equal(replay.session.gameId, first.session.gameId);
     assert.equal(replay.admission.reservationId, first.admission.reservationId);
@@ -150,12 +154,12 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
       creatorPlayerId: first.admission.playerId,
       maximumPlayers: 4,
       timeLimitMs: 3_600_000,
-      createdAtMs: new Date("2026-08-11T14:00:00.000Z").getTime(),
+      createdAtMs: new Date(`${SCENARIO_DATE}T14:00:00.000Z`).getTime(),
       startedAtMs: null,
       players: [{
         playerId: first.admission.playerId,
         seatIndex: 0,
-        joinedAtMs: new Date("2026-08-11T14:00:00.000Z").getTime(),
+        joinedAtMs: new Date(`${SCENARIO_DATE}T14:00:00.000Z`).getTime(),
       }],
     });
     assert.equal(JSON.stringify(bootstrap).includes("user"), false);
@@ -186,14 +190,14 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
 
     await pool.query(`
       UPDATE game.realtime_tickets
-      SET consumed_at = '2026-08-11T14:00:01.000Z', consumed_by_room_instance = 'room-instance-1'
+      SET consumed_at = '2099-08-11T14:00:01.000Z', consumed_by_room_instance = 'room-instance-1'
       WHERE game_session_id = $1
     `, [first.session.gameId]);
     const consumedReplay = await sessions.createSession(
       principal("creator"),
       "classic_100",
       "create:creator:1",
-      new Date("2026-08-11T14:00:01.000Z"),
+      new Date(`${SCENARIO_DATE}T14:00:01.000Z`),
     );
     assert.equal(consumedReplay.admission.playerId, first.admission.playerId);
     assert.equal(consumedReplay.admission.reservationId, first.admission.reservationId);
@@ -201,7 +205,7 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
       principal("creator"),
       "classic_100",
       "create:creator:1",
-      new Date("2026-08-11T14:00:01.000Z"),
+      new Date(`${SCENARIO_DATE}T14:00:01.000Z`),
     );
     assert.equal(sameTimestampReplay.admission.playerId, first.admission.playerId);
     const replayState = await pool.query(`
@@ -243,7 +247,7 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
     const left = await sessions.createSession(principal("balance-owner-left"), "classic_100", "create:balance-left");
     const right = await sessions.createSession(principal("balance-owner-right"), "classic_100", "create:balance-right");
     const contender = await economy.provisionPrincipal(principal("balance-contender"));
-    await spendTo(contender.user.userId, 100n, new Date("2026-08-11T15:00:00.000Z"));
+    await spendTo(contender.user.userId, 100n, new Date(`${SCENARIO_DATE}T15:00:00.000Z`));
 
     const attempts = await Promise.allSettled([
       sessions.joinSession(principal("balance-contender"), left.session.gameId, "join:balance:left"),

@@ -24,6 +24,10 @@ let settlements: InternalSettlementService;
 let economy: EconomyService;
 let readModels: ReadModelsService;
 
+// Keep scenario clocks after database-owned creation timestamps so operation
+// ordering does not depend on the wall-clock time when the suite runs.
+const SCENARIO_DATE = "2099-08-11";
+
 function principal(id: string): AuthenticatedPrincipal {
   return { privyDid: `did:privy:${id}`, privySessionId: `session_${id}` };
 }
@@ -149,7 +153,7 @@ describe("internal settlement authority", { timeout: 120_000 }, () => {
   });
 
   it("captures every reservation and credits only the proof-bound winner exactly once", async () => {
-    const now = new Date("2026-08-11T15:00:00.000Z");
+    const now = new Date(`${SCENARIO_DATE}T15:00:00.000Z`);
     const game = await startTwoPlayerGame("complete", now);
     const checksum = "ab".repeat(32);
     await insertTerminalProof(game, checksum, new Date(now.getTime() + 5));
@@ -274,7 +278,7 @@ describe("internal settlement authority", { timeout: 120_000 }, () => {
   });
 
   it("refunds an explicitly aborted active game once and cannot later settle it", async () => {
-    const now = new Date("2026-08-11T16:00:00.000Z");
+    const now = new Date(`${SCENARIO_DATE}T16:00:00.000Z`);
     const game = await startTwoPlayerGame("abort", now);
     const request = { contractVersion: 1 as const, reason: "reconnectWindowExpired" as const };
     const results = await Promise.all(
@@ -326,7 +330,7 @@ describe("internal settlement authority", { timeout: 120_000 }, () => {
   });
 
   it("settles current seats after a historical participant released and rejoined", async () => {
-    const now = new Date("2026-08-11T17:00:00.000Z");
+    const now = new Date(`${SCENARIO_DATE}T17:00:00.000Z`);
     const creator = await sessions.createSession(principal("rejoin-creator"), "classic_100", "rejoin:create", now);
     await sessions.joinSession(principal("rejoin-player"), creator.session.gameId, "rejoin:first", new Date(now.getTime() + 1));
     await sessions.releaseJoinIntent(
@@ -398,7 +402,7 @@ describe("internal settlement authority", { timeout: 120_000 }, () => {
   });
 
   it("settles a zero-cost game without manufacturing ledger entries", async () => {
-    const now = new Date("2026-08-11T18:00:00.000Z");
+    const now = new Date(`${SCENARIO_DATE}T18:00:00.000Z`);
     const creator = await sessions.createSession(principal("free-settle-creator"), "free", "free-settle:create", now);
     const joiner = await sessions.joinSession(
       principal("free-settle-joiner"),
@@ -450,7 +454,7 @@ describe("internal settlement authority", { timeout: 120_000 }, () => {
   });
 
   it("rejects a winner balance overflow before mutating settlement state", async () => {
-    const now = new Date("2026-08-11T19:00:00.000Z");
+    const now = new Date(`${SCENARIO_DATE}T19:00:00.000Z`);
     const game = await startTwoPlayerGame("overflow", now);
     const checksum = "56".repeat(32);
     await insertTerminalProof(game, checksum, new Date(now.getTime() + 5));
