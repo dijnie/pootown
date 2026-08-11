@@ -6,11 +6,15 @@ sharedWorkspaceLockfile: true
 linkWorkspacePackages: true
 saveWorkspaceProtocol: rolling
 
+overrides:
+  'rpc-websockets@9.1.3>ws': 8.18.3
+
 allowBuilds:
   '@reown/appkit': true
   bigint-buffer: true
   bufferutil: true
   cpu-features: true
+  msgpackr-extract: true
   protobufjs: true
   sharp: true
   ssh2: true

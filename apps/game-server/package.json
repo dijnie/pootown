@@ -1,0 +1,36 @@
+{
+  "name": "@pootown/game-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src test --max-warnings=0 && tsc -p tsconfig.test.json --noEmit",
+    "start": "node dist/main.js",
+    "test": "tsc -p tsconfig.test.json && node --test $(find .test-dist/test -maxdepth 1 -name '*.test.js' ! -name '*.integration.test.js' -print)",
+    "test:integration": "tsc -p tsconfig.test.json && node --test .test-dist/test/*.integration.test.js"
+  },
+  "dependencies": {
+    "@colyseus/core": "0.17.42",
+    "@colyseus/schema": "4.0.30",
+    "@colyseus/ws-transport": "0.17.13",
+    "@pootown/game-contracts": "workspace:^",
+    "@pootown/game-core": "workspace:^",
+    "express": "5.2.1",
+    "jose": "4.15.9",
+    "pg": "8.23.0",
+    "pino": "10.3.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "12.1.0",
+    "@types/express": "5.0.6",
+    "@types/node": "24.3.1",
+    "@types/pg": "8.21.0",
+    "@typescript-eslint/parser": "8.65.0",
+    "eslint": "10.8.1",
+    "testcontainers": "12.1.0",
+    "typescript": "5.9.2"
+  }
+}

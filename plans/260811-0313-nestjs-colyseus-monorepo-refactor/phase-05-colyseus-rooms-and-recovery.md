@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Colyseus Rooms and Recovery"
-status: pending
+status: in-progress
 priority: P1
 effort: "2-2.5 weeks"
 dependencies: [3, 4]

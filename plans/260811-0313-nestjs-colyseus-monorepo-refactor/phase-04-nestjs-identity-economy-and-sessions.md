@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "NestJS Identity Economy and Sessions"
-status: pending
+status: in-progress
 priority: P1
 effort: "2-2.5 weeks"
 dependencies: [2]
