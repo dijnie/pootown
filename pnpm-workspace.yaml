@@ -10,7 +10,10 @@ allowBuilds:
   '@reown/appkit': true
   bigint-buffer: true
   bufferutil: true
+  cpu-features: true
+  protobufjs: true
   sharp: true
+  ssh2: true
   unrs-resolver: true
   utf-8-validate: true
 

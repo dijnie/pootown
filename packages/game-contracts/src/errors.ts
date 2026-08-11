@@ -23,6 +23,8 @@ export const GameErrorCodeSchema = z.enum([
 ]);
 
 export const ApiErrorCodeSchema = z.enum([
+  "REQUEST_INVALID",
+  "INTERNAL_ERROR",
   "AUTH_TOKEN_MISSING",
   "AUTH_TOKEN_INVALID",
   "AUTH_TOKEN_EXPIRED",

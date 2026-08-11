@@ -1,0 +1,43 @@
+{
+  "name": "@pootown/api",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src test --max-warnings=0 && tsc -p tsconfig.test.json --noEmit",
+    "start": "node dist/main.js",
+    "test": "tsc -p tsconfig.test.json && node --test .test-dist/test/*.test.js",
+    "test:e2e": "tsc -p tsconfig.test.json && node --test .test-dist/test/*.e2e-spec.js",
+    "db:migrate": "node dist/database/migration-cli.js up",
+    "db:migrate:test": "tsc -p tsconfig.test.json && node --test .test-dist/test/database-migrations.e2e-spec.js"
+  },
+  "dependencies": {
+    "@fastify/helmet": "13.1.0",
+    "@nestjs/common": "11.1.29",
+    "@nestjs/config": "4.0.4",
+    "@nestjs/core": "11.1.29",
+    "@nestjs/platform-fastify": "11.1.29",
+    "@nestjs/schedule": "6.1.3",
+    "@nestjs/throttler": "6.5.0",
+    "@pootown/game-contracts": "workspace:^",
+    "jose": "4.15.9",
+    "nestjs-pino": "4.6.1",
+    "pg": "8.23.0",
+    "pino": "10.3.1",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "11.1.29",
+    "@types/node": "24.3.1",
+    "@types/pg": "8.21.0",
+    "@types/supertest": "7.2.1",
+    "@typescript-eslint/parser": "8.65.0",
+    "eslint": "10.8.1",
+    "supertest": "7.2.2",
+    "testcontainers": "12.1.0",
+    "typescript": "5.9.2"
+  }
+}
