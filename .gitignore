@@ -10,6 +10,8 @@ test-ledger-magicblock
 tests/utils/devnet-wallets.json
 tests/visual-baseline/actual/
 .next
+dist
+.test-dist
 # env files
 .env
 .env

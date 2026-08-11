@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Shared Contracts and Core Lifecycle"
-status: in-progress
+status: complete
 priority: P1
 effort: "1.5-2 weeks"
 dependencies: [1]
@@ -70,11 +70,11 @@ pnpm exec madge --extensions ts --circular packages/game-core/src packages/game-
 
 ## Success Criteria
 
-- [ ] Both packages build independently and expose one documented public entrypoint each.
-- [ ] Lifecycle fixtures match Phase 1; invalid actions return stable typed errors.
-- [ ] No framework, network, DB, wallet, or Solana import exists in core/contracts.
-- [ ] Account coin and in-match cash cannot be assigned interchangeably at compile time.
-- [ ] Snapshot/replay and strict contract tests pass.
+- [x] Both packages build independently and expose one documented public entrypoint each.
+- [x] Lifecycle fixtures match Phase 1; invalid actions return stable typed errors without mutating state.
+- [x] No framework, network, DB, wallet, or Solana import exists in core/contracts.
+- [x] Account coin and in-match cash cannot be assigned interchangeably at compile time.
+- [x] Snapshot/replay and strict contract tests pass.
 
 ## Risk Assessment
 
@@ -94,4 +94,4 @@ Use allowlisted schemas and constant-safe opaque ticket/token placeholders in fi
 
 ## Next Steps
 
-Phases 3 and 4 can begin in parallel against frozen package APIs. Unresolved questions: none.
+Phases 3 and 4 can begin against the frozen package APIs. Evidence and implementation decisions are recorded in [the Phase 2 report](./reports/phase-02-shared-contracts-and-core-lifecycle.md). Unresolved questions: none.
