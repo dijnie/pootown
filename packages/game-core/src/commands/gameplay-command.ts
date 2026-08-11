@@ -42,6 +42,26 @@ export type GameplayJailCommand =
   | PayJailFineGameplayCommand
   | UseJailCardGameplayCommand;
 
+export interface DrawChanceCardGameplayCommand extends VersionedGameplayCommand {
+  readonly type: "drawChanceCard";
+  readonly payload: Record<string, never>;
+}
+
+export interface DrawCommunityChestCardGameplayCommand extends VersionedGameplayCommand {
+  readonly type: "drawCommunityChestCard";
+  readonly payload: Record<string, never>;
+}
+
+export interface ResolveRandomCardGameplayCommand extends VersionedGameplayCommand {
+  readonly type: "resolveRandomCard";
+  readonly payload: { readonly deck: "chance" | "communityChest" };
+}
+
+export type GameplayCardCommand =
+  | DrawChanceCardGameplayCommand
+  | DrawCommunityChestCardGameplayCommand
+  | ResolveRandomCardGameplayCommand;
+
 export interface BuyPropertyGameplayCommand extends PositionedGameplayCommand {
   readonly type: "buyProperty";
 }
@@ -87,7 +107,7 @@ export type GameplayPropertyCommand =
   | PayMevTaxGameplayCommand
   | PayPriorityFeeTaxGameplayCommand;
 
-export type GameplayCommand = GameplayTurnCommand | GameplayPropertyCommand | GameplayJailCommand;
+export type GameplayCommand = GameplayTurnCommand | GameplayPropertyCommand | GameplayJailCommand | GameplayCardCommand;
 
 export type GameplayCommandActor =
   | { readonly kind: "player"; readonly playerId: PlayerId }

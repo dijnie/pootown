@@ -30,6 +30,13 @@ export type GameplayDomainEvent =
     }
   | { readonly type: "jailEntered"; readonly playerId: PlayerId; readonly reason: "space" | "threeDoubles" }
   | { readonly type: "jailExited"; readonly playerId: PlayerId; readonly method: "doubles" | "fine" | "card" }
+  | {
+      readonly type: "cardDrawn";
+      readonly playerId: PlayerId;
+      readonly deck: "chance" | "communityChest";
+      readonly cardId: number;
+      readonly effect: "money" | "move" | "getOutOfJailFree" | "collectFromPlayers" | "moveToNearest" | "repairFree";
+    }
   | { readonly type: "propertyPurchased"; readonly playerId: PlayerId; readonly position: number; readonly price: bigint }
   | { readonly type: "propertyDeclined"; readonly playerId: PlayerId; readonly position: number; readonly price: bigint }
   | {

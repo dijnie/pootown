@@ -12,9 +12,15 @@ import type {
 import { isValidActiveGameplayAggregateState } from "../model/gameplay-aggregate-state";
 import { MAX_STATE_VERSION } from "../model/game-state";
 import { checkedAddMatchCash, matchCash } from "../model/money";
-import type { RandomCheckpoint, RandomSource } from "../ports/random-source";
+import type { RandomSource } from "../ports/random-source";
 import { BOARD_SPACES } from "./board-definition";
 import { GAMEPLAY_POLICY } from "./gameplay-policy";
+import {
+  canResumeGameplayCheckpoint,
+  forkGameplayRandomSource,
+  isAdvancedGameplayCheckpoint,
+  readRandomCheckpoint,
+} from "./gameplay-random-support";
 import { resolveJailRoll } from "./jail-rules";
 import { applyDoubles, moveBy, rollDice } from "./movement";
 
@@ -49,47 +55,6 @@ function safeEpoch(value: number): boolean {
   return Number.isSafeInteger(value) && value >= 0;
 }
 
-function checkpoint(randomSource: RandomSource): RandomCheckpoint | null {
-  let value: unknown;
-  try {
-    value = randomSource.checkpoint();
-  } catch {
-    return null;
-  }
-  if (
-    typeof value !== "object" || value === null || Array.isArray(value) ||
-    !("algorithm" in value) || typeof value.algorithm !== "string" || value.algorithm.length < 1 || value.algorithm.length > 64 ||
-    !("state" in value) || typeof value.state !== "string" || value.state.length < 1 || value.state.length > 4_096 ||
-    !("draws" in value) || !Number.isSafeInteger(value.draws) || (value.draws as number) < 0 ||
-    !("bytesConsumed" in value) || !Number.isSafeInteger(value.bytesConsumed) || (value.bytesConsumed as number) < 0
-  ) return null;
-  return {
-    algorithm: value.algorithm,
-    state: value.state,
-    draws: value.draws as number,
-    bytesConsumed: value.bytesConsumed as number,
-  };
-}
-
-function canResume(randomSource: RandomSource, value: RandomCheckpoint): boolean {
-  try {
-    return randomSource.canResume(value) === true;
-  } catch {
-    return false;
-  }
-}
-
-function forkRandomSource(randomSource: RandomSource, value: RandomCheckpoint): RandomSource | null {
-  if (typeof randomSource.fork !== "function") return null;
-  let fork: RandomSource | null;
-  try {
-    fork = randomSource.fork(value);
-  } catch {
-    return null;
-  }
-  return fork !== null && fork !== randomSource && canResume(fork, value) ? fork : null;
-}
-
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
@@ -105,14 +70,6 @@ function validCommand(command: GameplayTurnCommand): boolean {
   if (command.type !== "rollDice" && command.type !== "resolveRandomDice" && command.type !== "endTurn") return false;
   if (!isPlainObject(command.payload)) return false;
   return Object.keys(command.payload).length === 0;
-}
-
-function checkpointAdvanced(previous: RandomCheckpoint, next: RandomCheckpoint): boolean {
-  return (
-    next.algorithm === previous.algorithm &&
-    next.draws > previous.draws &&
-    next.bytesConsumed >= previous.bytesConsumed + 2
-  );
 }
 
 export function activeGameplayPlayer(state: ActiveGameplayAggregateState): GameplayPlayerState | null {
@@ -147,7 +104,7 @@ export function createClockedGameplayTurn(
   return null;
 }
 
-function phaseForLanding(
+export function createGameplayLandingTurn(
   state: ActiveGameplayAggregateState,
   position: number,
   currentSeatIndex: number,
@@ -296,17 +253,17 @@ export function transitionGameplayTurn(
   if (state.turn.phase !== "awaitingRoll") {
     return reject(state, "INVALID_COMMAND", "dice can only be rolled at the start of a turn");
   }
-  const commandRandomSource = forkRandomSource(context.randomSource, state.rng);
+  const commandRandomSource = forkGameplayRandomSource(context.randomSource, state.rng);
   if (commandRandomSource === null) {
     return reject(state, "INVALID_STATE", "random source cannot fork the persisted checkpoint");
   }
   const dice = rollDice(commandRandomSource);
   if (dice === null) return reject(state, "INVALID_STATE", "random source failed to produce valid dice");
-  const nextCheckpoint = checkpoint(commandRandomSource);
+  const nextCheckpoint = readRandomCheckpoint(commandRandomSource);
   if (
     nextCheckpoint === null ||
-    !checkpointAdvanced(state.rng, nextCheckpoint) ||
-    !canResume(commandRandomSource, nextCheckpoint)
+    !isAdvancedGameplayCheckpoint(state.rng, nextCheckpoint, 2) ||
+    !canResumeGameplayCheckpoint(commandRandomSource, nextCheckpoint)
   ) {
     return reject(state, "INVALID_STATE", "random source returned an invalid checkpoint");
   }
@@ -358,7 +315,7 @@ export function transitionGameplayTurn(
     if (jail.movement === null || jail.releaseMethod === null) {
       return reject(state, "INVALID_STATE", "jail release did not provide its movement");
     }
-    const turn = phaseForLanding(state, jail.movement.to, current.seatIndex, context.nowMs, false);
+    const turn = createGameplayLandingTurn(state, jail.movement.to, current.seatIndex, context.nowMs, false);
     if (turn === null) return reject(state, "INVALID_STATE", "jail release landing cannot be resolved");
     const next = freezeActiveGameplayState(state, {
       stateVersion: state.stateVersion + 1,
@@ -454,7 +411,7 @@ export function transitionGameplayTurn(
       ]),
     };
   }
-  const turn = phaseForLanding(state, movement.to, current.seatIndex, context.nowMs, dice.isDoubles);
+  const turn = createGameplayLandingTurn(state, movement.to, current.seatIndex, context.nowMs, dice.isDoubles);
   if (turn === null) return reject(state, "INVALID_STATE", "landing cannot be resolved");
   const players = state.players.map((player, index) => player === null ? null : index === current.seatIndex
     ? { ...player, cash, position: movement.to, consecutiveDoubles: doubles.consecutiveDoubles }
