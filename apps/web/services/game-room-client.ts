@@ -13,6 +13,8 @@ import {
   type ServerMessage,
 } from "@pootown/game-contracts";
 
+import { normalizeGameServerEndpoint } from "./game-server-origin";
+
 type RoomWireState = {
   publicStateJson: string;
   stateVersion: number;
@@ -78,13 +80,9 @@ function parsePublicState(wire: RoomWireState): RoomPublicState {
 }
 
 export function createColyseusRoomConnector(endpoint: string): RoomConnector {
-  const parsed = new URL(endpoint);
-  if ((parsed.protocol !== "ws:" && parsed.protocol !== "wss:") ||
-      parsed.username !== "" || parsed.password !== "" || parsed.search !== "" || parsed.hash !== "") {
-    throw new Error("Game server endpoint must be a safe WebSocket URL");
-  }
+  const normalizedEndpoint = normalizeGameServerEndpoint(endpoint);
   const client = import("@colyseus/sdk").then(({ Client }) =>
-    new Client(parsed.toString().replace(/\/$/, "")));
+    new Client(normalizedEndpoint));
   return async (rawOptions) => {
     const options = RoomAdmissionOptionsSchema.parse(rawOptions);
     return (await client).joinOrCreate<RoomWireState>("game", options) as unknown as RoomTransport;
