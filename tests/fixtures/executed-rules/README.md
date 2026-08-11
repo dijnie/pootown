@@ -1,10 +1,14 @@
 # Executed rules authority
 
 `manifest.json` freezes the implementation boundary before the off-chain port.
-The lifecycle fixture is verified against the compiled Anchor program on a
-local Solana validator. Other families remain explicitly source-evidenced until
-they gain an executable observation. The characterization test fails if those
-sources disappear or the two primary source hashes drift.
+The pre-start lifecycle and start-runtime-boundary fixtures are verified against
+the compiled Anchor program on a local Solana validator with the pinned
+MagicBlock programs. The start attempt currently rolls back after delegation
+and event logs because the SBF runtime reports an access violation; the fixture
+does not describe that attempt as a successful state transition. Other families
+remain explicitly source-evidenced until they gain an executable observation.
+The characterization test fails if those sources disappear or the two primary
+source hashes drift.
 
 The source hashes are provenance, not a target API. Phase 2 and Phase 3 consume
 transport-neutral expectations and must not reproduce PDA, signature, wallet,

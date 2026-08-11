@@ -13,3 +13,10 @@ allowBuilds:
   sharp: true
   unrs-resolver: true
   utf-8-validate: true
+
+minimumReleaseAgeExclude:
+  - '@magicblock-labs/ephemeral-validator-darwin-arm64@0.13.20'
+  - '@magicblock-labs/ephemeral-validator-darwin-x64@0.13.20'
+  - '@magicblock-labs/ephemeral-validator-linux-arm64@0.13.20'
+  - '@magicblock-labs/ephemeral-validator-linux-x64@0.13.20'
+  - '@magicblock-labs/ephemeral-validator@0.13.20'

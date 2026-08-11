@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-readonly anchor_image="solanafoundation/anchor:v0.31.1"
+readonly anchor_image="solanafoundation/anchor@sha256:21ab8a16e19df4301a198d7a55ab2988549aa2d996e6b5ad229c1d95b9f2d326"
 readonly validator_name="pootown-legacy-characterization"
 readonly rpc_url="http://127.0.0.1:8899"
 readonly workspace_path="$(pwd)"
@@ -11,6 +11,17 @@ readonly host_gid="$(id -g)"
 readonly program_binary_path="${workspace_path}/target/deploy/panda_monopoly.so"
 readonly program_idl_path="${workspace_path}/target/idl/panda_monopoly.json"
 readonly program_types_path="${workspace_path}/target/types/panda_monopoly.ts"
+readonly magicblock_package_path="$(node -e '
+  const { realpathSync } = require("node:fs");
+  const { dirname } = require("node:path");
+  process.stdout.write(
+    realpathSync(
+      dirname(
+        require.resolve("@magicblock-labs/ephemeral-validator/package.json")
+      )
+    )
+  );
+')"
 
 temporary_directory="$(mktemp -d /tmp/pootown-characterization-XXXXXX)"
 validator_started=false
@@ -78,17 +89,27 @@ docker run --detach --rm \
   -p 8900:8900 \
   -p 9900:9900 \
   -v "${workspace_path}:/workspace:ro" \
+  -v "${magicblock_package_path}:/magicblock:ro" \
   "${anchor_image}" \
   sh -lc '
     program_binary=$(find /workspace -type f -path "*/deploy/panda_monopoly.so" -print -quit)
     test -n "${program_binary}"
-    exec solana-test-validator \
+    set -- solana-test-validator \
       --reset \
       --bind-address 0.0.0.0 \
       --rpc-port 8899 \
       --faucet-port 9900 \
       --ledger /tmp/pootown-ledger \
       --bpf-program 4vucUqMcXN4sgLsgnrXTUC9U7ACZ5DmoRBLbWt4vrnyR "${program_binary}"
+    for magicblock_program in /magicblock/bin/local-dumps/*.so; do
+      program_id=$(basename "${magicblock_program}" .so)
+      set -- "$@" --bpf-program "${program_id}" "${magicblock_program}"
+    done
+    for magicblock_account in /magicblock/bin/local-dumps/*.json; do
+      account_id=$(basename "${magicblock_account}" .json)
+      set -- "$@" --account "${account_id}" "${magicblock_account}"
+    done
+    exec "$@"
   ' >/dev/null
 validator_started=true
 

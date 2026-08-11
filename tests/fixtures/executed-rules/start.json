@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "scenario": "minimum-player-start-runtime-failure",
+  "before": {
+    "status": "waitingForPlayers",
+    "currentPlayers": 2
+  },
+  "attempt": {
+    "outcome": "rolledBack",
+    "observedSteps": [
+      "gameDelegationSucceeded",
+      "playerDelegationSucceeded",
+      "gameStartedEventEmitted",
+      "postHandlerRuntimeAccessViolation"
+    ],
+    "event": {
+      "name": "gameStarted",
+      "totalPlayers": 2
+    }
+  },
+  "after": {
+    "status": "waitingForPlayers",
+    "stateCommitted": false,
+    "accountsRemainProgramOwned": 3
+  }
+}

@@ -25,11 +25,11 @@
       ]
     },
     {
-      "name": "start-and-in-progress-lifecycle",
-      "status": "source-evidenced",
+      "name": "start-runtime-boundary",
+      "status": "characterized",
       "evidence": [
-        "tests/start-game.test.ts",
-        "programs/panda-monopoly/src/instructions/initialize.rs"
+        "tests/characterization/anchor-start.test.ts",
+        "tests/fixtures/executed-rules/start.json"
       ]
     },
     {
