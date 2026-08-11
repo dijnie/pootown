@@ -88,6 +88,24 @@ export const GameDefinitionViewSchema = z.strictObject({
   policyVersion: z.number().int().positive().max(2_147_483_647),
 });
 
+export const GameDefinitionsResponseSchema = z.strictObject({
+  contractVersion: ContractVersionSchema,
+  items: z.array(GameDefinitionViewSchema).max(100),
+}).superRefine((response, context) => {
+  const ids = new Set<string>();
+  for (const definition of response.items) {
+    if (ids.has(definition.gameDefinitionId)) {
+      context.addIssue({
+        code: "custom",
+        message: "Game definition IDs must be unique",
+        path: ["items"],
+      });
+      return;
+    }
+    ids.add(definition.gameDefinitionId);
+  }
+});
+
 export const SessionLifecycleSchema = z.enum([
   "open",
   "cancelling",
@@ -263,6 +281,7 @@ export type CoinOperationsResponse = z.infer<typeof CoinOperationsResponseSchema
 export type RescueGrantResponse = z.infer<typeof RescueGrantResponseSchema>;
 export type OperationResponse = z.infer<typeof OperationResponseSchema>;
 export type GameDefinitionView = z.infer<typeof GameDefinitionViewSchema>;
+export type GameDefinitionsResponse = z.infer<typeof GameDefinitionsResponseSchema>;
 export type SessionView = z.infer<typeof SessionViewSchema>;
 export type SessionDetail = z.infer<typeof SessionDetailSchema>;
 export type SessionListResponse = z.infer<typeof SessionListResponseSchema>;

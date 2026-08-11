@@ -91,4 +91,29 @@ describe("web API services", () => {
     assert.equal(result.availableCoin, "900719925474099300000");
     assert.equal(typeof result.availableCoin, "string");
   });
+
+  it("reads published game definitions without accepting a client price", async () => {
+    const calls: string[] = [];
+    const client = createApiClient({
+      baseUrl: "https://api.example",
+      fetcher: async (input) => {
+        calls.push(String(input));
+        return jsonResponse({
+          contractVersion: 1,
+          items: [{
+            contractVersion: 1,
+            gameDefinitionId: "classic_100",
+            displayName: "Classic",
+            maximumPlayers: 4,
+            entryCoin: "100",
+            timeLimitMs: 3_600_000,
+            policyVersion: 1,
+          }],
+        });
+      },
+    });
+    const result = await createSessionApi(client).definitions();
+    assert.equal(result.items[0]?.entryCoin, "100");
+    assert.deepEqual(calls, ["https://api.example/v1/game-definitions"]);
+  });
 });

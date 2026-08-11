@@ -5,6 +5,7 @@ import {
   AdmissionResponseSchema,
   CONTRACT_VERSION,
   GameDefinitionIdSchema,
+  GameDefinitionsResponseSchema,
   GameIdSchema,
   PlayerIdSchema,
   OperationResponseSchema,
@@ -13,6 +14,7 @@ import {
   SessionDetailSchema,
   SessionListResponseSchema,
   type AdmissionResponse,
+  type GameDefinitionsResponse,
   type OperationResponse,
   type SessionDetail,
   type SessionListResponse,
@@ -44,6 +46,15 @@ interface DefinitionRow {
   readonly time_limit_ms: number | null;
   readonly policy_snapshot: unknown;
   readonly policy_hash: Buffer;
+}
+
+interface DefinitionViewRow {
+  readonly id: string;
+  readonly policy_version: number;
+  readonly display_name: string;
+  readonly maximum_players: number;
+  readonly entry_coin: string;
+  readonly time_limit_ms: number | string | null;
 }
 
 interface AccountRow {
@@ -690,6 +701,37 @@ export class GameSessionsService {
       nextCursor: sessions.rows.length > limit && last !== undefined
         ? Buffer.from(JSON.stringify({ createdAt: last.created_at.toISOString(), id: last.id })).toString("base64url")
         : null,
+    });
+  }
+
+  public async listDefinitions(): Promise<GameDefinitionsResponse> {
+    const result = await this.pool.query<DefinitionViewRow>(
+      `
+        SELECT id, policy_version, display_name, maximum_players, entry_coin::text,
+               time_limit_ms
+        FROM (
+          SELECT DISTINCT ON (id)
+                 id, policy_version, display_name, maximum_players, entry_coin,
+                 time_limit_ms
+          FROM game.game_definitions
+          WHERE active = true
+          ORDER BY id, policy_version DESC
+        ) AS current_definitions
+        ORDER BY display_name, id
+        LIMIT 100
+      `,
+    );
+    return GameDefinitionsResponseSchema.parse({
+      contractVersion: CONTRACT_VERSION,
+      items: result.rows.map((definition) => ({
+        contractVersion: CONTRACT_VERSION,
+        gameDefinitionId: definition.id,
+        displayName: definition.display_name,
+        maximumPlayers: definition.maximum_players,
+        entryCoin: definition.entry_coin,
+        timeLimitMs: definition.time_limit_ms === null ? null : Number(definition.time_limit_ms),
+        policyVersion: definition.policy_version,
+      })),
     });
   }
 

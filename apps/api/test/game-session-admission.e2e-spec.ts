@@ -123,6 +123,18 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
     await container?.stop();
   });
 
+  it("lists active server-owned game definitions without policy internals", async () => {
+    const definitions = await sessions.listDefinitions();
+    assert.deepEqual(definitions, {
+      contractVersion: 1,
+      items: [
+        { contractVersion: 1, gameDefinitionId: "classic_100", displayName: "Classic", maximumPlayers: 4, entryCoin: "100", timeLimitMs: 3_600_000, policyVersion: 1 },
+        { contractVersion: 1, gameDefinitionId: "expensive", displayName: "Expensive", maximumPlayers: 4, entryCoin: "1001", timeLimitMs: 3_600_000, policyVersion: 1 },
+        { contractVersion: 1, gameDefinitionId: "free", displayName: "Free", maximumPlayers: 4, entryCoin: "0", timeLimitMs: 3_600_000, policyVersion: 1 },
+      ],
+    });
+  });
+
   it("atomically creates creator reserve, seat, and hash-only ticket with replay rotation", async () => {
     const first = await sessions.createSession(
       principal("creator"),

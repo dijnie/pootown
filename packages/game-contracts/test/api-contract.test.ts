@@ -6,6 +6,7 @@ import {
   CoinBalanceResponseSchema,
   CoinOperationViewSchema,
   CreateSessionRequestSchema,
+  GameDefinitionsResponseSchema,
   LeaderboardResponseSchema,
   MutationHeadersSchema,
   PublicMutationContractSchemas,
@@ -47,6 +48,36 @@ describe("HTTP API contracts", () => {
     ]) {
       assert.equal(CreateSessionRequestSchema.safeParse(forged).success, false);
     }
+  });
+
+  it("publishes only strict server-owned game definitions", () => {
+    const response = {
+      contractVersion: 1,
+      items: [{
+        contractVersion: 1,
+        gameDefinitionId: "classic_100",
+        displayName: "Classic",
+        maximumPlayers: 4,
+        entryCoin: "100",
+        timeLimitMs: 3_600_000,
+        policyVersion: 1,
+      }],
+    };
+    assert.equal(GameDefinitionsResponseSchema.safeParse(response).success, true);
+    assert.equal(
+      GameDefinitionsResponseSchema.safeParse({
+        ...response,
+        items: [{ ...response.items[0], requestedEntryCoin: "1" }],
+      }).success,
+      false,
+    );
+    assert.equal(
+      GameDefinitionsResponseSchema.safeParse({
+        ...response,
+        items: [response.items[0], { ...response.items[0], policyVersion: 2 }],
+      }).success,
+      false,
+    );
   });
 
   it("keeps account coin views separate and rejects identity injection", () => {

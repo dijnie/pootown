@@ -1,6 +1,7 @@
 import {
   AdmissionResponseSchema,
   CONTRACT_VERSION,
+  GameDefinitionsResponseSchema,
   OperationResponseSchema,
   SessionDetailSchema,
   SessionListResponseSchema,
@@ -12,6 +13,9 @@ import type { ApiClient, MutationOptions } from "./api-client";
 
 export function createSessionApi(client: ApiClient) {
   return {
+    definitions() {
+      return client.get("/v1/game-definitions", undefined, GameDefinitionsResponseSchema);
+    },
     list(options: { cursor?: string; limit?: number } = {}) {
       return client.get("/v1/game-sessions", options, SessionListResponseSchema);
     },
