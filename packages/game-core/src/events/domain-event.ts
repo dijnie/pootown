@@ -91,4 +91,20 @@ export type GameplayDomainEvent =
       readonly winnerId: PlayerId;
       readonly reason: "lastPlayerStanding" | "timeLimit" | "timeoutForfeit";
       readonly entitlementKey: string;
-    };
+    }
+  | {
+      readonly type: "tradeCreated";
+      readonly tradeId: string;
+      readonly tradeType: "moneyOnly" | "propertyOnly" | "moneyForProperty" | "propertyForMoney";
+      readonly proposerId: PlayerId;
+      readonly receiverId: PlayerId;
+      readonly offeredCash: bigint;
+      readonly requestedCash: bigint;
+      readonly offeredPropertyPosition: number | null;
+      readonly requestedPropertyPosition: number | null;
+      readonly expiresAtMs: number;
+    }
+  | { readonly type: "tradeAccepted"; readonly tradeId: string; readonly proposerId: PlayerId; readonly receiverId: PlayerId }
+  | { readonly type: "tradeRejected"; readonly tradeId: string; readonly rejecterId: PlayerId }
+  | { readonly type: "tradeCancelled"; readonly tradeId: string; readonly cancellerId: PlayerId }
+  | { readonly type: "tradeExpired"; readonly tradeId: string };

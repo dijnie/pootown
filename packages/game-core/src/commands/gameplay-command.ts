@@ -1,4 +1,5 @@
 import type { PlayerId } from "../model/identifiers";
+import type { MatchCash } from "../model/money";
 
 interface VersionedGameplayCommand {
   readonly expectedStateVersion: number;
@@ -67,6 +68,36 @@ export interface DeclareBankruptcyGameplayCommand extends VersionedGameplayComma
   readonly payload: Record<string, never>;
 }
 
+export type GameplayTradeTerms =
+  | { readonly tradeType: "moneyOnly"; readonly offeredCash: MatchCash; readonly requestedCash: MatchCash }
+  | { readonly tradeType: "propertyOnly"; readonly offeredPropertyPosition: number | null; readonly requestedPropertyPosition: number | null }
+  | { readonly tradeType: "moneyForProperty"; readonly offeredCash: MatchCash; readonly requestedPropertyPosition: number }
+  | { readonly tradeType: "propertyForMoney"; readonly offeredPropertyPosition: number; readonly requestedCash: MatchCash };
+
+export interface CreateTradeGameplayCommand extends VersionedGameplayCommand {
+  readonly type: "createTrade";
+  readonly payload: { readonly receiverId: PlayerId; readonly terms: GameplayTradeTerms };
+}
+
+interface TradeDecisionGameplayCommand extends VersionedGameplayCommand {
+  readonly payload: { readonly tradeId: string };
+}
+
+export interface AcceptTradeGameplayCommand extends TradeDecisionGameplayCommand { readonly type: "acceptTrade" }
+export interface RejectTradeGameplayCommand extends TradeDecisionGameplayCommand { readonly type: "rejectTrade" }
+export interface CancelTradeGameplayCommand extends TradeDecisionGameplayCommand { readonly type: "cancelTrade" }
+export interface CleanupExpiredTradesGameplayCommand extends VersionedGameplayCommand {
+  readonly type: "cleanupExpiredTrades";
+  readonly payload: Record<string, never>;
+}
+
+export type GameplayTradeCommand =
+  | CreateTradeGameplayCommand
+  | AcceptTradeGameplayCommand
+  | RejectTradeGameplayCommand
+  | CancelTradeGameplayCommand
+  | CleanupExpiredTradesGameplayCommand;
+
 export interface BuyPropertyGameplayCommand extends PositionedGameplayCommand {
   readonly type: "buyProperty";
 }
@@ -117,7 +148,8 @@ export type GameplayCommand =
   | GameplayPropertyCommand
   | GameplayJailCommand
   | GameplayCardCommand
-  | DeclareBankruptcyGameplayCommand;
+  | DeclareBankruptcyGameplayCommand
+  | GameplayTradeCommand;
 
 export type GameplayCommandActor =
   | { readonly kind: "player"; readonly playerId: PlayerId }
