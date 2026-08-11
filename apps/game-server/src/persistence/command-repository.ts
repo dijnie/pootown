@@ -3,7 +3,9 @@ import {
   CommandAcknowledgementSchema,
   DomainEventEnvelopeSchema,
   GameplayDomainEventEnvelopeSchema,
+  IdempotencyKeySchema,
   PlayerIdSchema,
+  ReservationIdSchema,
   RoomCommandSchema,
   type CommandAcknowledgement,
   type RoomCommand,
@@ -40,6 +42,11 @@ export interface CommandCommit {
   readonly terminalProof?: {
     readonly endReason: "lastPlayerStanding" | "timeLimit" | "timeoutForfeit";
     readonly winnerPlayerId: string;
+  };
+  readonly sessionFinalization?: {
+    readonly action: "leave" | "cancel";
+    readonly idempotencyKey: string;
+    readonly reservationId: string;
   };
 }
 
@@ -144,6 +151,14 @@ export class CommandRepository {
       if (lifecycle.success) return lifecycle.data;
       return GameplayDomainEventEnvelopeSchema.parse(event);
     });
+    const expectedFinalization = command.type === "leaveGame" ? "leave"
+      : command.type === "cancelGame" ? "cancel" : undefined;
+    if (expectedFinalization !== undefined && value.sessionFinalization === undefined) {
+      throw new CommandCommitConflictError("Session finalization is required for the lifecycle command");
+    }
+    if (value.sessionFinalization !== undefined && expectedFinalization !== value.sessionFinalization.action) {
+      throw new CommandCommitConflictError("Session finalization does not match the command");
+    }
     const hash = requestHash(command);
     if (value.stateVersion !== command.expectedStateVersion + 1 ||
         acknowledgement.requestId !== command.requestId || acknowledgement.stateVersion !== value.stateVersion ||
@@ -255,6 +270,28 @@ export class CommandRepository {
           now ?? null,
         ],
       );
+      if (value.sessionFinalization !== undefined) {
+        const reservationId = ReservationIdSchema.parse(value.sessionFinalization.reservationId);
+        const idempotencyKey = IdempotencyKeySchema.parse(value.sessionFinalization.idempotencyKey);
+        await client.query(
+          `
+            INSERT INTO realtime.session_finalizations
+              (room_id, player_id, request_id, game_session_id, reservation_id,
+               action, idempotency_key, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::timestamptz, clock_timestamp()))
+          `,
+          [
+            lease.roomId,
+            playerId,
+            command.requestId,
+            lease.gameId,
+            reservationId,
+            value.sessionFinalization.action,
+            idempotencyKey,
+            now ?? null,
+          ],
+        );
+      }
       await this.hooks.beforeCommit?.();
       return { acknowledgement, duplicate: false };
     });

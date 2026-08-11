@@ -4,6 +4,7 @@ import { Interval } from "@nestjs/schedule";
 import { CONTRACT_VERSION } from "@pootown/game-contracts";
 import {
   ReconciliationResponseSchema,
+  RoomSessionFinalizationRequestSchema,
   SettlementRequestSchema,
   type ReconciliationResponse,
 } from "@pootown/game-contracts/internal";
@@ -56,7 +57,7 @@ export class ReconciliationService implements OnApplicationBootstrap {
   }
 
   public async run(now = new Date()): Promise<ReconciliationResponse> {
-    if (this.running) return this.response(true, 0, 0, 0, 0, 0);
+    if (this.running) return this.response(true, 0, 0, 0, 0, 0, 0);
     this.running = true;
     let lockClient: PoolClient | undefined;
     let lockAcquired = false;
@@ -67,8 +68,9 @@ export class ReconciliationService implements OnApplicationBootstrap {
         [RECONCILIATION_LOCK],
       );
       lockAcquired = lock.rows[0]?.acquired === true;
-      if (!lockAcquired) return this.response(true, 0, 0, 0, 0, 0);
+      if (!lockAcquired) return this.response(true, 0, 0, 0, 0, 0, 0);
 
+      const roomCommandsFinalized = await this.finalizeRoomCommands(now);
       const waitingSessionsCancelled = await this.cancelExpiredWaitingSessions(now);
       const expiredAdmissionsReleased = await this.releaseExpiredAdmissions(now);
       const terminal = await this.commitTerminalSettlements(now);
@@ -79,6 +81,7 @@ export class ReconciliationService implements OnApplicationBootstrap {
         waitingSessionsCancelled,
         expiredAdmissionsReleased,
         terminal.committed,
+        roomCommandsFinalized,
         offlineSessionsAborted,
         sessionsMarkedForRecovery,
       );
@@ -89,6 +92,44 @@ export class ReconciliationService implements OnApplicationBootstrap {
       lockClient?.release();
       this.running = false;
     }
+  }
+
+  private async finalizeRoomCommands(now: Date): Promise<number> {
+    const candidates = await this.pool.query<{
+      action: "leave" | "cancel";
+      game_session_id: string;
+      idempotency_key: string;
+      player_id: string;
+      request_id: string;
+      reservation_id: string;
+      room_id: string;
+    }>(
+      `
+        SELECT game_session_id, room_id, player_id, reservation_id, request_id::text, action, idempotency_key
+        FROM realtime.api_session_finalizations
+        ORDER BY created_at, room_id, player_id, request_id
+        LIMIT $1
+      `,
+      [RECONCILIATION_BATCH_SIZE],
+    );
+    let count = 0;
+    for (const candidate of candidates.rows) {
+      try {
+        await this.sessions.finalizeRoomCommand(candidate.game_session_id, RoomSessionFinalizationRequestSchema.parse({
+          contractVersion: CONTRACT_VERSION,
+          roomId: candidate.room_id,
+          playerId: candidate.player_id,
+          reservationId: candidate.reservation_id,
+          action: candidate.action,
+        }), candidate.idempotency_key, now);
+        count += 1;
+      } catch (error: unknown) {
+        this.logger.warn(
+          `Room command finalization failed for ${candidate.game_session_id}: ${this.safeErrorCode(error)}`,
+        );
+      }
+    }
+    return count;
   }
 
   private async abortOfflineSessions(now: Date): Promise<number> {
@@ -334,6 +375,7 @@ export class ReconciliationService implements OnApplicationBootstrap {
     waitingSessionsCancelled: number,
     expiredAdmissionsReleased: number,
     terminalSettlementsCommitted: number,
+    roomCommandsFinalized: number,
     offlineSessionsAborted: number,
     sessionsMarkedForRecovery: number,
   ): ReconciliationResponse {
@@ -342,6 +384,7 @@ export class ReconciliationService implements OnApplicationBootstrap {
       waitingSessionsCancelled,
       expiredAdmissionsReleased,
       terminalSettlementsCommitted,
+      roomCommandsFinalized,
       offlineSessionsAborted,
       sessionsMarkedForRecovery,
       alreadyRunning,

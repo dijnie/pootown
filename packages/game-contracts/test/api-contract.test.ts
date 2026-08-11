@@ -17,6 +17,7 @@ import {
 import {
   InternalMutationContractSchemas,
   ReconciliationResponseSchema,
+  RoomSessionFinalizationRequestSchema,
   SessionBootstrapResponseSchema,
   SessionStartedRequestSchema,
   SettlementRequestSchema,
@@ -135,6 +136,7 @@ describe("HTTP API contracts", () => {
     assert.deepEqual(Object.keys(InternalMutationContractSchemas).sort(), [
       "abortSession",
       "consumeTicket",
+      "finalizeSessionCommand",
       "markStarted",
       "runReconciliation",
       "settleSession",
@@ -148,6 +150,20 @@ describe("HTTP API contracts", () => {
     }
   });
 
+  it("binds room finalization without accepting identity or coin amounts", () => {
+    const request = {
+      contractVersion: 1,
+      roomId: "room_1",
+      playerId: "player_1",
+      reservationId: "reservation_1",
+      action: "leave",
+    };
+    assert.equal(RoomSessionFinalizationRequestSchema.safeParse(request).success, true);
+    assert.equal(RoomSessionFinalizationRequestSchema.safeParse({ ...request, userId: "user_1" }).success, false);
+    assert.equal(RoomSessionFinalizationRequestSchema.safeParse({ ...request, amount: "100" }).success, false);
+    assert.equal(RoomSessionFinalizationRequestSchema.safeParse({ ...request, action: "refund" }).success, false);
+  });
+
   it("strictly versions reconciliation requests and bounded counters", () => {
     const reconciliation = InternalMutationContractSchemas.runReconciliation.body;
     assert.equal(reconciliation.safeParse({ contractVersion: 1 }).success, true);
@@ -158,6 +174,7 @@ describe("HTTP API contracts", () => {
       waitingSessionsCancelled: 1,
       expiredAdmissionsReleased: 2,
       terminalSettlementsCommitted: 3,
+      roomCommandsFinalized: 2,
       offlineSessionsAborted: 2,
       sessionsMarkedForRecovery: 4,
       alreadyRunning: false,

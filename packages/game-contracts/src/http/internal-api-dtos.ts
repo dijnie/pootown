@@ -58,6 +58,14 @@ export const AbortSessionRequestSchema = z.strictObject({
   reason: z.enum(["reconnectWindowExpired", "operatorDecision"]),
 });
 
+export const RoomSessionFinalizationRequestSchema = z.strictObject({
+  contractVersion: ContractVersionSchema,
+  roomId: RoomIdSchema,
+  playerId: PlayerIdSchema,
+  reservationId: ReservationIdSchema,
+  action: z.enum(["leave", "cancel"]),
+});
+
 const BootstrapPlayerSchema = z.strictObject({
   playerId: PlayerIdSchema,
   seatIndex: z.number().int().min(0).max(3),
@@ -125,6 +133,7 @@ export const ReconciliationResponseSchema = z.strictObject({
   waitingSessionsCancelled: z.number().int().nonnegative(),
   expiredAdmissionsReleased: z.number().int().nonnegative(),
   terminalSettlementsCommitted: z.number().int().nonnegative(),
+  roomCommandsFinalized: z.number().int().nonnegative(),
   offlineSessionsAborted: z.number().int().nonnegative(),
   sessionsMarkedForRecovery: z.number().int().nonnegative(),
   alreadyRunning: z.boolean(),
@@ -135,6 +144,7 @@ export const InternalMutationContractSchemas = {
   markStarted: { headers: MutationHeadersSchema, body: SessionStartedRequestSchema },
   settleSession: { headers: MutationHeadersSchema, body: SettlementRequestSchema },
   abortSession: { headers: MutationHeadersSchema, body: AbortSessionRequestSchema },
+  finalizeSessionCommand: { headers: MutationHeadersSchema, body: RoomSessionFinalizationRequestSchema },
   runReconciliation: { headers: MutationHeadersSchema, body: ReconciliationRequestSchema },
 } as const;
 
@@ -142,6 +152,7 @@ export type TicketConsumeRequest = z.infer<typeof TicketConsumeRequestSchema>;
 export type TicketConsumeResponse = z.infer<typeof TicketConsumeResponseSchema>;
 export type SettlementRequest = z.infer<typeof SettlementRequestSchema>;
 export type AbortSessionRequest = z.infer<typeof AbortSessionRequestSchema>;
+export type RoomSessionFinalizationRequest = z.infer<typeof RoomSessionFinalizationRequestSchema>;
 export type SessionBootstrapResponse = z.infer<typeof SessionBootstrapResponseSchema>;
 export type ReconciliationResponse = z.infer<typeof ReconciliationResponseSchema>;
 export type InternalOperationResponse = z.infer<typeof OperationResponseSchema>;

@@ -3,11 +3,13 @@ import { GameIdSchema, type OperationResponse } from "@pootown/game-contracts";
 import {
   AbortSessionRequestSchema,
   ReconciliationRequestSchema,
+  RoomSessionFinalizationRequestSchema,
   SessionStartedRequestSchema,
   SettlementRequestSchema,
   TicketConsumeRequestSchema,
   type AbortSessionRequest,
   type ReconciliationResponse,
+  type RoomSessionFinalizationRequest,
   type SessionBootstrapResponse,
   type SettlementRequest,
   type TicketConsumeRequest,
@@ -17,6 +19,7 @@ import {
 import { InternalSettlementService } from "./internal-settlement.service";
 import { InternalSessionService } from "./internal-session.service";
 import { ReconciliationService } from "./reconciliation.service";
+import { GameSessionsService } from "../game-sessions/game-sessions.service";
 import { InternalRoute } from "../auth/internal-route.decorator";
 import { ApiHttpException } from "../platform/http/api-http.exception";
 import { requireContractVersion, requireMutationHeaders, type HttpHeaders } from "../platform/http/contract-headers";
@@ -29,6 +32,7 @@ export class InternalController {
     private readonly sessions: InternalSessionService,
     private readonly settlements: InternalSettlementService,
     private readonly reconciliation: ReconciliationService,
+    private readonly gameSessions: GameSessionsService,
   ) {}
 
   @Get("game-sessions/:gameId/bootstrap")
@@ -76,6 +80,18 @@ export class InternalController {
     const gameId = GameIdSchema.safeParse(rawGameId);
     if (!gameId.success) throw new ApiHttpException("REQUEST_INVALID", 400, "Game ID is invalid");
     return this.settlements.settle(gameId.data, body, mutation.idempotencyKey);
+  }
+
+  @Post("game-sessions/:gameId/finalization")
+  public finalizeSessionCommand(
+    @Headers() headers: HttpHeaders,
+    @Param("gameId") rawGameId: string,
+    @Body(new ZodValidationPipe(RoomSessionFinalizationRequestSchema)) body: RoomSessionFinalizationRequest,
+  ): Promise<OperationResponse> {
+    const mutation = requireMutationHeaders(headers);
+    const gameId = GameIdSchema.safeParse(rawGameId);
+    if (!gameId.success) throw new ApiHttpException("REQUEST_INVALID", 400, "Game ID is invalid");
+    return this.gameSessions.finalizeRoomCommand(gameId.data, body, mutation.idempotencyKey);
   }
 
   @Post("game-sessions/:gameId/abort")

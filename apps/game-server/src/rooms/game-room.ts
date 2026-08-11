@@ -22,7 +22,9 @@ import {
   type GameplayAggregateState,
 } from "@pootown/game-core";
 
-import type {
+import {
+  RoomSessionFinalizationRequestSchema,
+  type RoomSessionFinalizationRequest,
   SessionBootstrapResponse,
   TicketConsumeRequest,
   TicketConsumeResponse,
@@ -37,6 +39,7 @@ import {
   InvalidRoomCommandError,
   RoomCommandHandler,
 } from "../commands/command-handler.js";
+import { sessionFinalizationIdempotencyKey } from "../commands/session-finalization.js";
 import {
   CheckpointRepository,
   CorruptCheckpointError,
@@ -67,6 +70,11 @@ export interface GameRoomDependencies {
     markStarted(
       gameId: string,
       request: { readonly contractVersion: 1; readonly roomId: string; readonly stateVersion: number },
+      idempotencyKey: string,
+    ): Promise<OperationResponse>;
+    finalizeSessionCommand(
+      gameId: string,
+      request: RoomSessionFinalizationRequest,
       idempotencyKey: string,
     ): Promise<OperationResponse>;
     settleSession(
@@ -132,6 +140,12 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
       readonly requestId: string;
       readonly events: readonly (DomainEventEnvelope | GameplayDomainEventEnvelope)[];
     } | undefined;
+    private pendingSessionFinalization: {
+      readonly action: "leave" | "cancel";
+      readonly events: readonly (DomainEventEnvelope | GameplayDomainEventEnvelope)[];
+      readonly playerId: string;
+      readonly requestId: string;
+    } | undefined;
     private roomClock: RoomClock | undefined;
     private settlementInFlight = false;
     private settlementRetryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -139,13 +153,18 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
 
     public override async onCreate(rawOptions: unknown): Promise<void> {
       const options = RoomAdmissionOptionsSchema.parse(rawOptions);
-      const bootstrap = await dependencies.api.bootstrap(options.gameId);
+      let bootstrap = await dependencies.api.bootstrap(options.gameId);
       if (bootstrap.gameId !== options.gameId) {
         throw new TicketAuthenticationError("Room bootstrap binding does not match admission");
       }
       const lease = await dependencies.leases.acquire(bootstrap.roomId, bootstrap.gameId);
       let privateState: GameState | GameplayAggregateState;
       try {
+        const refreshedBootstrap = await dependencies.api.bootstrap(options.gameId);
+        if (refreshedBootstrap.gameId !== bootstrap.gameId || refreshedBootstrap.roomId !== bootstrap.roomId) {
+          throw new TicketAuthenticationError("Room bootstrap binding changed during lease acquisition");
+        }
+        bootstrap = refreshedBootstrap;
         const checkpoint = await dependencies.checkpoints.load(lease);
         if (checkpoint === null) {
           const initialState = createWaitingState(bootstrap, new SecureRandomSource());
@@ -222,7 +241,9 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
     }
 
     public override async onAuth(client: Client, rawOptions: unknown): Promise<AuthenticatedRoomPlayer> {
-      if (this.starting) throw new TicketAuthenticationError("Room start is being finalized");
+      if (this.starting || this.pendingSessionFinalization !== undefined) {
+        throw new TicketAuthenticationError("Room lifecycle command is being finalized");
+      }
       this.authenticationsInFlight += 1;
       try {
         return await this.authenticateClient(client, rawOptions);
@@ -365,25 +386,78 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
       }
       const parsedCommand = RoomCommandSchema.safeParse(payload);
       const startsGame = parsedCommand.success && parsedCommand.data.type === "startGame";
+      const parsedRequestId = parsedCommand.success ? parsedCommand.data.requestId : undefined;
+      const finalizationAction = parsedCommand.success && parsedCommand.data.type === "leaveGame"
+        ? "leave" as const
+        : parsedCommand.success && parsedCommand.data.type === "cancelGame"
+          ? "cancel" as const
+          : undefined;
       if (this.starting && (!startsGame ||
           this.pendingStartPublication?.requestId !== parsedCommand.data.requestId)) {
         client.error(4503, "Room start is awaiting API confirmation");
         return;
+      }
+      if (this.pendingSessionFinalization !== undefined &&
+          (finalizationAction === undefined ||
+            this.pendingSessionFinalization.action !== finalizationAction ||
+            this.pendingSessionFinalization.playerId !== client.userData.playerId ||
+            this.pendingSessionFinalization.requestId !== parsedRequestId)) {
+        client.error(4503, "Room lifecycle command is awaiting API confirmation");
+        return;
+      }
+      if (finalizationAction !== undefined && this.pendingSessionFinalization === undefined) {
+        this.pendingSessionFinalization = {
+          action: finalizationAction,
+          events: [],
+          playerId: client.userData.playerId,
+          requestId: parsedRequestId as string,
+        };
       }
       try {
         if (startsGame) {
           this.starting = true;
           await this.waitForAuthentications();
         }
+        if (finalizationAction !== undefined) await this.waitForAuthentications();
         const result = await this.commandHandler.handle(client.userData, payload);
         if (!result.accepted) {
           if (startsGame) {
             this.starting = false;
           }
+          if (finalizationAction !== undefined) this.pendingSessionFinalization = undefined;
           client.send(result.rejection.type, result.rejection);
           return;
         }
         let events = result.events;
+        if (finalizationAction !== undefined) {
+          if (this.gameId === undefined || this.logicalRoomId === undefined) {
+            throw new InvalidRoomCommandError("Room finalization binding is unavailable");
+          }
+          if (!result.replayed) {
+            this.pendingSessionFinalization = {
+              action: finalizationAction,
+              events: result.events,
+              playerId: client.userData.playerId,
+              requestId: result.acknowledgement.requestId,
+            };
+          } else if (this.pendingSessionFinalization?.requestId === result.acknowledgement.requestId) {
+            events = this.pendingSessionFinalization.events;
+          }
+          await dependencies.api.finalizeSessionCommand(this.gameId, RoomSessionFinalizationRequestSchema.parse({
+            contractVersion: 1,
+            roomId: this.logicalRoomId,
+            playerId: client.userData.playerId,
+            reservationId: client.userData.reservationId,
+            action: finalizationAction,
+          }), sessionFinalizationIdempotencyKey(
+            this.gameId,
+            this.logicalRoomId,
+            client.userData.playerId,
+            result.acknowledgement.requestId,
+            finalizationAction,
+          ));
+          this.pendingSessionFinalization = undefined;
+        }
         if (startsGame) {
           if (this.gameId === undefined || this.logicalRoomId === undefined) {
             throw new InvalidRoomCommandError("Started room binding is unavailable");
@@ -419,7 +493,7 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
           client.error(4400, "Room command is invalid");
           return;
         }
-        if (!startsGame) await this.lock();
+        if (!startsGame && finalizationAction === undefined) await this.lock();
         const status = SessionStatusSchema.parse({
           type: "session.status",
           status: "reconnecting",

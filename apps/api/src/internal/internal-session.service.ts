@@ -94,6 +94,13 @@ export class InternalSessionService {
       );
       const session = sessionResult.rows[0];
       if (session === undefined) throw new ApiHttpException("SESSION_NOT_FOUND", 404, "Session was not found");
+      const pendingFinalization = await client.query(
+        "SELECT 1 FROM realtime.api_session_finalizations WHERE game_session_id = $1 LIMIT 1",
+        [gameId],
+      );
+      if (pendingFinalization.rowCount !== 0) {
+        throw new ApiHttpException("SESSION_NOT_OPEN", 409, "Room lifecycle finalization is pending");
+      }
       if (session.lifecycle === "cancelling" || session.lifecycle === "cancelled") {
         throw new ApiHttpException("SESSION_NOT_OPEN", 409, "Cancelled session cannot be materialized");
       }

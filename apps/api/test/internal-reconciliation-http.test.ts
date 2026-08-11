@@ -8,6 +8,7 @@ import { InternalController } from "../src/internal/internal.controller";
 import { InternalSessionService } from "../src/internal/internal-session.service";
 import { InternalSettlementService } from "../src/internal/internal-settlement.service";
 import { ReconciliationService } from "../src/internal/reconciliation.service";
+import { GameSessionsService } from "../src/game-sessions/game-sessions.service";
 
 describe("internal reconciliation HTTP route", () => {
   let app: NestFastifyApplication;
@@ -19,6 +20,7 @@ describe("internal reconciliation HTTP route", () => {
       providers: [
         { provide: InternalSessionService, useValue: {} },
         { provide: InternalSettlementService, useValue: {} },
+        { provide: GameSessionsService, useValue: {} },
         {
           provide: ReconciliationService,
           useValue: {
@@ -29,6 +31,7 @@ describe("internal reconciliation HTTP route", () => {
                 waitingSessionsCancelled: 0,
                 expiredAdmissionsReleased: 0,
                 terminalSettlementsCommitted: 0,
+                roomCommandsFinalized: 0,
                 offlineSessionsAborted: 0,
                 sessionsMarkedForRecovery: 0,
                 alreadyRunning: false,
@@ -60,6 +63,7 @@ describe("internal reconciliation HTTP route", () => {
       waitingSessionsCancelled: 0,
       expiredAdmissionsReleased: 0,
       terminalSettlementsCommitted: 0,
+      roomCommandsFinalized: 0,
       offlineSessionsAborted: 0,
       sessionsMarkedForRecovery: 0,
       alreadyRunning: false,

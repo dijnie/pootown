@@ -525,6 +525,105 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
     assert.deepEqual(result.rows.map((row) => row.entries), [0, 0]);
   });
 
+  it("finalizes durable room leave and cancel facts from exact server bindings", async () => {
+    const leaveSession = await sessions.createSession(
+      principal("room-finalize-leave-owner"),
+      "classic_100",
+      "create:room-finalize-leave-owner",
+    );
+    const joiner = await sessions.joinSession(
+      principal("room-finalize-leave-player"),
+      leaveSession.session.gameId,
+      "join:room-finalize-leave-player",
+    );
+    const leaveRequest = {
+      contractVersion: 1 as const,
+      roomId: leaveSession.session.roomId,
+      playerId: joiner.admission.playerId,
+      reservationId: joiner.admission.reservationId,
+      action: "leave" as const,
+    };
+    await pool.query(`
+      INSERT INTO realtime.room_leases
+        (room_id, game_session_id, instance_id, lease_until, fencing_token)
+      VALUES ($1, $2, 'room-finalize-leave', now() + interval '1 minute', 1)
+    `, [leaveSession.session.roomId, leaveSession.session.gameId]);
+    await assert.rejects(
+      sessions.releaseJoinIntent(
+        principal("room-finalize-leave-player"),
+        leaveSession.session.gameId,
+        "room-finalize:public-leave",
+      ),
+      (error: unknown) => apiCode(error) === "SESSION_NOT_OPEN",
+    );
+    await assert.rejects(
+      sessions.finalizeRoomCommand(leaveSession.session.gameId, {
+        ...leaveRequest,
+        playerId: leaveSession.admission.playerId,
+      }, "room-finalize:forged"),
+      (error: unknown) => apiCode(error) === "SESSION_FORBIDDEN",
+    );
+    const left = await sessions.finalizeRoomCommand(
+      leaveSession.session.gameId,
+      leaveRequest,
+      "room-finalize:leave",
+    );
+    const leftReplay = await sessions.finalizeRoomCommand(
+      leaveSession.session.gameId,
+      leaveRequest,
+      "room-finalize:leave",
+    );
+    assert.deepEqual(leftReplay, left);
+
+    const cancelSession = await sessions.createSession(
+      principal("room-finalize-cancel-owner"),
+      "classic_100",
+      "create:room-finalize-cancel-owner",
+    );
+    await sessions.joinSession(
+      principal("room-finalize-cancel-player"),
+      cancelSession.session.gameId,
+      "join:room-finalize-cancel-player",
+    );
+    await pool.query(`
+      INSERT INTO realtime.room_leases
+        (room_id, game_session_id, instance_id, lease_until, fencing_token)
+      VALUES ($1, $2, 'room-finalize-cancel', now() + interval '1 minute', 1)
+    `, [cancelSession.session.roomId, cancelSession.session.gameId]);
+    await assert.rejects(
+      sessions.cancelSession(
+        principal("room-finalize-cancel-owner"),
+        cancelSession.session.gameId,
+        "room-finalize:public-cancel",
+      ),
+      (error: unknown) => apiCode(error) === "SESSION_NOT_OPEN",
+    );
+    const cancelled = await sessions.finalizeRoomCommand(cancelSession.session.gameId, {
+      contractVersion: 1,
+      roomId: cancelSession.session.roomId,
+      playerId: cancelSession.admission.playerId,
+      reservationId: cancelSession.admission.reservationId,
+      action: "cancel",
+    }, "room-finalize:cancel");
+    assert.equal(cancelled.committed, true);
+
+    const state = await pool.query(`
+      SELECT session.id, session.lifecycle,
+        count(reservation.id) FILTER (WHERE reservation.status = 'reserved')::int AS reserved,
+        count(DISTINCT player.player_id)::int AS players
+      FROM game.game_sessions session
+      LEFT JOIN economy.coin_reservations reservation ON reservation.game_session_id = session.id
+      LEFT JOIN game.session_players player ON player.game_session_id = session.id
+      WHERE session.id = ANY($1::varchar[])
+      GROUP BY session.id, session.lifecycle ORDER BY session.id
+    `, [[leaveSession.session.gameId, cancelSession.session.gameId]]);
+    assert.deepEqual(state.rows.map((row) => ({ lifecycle: row.lifecycle, reserved: row.reserved, players: row.players }))
+      .sort((left, right) => left.lifecycle.localeCompare(right.lifecycle)), [
+      { lifecycle: "open", reserved: 1, players: 1 },
+      { lifecycle: "cancelled", reserved: 0, players: 0 },
+    ].sort((left, right) => left.lifecycle.localeCompare(right.lifecycle)));
+  });
+
   it("serializes cancellation against admission without leaving a stranded reservation", async () => {
     const created = await sessions.createSession(principal("race-cancel-owner"), "classic_100", "create:race-cancel-owner");
     const attempts = await Promise.allSettled([

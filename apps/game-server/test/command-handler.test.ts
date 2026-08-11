@@ -149,6 +149,35 @@ describe("server-authoritative room command handler", () => {
     assert.equal(handler.currentState().stateVersion, 1);
   });
 
+  it("persists the authenticated reservation binding with leave and cancel commands", async () => {
+    const leaveStore = new FakeStore();
+    const nowMs = () => Date.parse("2026-08-11T21:00:01.000Z");
+    const leaveHandler = new RoomCommandHandler({ initialState: waitingState(), lease, nowMs, store: leaveStore });
+    const left = await leaveHandler.handle(second, {
+      requestId: "00000000-0000-4000-8000-000000000212",
+      expectedStateVersion: 1,
+      type: "leaveGame",
+      payload: {},
+    });
+    assert.equal(left.accepted, true);
+    assert.equal(leaveStore.commits[0]?.sessionFinalization?.action, "leave");
+    assert.equal(leaveStore.commits[0]?.sessionFinalization?.reservationId, second.reservationId);
+    assert.match(leaveStore.commits[0]?.sessionFinalization?.idempotencyKey ?? "", /^realtime-finalize-[a-f0-9]{64}$/);
+
+    const cancelStore = new FakeStore();
+    const cancelHandler = new RoomCommandHandler({ initialState: waitingState(), lease, nowMs, store: cancelStore });
+    const cancelled = await cancelHandler.handle(owner, {
+      requestId: "00000000-0000-4000-8000-000000000213",
+      expectedStateVersion: 1,
+      type: "cancelGame",
+      payload: {},
+    });
+    assert.equal(cancelled.accepted, true);
+    assert.equal(cancelStore.commits[0]?.sessionFinalization?.action, "cancel");
+    assert.equal(cancelStore.commits[0]?.sessionFinalization?.reservationId, owner.reservationId);
+    assert.match(cancelStore.commits[0]?.sessionFinalization?.idempotencyKey ?? "", /^realtime-finalize-[a-f0-9]{64}$/);
+  });
+
   it("rejects unauthorized, stale, and malformed commands without mutation", async () => {
     const store = new FakeStore();
     const handler = new RoomCommandHandler({

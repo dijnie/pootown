@@ -42,6 +42,7 @@ import type {
   CommandRepository,
 } from "../persistence/command-repository.js";
 import type { RoomLease } from "../persistence/room-lease.js";
+import { sessionFinalizationIdempotencyKey } from "./session-finalization.js";
 import { SecureRandomSource } from "../random/secure-random-source.js";
 
 export interface RoomCommandStore {
@@ -474,6 +475,31 @@ export class RoomCommandHandler {
       ? serializeGameplaySnapshot(nextState)
       : serializeSnapshot(nextState);
     const proof = terminalProof(nextState);
+    const sessionFinalization = command.type === "leaveGame"
+      ? {
+          action: "leave" as const,
+          idempotencyKey: sessionFinalizationIdempotencyKey(
+            authenticated.gameId,
+            authenticated.roomId,
+            authenticated.playerId,
+            command.requestId,
+            "leave",
+          ),
+          reservationId: authenticated.reservationId,
+        }
+      : command.type === "cancelGame"
+        ? {
+            action: "cancel" as const,
+            idempotencyKey: sessionFinalizationIdempotencyKey(
+              authenticated.gameId,
+              authenticated.roomId,
+              authenticated.playerId,
+              command.requestId,
+              "cancel",
+            ),
+            reservationId: authenticated.reservationId,
+          }
+        : undefined;
     const committed = await this.options.store.commit(this.options.lease, {
       acknowledgement,
       events,
@@ -482,6 +508,7 @@ export class RoomCommandHandler {
       serializedState,
       stateVersion: nextState.stateVersion,
       ...(proof === undefined ? {} : { terminalProof: proof }),
+      ...(sessionFinalization === undefined ? {} : { sessionFinalization }),
     }, now);
     if (committed.duplicate) {
       return { accepted: true, acknowledgement: committed.acknowledgement, events: [], replayed: true };

@@ -20,6 +20,7 @@ import {
 } from "@pootown/game-contracts";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
+import type { RoomSessionFinalizationRequest } from "@pootown/game-contracts/internal";
 
 import type { AuthenticatedPrincipal } from "../auth/auth.types";
 import { DATABASE_POOL } from "../database/database.constants";
@@ -185,22 +186,52 @@ export class GameSessionsService {
   ): Promise<OperationResponse> {
     const provisioned = await this.economy.provisionPrincipal(principal, now);
     const hash = requestHash({ contractVersion: CONTRACT_VERSION, gameId });
+    return this.releaseJoinIntentForUser(provisioned.user.userId, gameId, idempotencyKey, hash, now);
+  }
+
+  private releaseJoinIntentForUser(
+    userId: string,
+    gameId: string,
+    idempotencyKey: string,
+    hash: Buffer,
+    now: Date,
+    expected?: { readonly roomId: string; readonly playerId: string; readonly reservationId: string },
+  ): Promise<OperationResponse> {
     return withTransaction(this.pool, async (client) => {
       await this.advisoryLockSession(client, gameId);
-      await this.lockAccount(client, provisioned.user.userId);
+      await this.lockAccount(client, userId);
       const session = await this.lockSession(client, gameId);
-      const prior = await this.findOperation(client, provisioned.user.userId, "releaseJoinIntent", idempotencyKey);
+      const prior = await this.findOperation(client, userId, "releaseJoinIntent", idempotencyKey);
       if (prior !== undefined) {
         this.assertReplay(prior, hash, "committed");
         return OperationResponseSchema.parse(prior.response_snapshot);
+      }
+      if (expected === undefined && await this.hasRealtimeMaterialization(client, gameId)) {
+        throw new ApiHttpException("SESSION_NOT_OPEN", 409, "Leave must be finalized by the authoritative room");
       }
       if (session.lifecycle !== "open") throw new ApiHttpException("SESSION_NOT_OPEN", 409, "Session is not open");
       const creator = await client.query<{ creator_user_id: string }>(
         "SELECT creator_user_id FROM game.game_sessions WHERE id = $1",
         [gameId],
       );
-      if (creator.rows[0]?.creator_user_id === provisioned.user.userId) {
+      if (creator.rows[0]?.creator_user_id === userId) {
         throw new ApiHttpException("CREATOR_CANNOT_LEAVE", 409, "Session creator must cancel instead");
+      }
+      if (expected !== undefined) {
+        if (session.room_id !== expected.roomId) {
+          throw new ApiHttpException("SESSION_FORBIDDEN", 403, "Room finalization binding is invalid");
+        }
+        const player = await client.query(
+          `
+            SELECT 1 FROM game.session_players
+            WHERE game_session_id = $1 AND player_id = $2 AND user_id = $3
+              AND reservation_id = $4 AND active = true
+          `,
+          [gameId, expected.playerId, userId, expected.reservationId],
+        );
+        if (player.rowCount !== 1) {
+          throw new ApiHttpException("SESSION_FORBIDDEN", 403, "Player finalization binding is invalid");
+        }
       }
       const reservationResult = await client.query<ReservationRow>(
         `
@@ -209,12 +240,15 @@ export class GameSessionsService {
           WHERE game_session_id = $1 AND user_id = $2 AND status = 'reserved'
           FOR UPDATE
         `,
-        [gameId, provisioned.user.userId],
+        [gameId, userId],
       );
       const reservation = reservationResult.rows[0];
       if (reservation === undefined) throw new ApiHttpException("RESERVATION_NOT_FOUND", 404, "Reservation was not found");
+      if (expected !== undefined && reservation.id !== expected.reservationId) {
+        throw new ApiHttpException("SESSION_FORBIDDEN", 403, "Reservation finalization binding is invalid");
+      }
       const operationId = randomUUID();
-      await this.insertOperation(client, operationId, provisioned.user.userId, "releaseJoinIntent", idempotencyKey, hash);
+      await this.insertOperation(client, operationId, userId, "releaseJoinIntent", idempotencyKey, hash);
       await this.releaseReservation(client, operationId, reservation, now);
       await client.query(
         "UPDATE game.join_intents SET status = 'released', updated_at = $2 WHERE reservation_id = $1",
@@ -236,6 +270,17 @@ export class GameSessionsService {
   ): Promise<OperationResponse> {
     const provisioned = await this.economy.provisionPrincipal(principal, now);
     const hash = requestHash({ contractVersion: CONTRACT_VERSION, gameId });
+    return this.cancelSessionForUser(provisioned.user.userId, gameId, idempotencyKey, hash, now);
+  }
+
+  private cancelSessionForUser(
+    userId: string,
+    gameId: string,
+    idempotencyKey: string,
+    hash: Buffer,
+    now: Date,
+    expected?: { readonly roomId: string; readonly playerId: string; readonly reservationId: string },
+  ): Promise<OperationResponse> {
     return withTransaction(this.pool, async (client) => {
       await this.advisoryLockSession(client, gameId);
       const creator = await client.query<{ creator_user_id: string }>(
@@ -245,10 +290,10 @@ export class GameSessionsService {
       if (creator.rows[0] === undefined) {
         throw new ApiHttpException("SESSION_NOT_FOUND", 404, "Session was not found");
       }
-      if (creator.rows[0].creator_user_id !== provisioned.user.userId) {
+      if (creator.rows[0].creator_user_id !== userId) {
         throw new ApiHttpException("SESSION_FORBIDDEN", 403, "Only the session creator can cancel");
       }
-      const prior = await this.findOperation(client, provisioned.user.userId, "cancelSession", idempotencyKey);
+      const prior = await this.findOperation(client, userId, "cancelSession", idempotencyKey);
       if (prior !== undefined) {
         this.assertReplay(prior, hash, "committed");
         return OperationResponseSchema.parse(prior.response_snapshot);
@@ -275,9 +320,28 @@ export class GameSessionsService {
       if (locked.rows.length !== userIds.length) throw new Error("Cancellation account set is incomplete");
       const session = await this.lockSession(client, gameId);
       if (session.lifecycle !== "open") throw new ApiHttpException("SESSION_NOT_OPEN", 409, "Session is not open");
+      if (expected === undefined && await this.hasRealtimeMaterialization(client, gameId)) {
+        throw new ApiHttpException("SESSION_NOT_OPEN", 409, "Cancellation must be finalized by the authoritative room");
+      }
+      if (expected !== undefined) {
+        if (session.room_id !== expected.roomId) {
+          throw new ApiHttpException("SESSION_FORBIDDEN", 403, "Room cancellation binding is invalid");
+        }
+        const creatorPlayer = await client.query(
+          `
+            SELECT 1 FROM game.session_players
+            WHERE game_session_id = $1 AND player_id = $2 AND user_id = $3
+              AND reservation_id = $4 AND seat_index = 0 AND active = true
+          `,
+          [gameId, expected.playerId, userId, expected.reservationId],
+        );
+        if (creatorPlayer.rowCount !== 1) {
+          throw new ApiHttpException("SESSION_FORBIDDEN", 403, "Creator cancellation binding is invalid");
+        }
+      }
 
       const operationId = randomUUID();
-      await this.insertOperation(client, operationId, provisioned.user.userId, "cancelSession", idempotencyKey, hash);
+      await this.insertOperation(client, operationId, userId, "cancelSession", idempotencyKey, hash);
       await client.query("UPDATE game.game_sessions SET lifecycle = 'cancelling' WHERE id = $1", [gameId]);
       for (const reservation of reservationResult.rows) {
         await this.releaseReservation(client, operationId, reservation, now);
@@ -318,6 +382,44 @@ export class GameSessionsService {
       await this.commitOperation(client, operationId, response, now);
       return response;
     });
+  }
+
+  public async finalizeRoomCommand(
+    gameId: string,
+    request: RoomSessionFinalizationRequest,
+    idempotencyKey: string,
+    now = new Date(),
+  ): Promise<OperationResponse> {
+    const actor = await this.pool.query<{ user_id: string }>(
+      `
+        SELECT DISTINCT ticket.user_id
+        FROM game.realtime_tickets ticket
+        WHERE ticket.game_session_id = $1 AND ticket.room_id = $2
+          AND ticket.player_id = $3 AND ticket.reservation_id = $4
+      `,
+      [gameId, request.roomId, request.playerId, request.reservationId],
+    );
+    const userId = actor.rows[0]?.user_id;
+    if (userId === undefined || actor.rows.length !== 1) {
+      throw new ApiHttpException("SESSION_FORBIDDEN", 403, "Room finalization binding is invalid");
+    }
+    const expected = {
+      roomId: request.roomId,
+      playerId: request.playerId,
+      reservationId: request.reservationId,
+    };
+    const hash = requestHash({ gameId, ...request });
+    return request.action === "leave"
+      ? this.releaseJoinIntentForUser(userId, gameId, idempotencyKey, hash, now, expected)
+      : this.cancelSessionForUser(userId, gameId, idempotencyKey, hash, now, expected);
+  }
+
+  private async hasRealtimeMaterialization(client: PoolClient, gameId: string): Promise<boolean> {
+    const result = await client.query(
+      "SELECT 1 FROM realtime.api_room_materializations WHERE game_session_id = $1 LIMIT 1",
+      [gameId],
+    );
+    return result.rowCount !== 0;
   }
 
   public cancelExpiredWaitingSession(gameId: string, expiresBefore: Date, now = new Date()): Promise<boolean> {

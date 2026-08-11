@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { RoomSessionFinalizationRequestSchema } from "@pootown/game-contracts/internal";
 
 import { InternalApiClient, InternalApiRequestError } from "../src/api/internal-api-client.js";
 
@@ -128,6 +129,38 @@ describe("internal API client", () => {
       stateVersion: 7,
     });
     assert.equal((observed?.init?.headers as Record<string, string>)["idempotency-key"], "realtime-start-key");
+  });
+
+  it("finalizes a room command without sending user identity or coin amounts", async () => {
+    let captured: { url: string; init?: RequestInit } | undefined;
+    const client = new InternalApiClient({
+      baseUrl: "https://api.pootown.example",
+      credentialProvider: { async issue() { return "signed-service-token"; } },
+      fetchImplementation: async (input, init) => {
+        captured = { url: String(input), ...(init === undefined ? {} : { init }) };
+        return Response.json({ contractVersion: 1, operationId: "operation_leave", committed: true });
+      },
+    });
+    await client.finalizeSessionCommand("game_1", RoomSessionFinalizationRequestSchema.parse({
+      contractVersion: 1,
+      roomId: "room_1",
+      playerId: "player_1",
+      reservationId: "reservation_1",
+      action: "leave",
+    }), "realtime-finalize-key");
+    assert.equal(captured?.url, "https://api.pootown.example/internal/v1/game-sessions/game_1/finalization");
+    assert.equal(captured?.init?.method, "POST");
+    assert.equal((captured?.init?.headers as Record<string, string>)["idempotency-key"], "realtime-finalize-key");
+    const body = JSON.parse(String(captured?.init?.body)) as Record<string, unknown>;
+    assert.deepEqual(body, {
+      contractVersion: 1,
+      roomId: "room_1",
+      playerId: "player_1",
+      reservationId: "reservation_1",
+      action: "leave",
+    });
+    assert.equal("userId" in body, false);
+    assert.equal("amount" in body, false);
   });
 
   it("submits only terminal proof identity for idempotent settlement", async () => {

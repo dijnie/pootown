@@ -29,6 +29,7 @@ describe("atomic room command persistence", { timeout: 120_000 }, () => {
     await seedGameSession(database.pool, "game_command_timer", "room_command_timer");
     await seedGameSession(database.pool, "game_command_precommit", "room_command_precommit");
     await seedGameSession(database.pool, "game_command_postcommit", "room_command_postcommit");
+    await seedGameSession(database.pool, "game_command_finalize", "room_command_finalize");
   });
 
   after(async () => stopTestDatabase(database));
@@ -80,6 +81,11 @@ describe("atomic room command persistence", { timeout: 120_000 }, () => {
     await assert.rejects(commands.commit(lease, {
       ...value,
       command: { ...value.command, type: "leaveGame" },
+      sessionFinalization: {
+        action: "leave",
+        idempotencyKey: "realtime-finalize-conflicting-command",
+        reservationId: "reservation_checkpoint",
+      },
     }, new Date("2026-08-11T20:00:04.000Z")), CommandIdempotencyConflictError);
     await assert.rejects(commands.findReplay(lease, value.playerId, {
       ...value.command,
@@ -222,6 +228,46 @@ describe("atomic room command persistence", { timeout: 120_000 }, () => {
       [lease.roomId],
     );
     assert.deepEqual(stored.rows, [{ player_id: "system_timer", state_version: 3, proofs: 1 }]);
+  });
+
+  it("commits the room finalization fact atomically with its command checkpoint", async () => {
+    const now = new Date("2026-08-11T20:05:00.000Z");
+    const leases = new RoomLeaseRepository(database.pool, "finalize-instance", 30_000);
+    const lease = await leases.acquire("room_command_finalize", "game_command_finalize", now);
+    await new CheckpointRepository(database.pool, leases).initialize(
+      lease,
+      1,
+      lifecycleSnapshot("game_command_finalize", 1),
+      now,
+    );
+    const requestId = "00000000-0000-4000-8000-000000000114";
+    const commands = new CommandRepository(database.pool, leases);
+    await commands.commit(lease, {
+      playerId: "player_checkpoint",
+      command: { requestId, expectedStateVersion: 1, type: "leaveGame", payload: {} },
+      stateVersion: 2,
+      serializedState: lifecycleSnapshot("game_command_finalize", 2),
+      acknowledgement: { type: "command.ack", requestId, stateVersion: 2, eventIds: [] },
+      events: [],
+      sessionFinalization: {
+        action: "leave",
+        idempotencyKey: "realtime-finalize-test-command",
+        reservationId: "reservation_checkpoint",
+      },
+    }, now);
+    const stored = await database.pool.query(
+      `SELECT room_id, player_id, request_id::text, game_session_id, reservation_id, action
+       FROM realtime.session_finalizations WHERE room_id = $1`,
+      [lease.roomId],
+    );
+    assert.deepEqual(stored.rows, [{
+      room_id: "room_command_finalize",
+      player_id: "player_checkpoint",
+      request_id: requestId,
+      game_session_id: "game_command_finalize",
+      reservation_id: "reservation_checkpoint",
+      action: "leave",
+    }]);
   });
 
   it("rolls back every durable artifact when interrupted before commit", async () => {

@@ -7,10 +7,12 @@ import { InternalController } from "../src/internal/internal.controller";
 import { InternalSessionService } from "../src/internal/internal-session.service";
 import { InternalSettlementService } from "../src/internal/internal-settlement.service";
 import { ReconciliationService } from "../src/internal/reconciliation.service";
+import { GameSessionsService } from "../src/game-sessions/game-sessions.service";
 
 describe("internal session HTTP routes", () => {
   let app: NestFastifyApplication;
   let requestedGameId: string | undefined;
+  let finalized: { gameId: string; body: unknown; key: string } | undefined;
 
   before(async () => {
     const module = await Test.createTestingModule({
@@ -42,6 +44,15 @@ describe("internal session HTTP routes", () => {
         },
         { provide: InternalSettlementService, useValue: {} },
         { provide: ReconciliationService, useValue: {} },
+        {
+          provide: GameSessionsService,
+          useValue: {
+            finalizeRoomCommand: (gameId: string, body: unknown, key: string) => {
+              finalized = { gameId, body, key };
+              return Promise.resolve({ contractVersion: 1, operationId: "operation_finalized", committed: true });
+            },
+          },
+        },
       ],
     }).compile();
     app = module.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
@@ -73,5 +84,33 @@ describe("internal session HTTP routes", () => {
       headers: { "x-contract-version": "1" },
     });
     assert.equal(invalidId.statusCode, 400);
+  });
+
+  it("accepts only a server-bound room finalization without identity or coin input", async () => {
+    const body = {
+      contractVersion: 1,
+      roomId: "room_1",
+      playerId: "player_1",
+      reservationId: "reservation_1",
+      action: "leave",
+    };
+    const response = await app.inject({
+      method: "POST",
+      url: "/internal/v1/game-sessions/game_1/finalization",
+      headers: { "x-contract-version": "1", "idempotency-key": "finalize:request-1" },
+      payload: body,
+    });
+    assert.equal(response.statusCode, 201);
+    assert.deepEqual(finalized, { gameId: "game_1", body, key: "finalize:request-1" });
+
+    for (const forged of [{ ...body, userId: "user_2" }, { ...body, amount: "100" }]) {
+      const rejected = await app.inject({
+        method: "POST",
+        url: "/internal/v1/game-sessions/game_1/finalization",
+        headers: { "x-contract-version": "1", "idempotency-key": "finalize:request-2" },
+        payload: forged,
+      });
+      assert.equal(rejected.statusCode, 400);
+    }
   });
 });

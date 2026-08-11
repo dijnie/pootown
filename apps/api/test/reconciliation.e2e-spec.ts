@@ -434,6 +434,63 @@ describe("session reconciliation", { timeout: 120_000 }, () => {
     );
   });
 
+  it("finishes a committed room leave after the realtime process disappears", async () => {
+    const now = new Date("2099-08-12T00:00:00.000Z");
+    const created = await sessions.createSession(
+      principal("reconcile-finalize-owner"),
+      "classic_100",
+      "reconcile-finalize:create",
+      now,
+    );
+    const joined = await sessions.joinSession(
+      principal("reconcile-finalize-player"),
+      created.session.gameId,
+      "reconcile-finalize:join",
+      new Date(now.getTime() + 1),
+    );
+    const requestId = "00000000-0000-4000-8000-000000000902";
+    await pool.query(`
+      INSERT INTO realtime.room_leases
+        (room_id, game_session_id, instance_id, lease_until, fencing_token, updated_at)
+      VALUES ($1, $2, 'dead-room-process', $3, 1, $4)
+    `, [created.session.roomId, created.session.gameId, new Date(now.getTime() + 30_000), now]);
+    await pool.query(`
+      INSERT INTO realtime.room_commands
+        (room_id, player_id, request_id, expected_state_version, committed_state_version,
+         response_snapshot, created_at)
+      VALUES ($1, $2, $3, 1, 2, '{}', $4)
+    `, [created.session.roomId, joined.admission.playerId, requestId, new Date(now.getTime() + 2)]);
+    await pool.query(`
+      INSERT INTO realtime.session_finalizations
+        (room_id, player_id, request_id, game_session_id, reservation_id, action,
+         idempotency_key, created_at)
+      VALUES ($1, $2, $3, $4, $5, 'leave', 'realtime-finalize-reconciliation-test', $6)
+    `, [
+      created.session.roomId,
+      joined.admission.playerId,
+      requestId,
+      created.session.gameId,
+      joined.admission.reservationId,
+      new Date(now.getTime() + 2),
+    ]);
+
+    await assert.rejects(
+      internalSessions.bootstrap(created.session.gameId),
+      (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "SESSION_NOT_OPEN",
+    );
+
+    const finalized = await reconciliation.run(new Date(now.getTime() + 3));
+    assert.equal(finalized.roomCommandsFinalized, 1);
+    assert.equal((await reconciliation.run(new Date(now.getTime() + 4))).roomCommandsFinalized, 0);
+    assert.equal((await internalSessions.bootstrap(created.session.gameId)).players.length, 1);
+    const state = await pool.query(`
+      SELECT reservation.status,
+        (SELECT count(*)::int FROM game.session_players WHERE reservation_id = $1) AS players
+      FROM economy.coin_reservations reservation WHERE reservation.id = $1
+    `, [joined.admission.reservationId]);
+    assert.deepEqual(state.rows, [{ status: "released", players: 0 }]);
+  });
+
   it("uses a database advisory lock across API instances", async () => {
     const client = await pool.connect();
     try {
@@ -444,6 +501,7 @@ describe("session reconciliation", { timeout: 120_000 }, () => {
         waitingSessionsCancelled: 0,
         expiredAdmissionsReleased: 0,
         terminalSettlementsCommitted: 0,
+        roomCommandsFinalized: 0,
         offlineSessionsAborted: 0,
         sessionsMarkedForRecovery: 0,
         alreadyRunning: true,

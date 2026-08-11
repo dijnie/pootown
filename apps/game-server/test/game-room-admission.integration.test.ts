@@ -100,7 +100,7 @@ describe("live Colyseus ticket admission", { timeout: 120_000 }, () => {
         async bootstrap(gameId) {
           assert.equal(gameId, bootstrap.gameId);
           bootstrapCalls += 1;
-          if (bootstrapCalls === 1) return { ...bootstrap, players: [bootstrap.players[0]!] };
+          if (bootstrapCalls === 2) return { ...bootstrap, players: [bootstrap.players[0]!] };
           return apiStarted ? {
             ...bootstrap,
             lifecycle: "active",
@@ -132,6 +132,9 @@ describe("live Colyseus ticket admission", { timeout: 120_000 }, () => {
             operationId: "operation_started" as never,
             committed: true,
           };
+        },
+        async finalizeSessionCommand() {
+          throw new Error("Admission test does not finalize waiting-room commands");
         },
         async settleSession() {
           throw new Error("Admission test does not finish the game");
