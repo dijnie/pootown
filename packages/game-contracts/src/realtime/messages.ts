@@ -9,6 +9,7 @@ import {
   StateVersionSchema,
 } from "../primitives";
 import { GameplayDomainEventEnvelopeSchema } from "./gameplay-events";
+import { PlayerPrivateViewSchema } from "../state/game-state";
 
 export const CommandAcknowledgementSchema = z.strictObject({
   type: z.literal("command.ack"),
@@ -62,6 +63,13 @@ export const AuthStatusSchema = z.strictObject({
   type: z.enum(["auth.expiring", "auth.revoked"]),
 });
 
+export const PlayerPrivateStateMessageSchema = z.strictObject({
+  type: z.literal("player.private"),
+  view: PlayerPrivateViewSchema,
+});
+
+export const PlayerPrivateStateRequestSchema = z.strictObject({});
+
 export const ServerMessageSchema = z.union([
   CommandAcknowledgementSchema,
   CommandRejectionSchema,
@@ -70,11 +78,13 @@ export const ServerMessageSchema = z.union([
   SessionStatusSchema,
   ClockSyncSchema,
   AuthStatusSchema,
+  PlayerPrivateStateMessageSchema,
 ]);
 
 export type CommandAcknowledgement = z.infer<typeof CommandAcknowledgementSchema>;
 export type DomainEventEnvelope = z.infer<typeof DomainEventEnvelopeSchema>;
 export type LifecycleEventPayload = z.infer<typeof LifecycleEventPayloadSchema>;
+export type PlayerPrivateStateMessage = z.infer<typeof PlayerPrivateStateMessageSchema>;
 export type ServerMessage = z.infer<typeof ServerMessageSchema>;
 
 export { GameErrorCodeSchema };

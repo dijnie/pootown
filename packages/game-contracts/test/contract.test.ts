@@ -7,6 +7,8 @@ import {
   CreateGameRequestSchema,
   InMatchCashStringSchema,
   PlayerPrivateViewSchema,
+  PlayerPrivateStateMessageSchema,
+  PlayerPrivateStateRequestSchema,
   PublicGameStateSchema,
   RoomAdmissionOptionsSchema,
   RoomCommandSchema,
@@ -176,6 +178,22 @@ describe("game contracts", () => {
       }).success,
       false,
     );
+    const privateMessage = {
+      type: "player.private",
+      view: {
+        schemaVersion: 1,
+        gameId: "game_1",
+        playerId: "player_1",
+        reconnectDeadlineAtMs: null,
+      },
+    };
+    assert.equal(PlayerPrivateStateMessageSchema.safeParse(privateMessage).success, true);
+    assert.equal(PlayerPrivateStateMessageSchema.safeParse({
+      ...privateMessage,
+      view: { ...privateMessage.view, userId: "user_1" },
+    }).success, false);
+    assert.equal(PlayerPrivateStateRequestSchema.safeParse({}).success, true);
+    assert.equal(PlayerPrivateStateRequestSchema.safeParse({ playerId: "player_2" }).success, false);
   });
 
   it("keeps account coin and in-match cash nominally distinct", () => {

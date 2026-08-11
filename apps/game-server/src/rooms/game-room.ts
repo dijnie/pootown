@@ -4,11 +4,15 @@ import {
 } from "@colyseus/core";
 import {
   RoomAdmissionOptionsSchema,
+  PlayerPrivateStateMessageSchema,
+  PlayerPrivateStateRequestSchema,
 } from "@pootown/game-contracts";
 import {
   parseGameplaySnapshot,
   parseSnapshot,
   serializeSnapshot,
+  type GameState,
+  type GameplayAggregateState,
 } from "@pootown/game-core";
 
 import type { SessionBootstrapResponse, TicketConsumeRequest, TicketConsumeResponse } from "@pootown/game-contracts/internal";
@@ -21,6 +25,9 @@ import { CheckpointRepository, CorruptCheckpointError } from "../persistence/che
 import { RoomLeaseRepository, type RoomLease } from "../persistence/room-lease.js";
 import { SecureRandomSource } from "../random/secure-random-source.js";
 import { createWaitingState } from "./bootstrap-state.js";
+import {
+  createGameRoomState,
+} from "./game-room-state.js";
 
 export interface GameRoomDependencies {
   readonly api: {
@@ -42,12 +49,12 @@ interface ActiveSession {
   joined: boolean;
 }
 
-function snapshotGameId(serializedState: string): string {
+function parseCheckpointState(serializedState: string): GameState | GameplayAggregateState {
   try {
-    return parseSnapshot(serializedState).gameId;
+    return parseSnapshot(serializedState);
   } catch {
     try {
-      return parseGameplaySnapshot(serializedState).gameId;
+      return parseGameplaySnapshot(serializedState);
     } catch {
       throw new CorruptCheckpointError("Room checkpoint cannot be restored");
     }
@@ -69,6 +76,7 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
         throw new TicketAuthenticationError("Room bootstrap binding does not match admission");
       }
       const lease = await dependencies.leases.acquire(bootstrap.roomId, bootstrap.gameId);
+      let privateState: GameState | GameplayAggregateState;
       try {
         const checkpoint = await dependencies.checkpoints.load(lease);
         if (checkpoint === null) {
@@ -78,8 +86,12 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
             initialState.stateVersion,
             serializeSnapshot(initialState),
           );
-        } else if (snapshotGameId(checkpoint.serializedState) !== bootstrap.gameId) {
-          throw new CorruptCheckpointError("Room checkpoint belongs to another game");
+          privateState = initialState;
+        } else {
+          privateState = parseCheckpointState(checkpoint.serializedState);
+          if (String(privateState.gameId) !== String(bootstrap.gameId)) {
+            throw new CorruptCheckpointError("Room checkpoint belongs to another game");
+          }
         }
       } catch (error) {
         await dependencies.leases.release(lease).catch(() => false);
@@ -88,11 +100,20 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
       this.gameId = bootstrap.gameId;
       this.logicalRoomId = bootstrap.roomId;
       this.lease = lease;
+      this.setState(createGameRoomState(privateState));
       this.authenticator = new TicketAuthenticator({
         consumeTicket: (request, idempotencyKey) => dependencies.api.consumeTicket(request, idempotencyKey),
       }, lease.instanceId, bootstrap.roomId);
       this.maxClients = bootstrap.maximumPlayers;
       await this.setMetadata({ gameId: bootstrap.gameId, roomId: bootstrap.roomId });
+      this.onMessage("player.private.sync", (client: GameClient, payload: unknown) => {
+        PlayerPrivateStateRequestSchema.parse(payload);
+        if (client.userData === undefined) {
+          throw new TicketAuthenticationError("Room client is not authenticated");
+        }
+        const privateMessage = playerPrivateStateMessage(client.userData);
+        client.send(privateMessage.type, privateMessage);
+      });
       this.clock.setInterval(() => {
         void this.renewLease();
       }, dependencies.leaseRenewMs);
@@ -152,4 +173,16 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
       }
     }
   };
+}
+
+export function playerPrivateStateMessage(authenticated: AuthenticatedRoomPlayer) {
+  return PlayerPrivateStateMessageSchema.parse({
+    type: "player.private",
+    view: {
+      schemaVersion: 1,
+      gameId: authenticated.gameId,
+      playerId: authenticated.playerId,
+      reconnectDeadlineAtMs: null,
+    },
+  });
 }

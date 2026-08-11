@@ -5,11 +5,13 @@ import { Server as ColyseusServer } from "@colyseus/core";
 import { Client as ColyseusClient, type Room as ClientRoom } from "@colyseus/sdk";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import type { SessionBootstrapResponse, TicketConsumeResponse } from "@pootown/game-contracts/internal";
+import { PlayerPrivateStateMessageSchema } from "@pootown/game-contracts";
 import express from "express";
 
 import { CheckpointRepository } from "../src/persistence/checkpoint-repository.js";
 import { RoomLeaseRepository } from "../src/persistence/room-lease.js";
 import { createGameRoomClass } from "../src/rooms/game-room.js";
+import type { GameRoomStateInstance } from "../src/rooms/game-room-state.js";
 import {
   seedGameSession,
   startTestDatabase,
@@ -102,8 +104,22 @@ describe("live Colyseus ticket admission", { timeout: 120_000 }, () => {
     });
     const owner = await new ColyseusClient(endpoint).joinOrCreate("game", options(ownerTicket));
     rooms.push(owner);
+    let ownerState = owner.state as unknown as GameRoomStateInstance;
+    for (let attempt = 0; attempt < 100 && ownerState.stateVersion === undefined; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      ownerState = owner.state as unknown as GameRoomStateInstance;
+    }
+    assert.equal(ownerState.stateVersion, 1);
+    assert.equal(JSON.parse(ownerState.publicStateJson).gameId, "game_admission");
+    assert.doesNotMatch(ownerState.publicStateJson, /rng|seed|ticket|reservation|userId/i);
+    const ownerPrivate = new Promise<unknown>((resolve) => owner.onMessage("player.private", resolve));
+    owner.send("player.private.sync", {});
+    assert.equal(PlayerPrivateStateMessageSchema.parse(await ownerPrivate).view.playerId, "player_owner");
     const second = await new ColyseusClient(endpoint).joinOrCreate("game", options(secondTicket));
     rooms.push(second);
+    const secondPrivate = new Promise<unknown>((resolve) => second.onMessage("player.private", resolve));
+    second.send("player.private.sync", {});
+    assert.equal(PlayerPrivateStateMessageSchema.parse(await secondPrivate).view.playerId, "player_second");
     assert.equal(second.roomId, owner.roomId);
     await assert.rejects(new ColyseusClient(endpoint).joinOrCreate("game", options(ownerTicket)));
     await assert.rejects(new ColyseusClient(endpoint).joinOrCreate("game", {

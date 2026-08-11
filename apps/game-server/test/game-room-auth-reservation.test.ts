@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import type { Client, Room } from "@colyseus/core";
 
 import type { AuthenticatedRoomPlayer } from "../src/auth/ticket-auth.js";
-import { createGameRoomClass } from "../src/rooms/game-room.js";
+import { createGameRoomClass, playerPrivateStateMessage } from "../src/rooms/game-room.js";
 
 interface TestRoom extends Room {
   onAuth(client: Client, options: unknown): Promise<AuthenticatedRoomPlayer>;
@@ -55,6 +55,15 @@ describe("room authentication reservation", () => {
     room.onJoin(attachedClient, options, claims);
 
     room.clock.tick();
+    assert.deepEqual(playerPrivateStateMessage(claims), {
+      type: "player.private",
+      view: {
+        schemaVersion: 1,
+        gameId: "game_auth",
+        playerId: "player_auth",
+        reconnectDeadlineAtMs: null,
+      },
+    });
     await assert.rejects(room.onAuth(client("session_duplicate"), options));
   });
 });
