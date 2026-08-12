@@ -18,6 +18,8 @@ RUN pnpm --filter @pootown/game-contracts build \
 
 FROM node:24.18.0-alpine3.23@sha256:595398b0081eacda8e1c4c5b97b76cd1020e4d58a8ebcb4843b9bca1e79e7436 AS runtime
 ENV NODE_ENV=production
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+  && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/pnpm /usr/local/bin/pnpx
 WORKDIR /app
 COPY --from=build --chown=node:node /output/ ./
 USER node
