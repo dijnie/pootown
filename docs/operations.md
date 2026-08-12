@@ -15,6 +15,7 @@ or image publication for a specific hosting provider.
 
 ```bash
 pnpm images:verify
+pnpm images:scan
 pnpm containers:smoke
 docker compose -f compose.deploy.yml config
 docker compose -f compose.deploy.yml build
@@ -77,9 +78,12 @@ old snapshot over a database that is still accepting writes.
   authenticated API path. Active failure never auto-refunds.
 
 Run `pnpm release:gates` in isolated infrastructure before a release. Run
-`pnpm audit --prod` and `pnpm images:verify`; the latter inventories packages
-inside each runtime image and rejects removed chain/Privy dependencies. A
-hosting-specific image SBOM/CVE scanner is still required before publication.
+`pnpm audit --prod`, `pnpm images:verify`, and `pnpm images:scan`. The image
+verification command inventories runtime packages and rejects removed
+chain/Privy dependencies. The security command generates a transient SPDX SBOM
+for every image, scans with digest-pinned Trivy, writes a sanitized result under
+the plan reports directory, and fails on any HIGH or CRITICAL finding. Retain
+the full SBOMs in the hosting artifact store when publishing images.
 
 The current Next.js 15 dependency tree still reports three high and two
 moderate production advisories through Next.js, Sharp, and PostCSS. No patched

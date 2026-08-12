@@ -22,6 +22,7 @@
     "test:restore": "./scripts/run-release-gates.sh restore",
     "test:load": "./scripts/run-release-gates.sh load",
     "images:verify": "./scripts/run-image-gates.sh",
+    "images:scan": "./scripts/run-image-security-gates.sh",
     "containers:smoke": "./scripts/run-container-smoke.sh",
     "release:gates": "./scripts/run-release-gates.sh all",
     "quality": "pnpm lint && pnpm test && pnpm build",

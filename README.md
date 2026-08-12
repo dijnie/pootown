@@ -64,6 +64,7 @@ pnpm --filter @pootown/game-server test
 pnpm --filter ./apps/web test
 pnpm --filter ./apps/web build
 pnpm images:verify
+pnpm images:scan
 ```
 
 ## Web configuration
@@ -102,6 +103,7 @@ production-like rehearsal surface keeps migrations as an explicit one-shot job:
 
 ```bash
 pnpm images:verify
+pnpm images:scan
 pnpm containers:smoke
 docker compose -f compose.deploy.yml config
 docker compose -f compose.deploy.yml up --build
