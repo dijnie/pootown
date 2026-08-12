@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-08-12T13:25:05Z",
+  "generatedAt": "2026-08-12T15:27:24Z",
   "postgresImage": "postgres:17.6-alpine",
   "cleanCluster": true,
   "encryptedBackup": true,
-  "encryptedBackupBytes": 140208,
-  "restoreDurationMs": 4318,
+  "encryptedBackupBytes": 140032,
+  "restoreDurationMs": 4800,
   "sourceAndTargetFingerprintsMatch": true,
   "ledgerReconciliationMismatches": 0,
   "runtimeRoleBoundaryRestored": true,
-  "activeRoomReconnect": {"availableCoin":"900","gameId":"f8e2158f-08eb-444b-aace-0a4005ab51b3","reservedCoin":"100","restoredStateVersion":12}
+  "activeRoomReconnect": {"availableCoin":"900","gameId":"b7532bb6-4f03-42d2-85db-09a7b37fa2a0","reservedCoin":"100","restoredStateVersion":10}
 }

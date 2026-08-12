@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-12T14:40:15.461Z",
+  "generatedAt": "2026-08-12T15:26:21.761Z",
   "scannerImage": "ghcr.io/aquasecurity/trivy@sha256:7cced7cae583819fc7806d4cbc0dbbc7cad18b99f7d3e235192e6da8c091045c",
   "severityGate": [
     "HIGH",
@@ -9,7 +9,7 @@
   "images": [
     {
       "image": "pootown-api:verification",
-      "imageId": "sha256:6580c31233bcb39c3aeba5f72409a56810811088635c542a22be25dd56b66ab6",
+      "imageId": "sha256:7ed2fad49144968f6fe59359ec1f0c1cb9bf69f6ad479c9283b559ec6a0e65d3",
       "sbomPackages": 133,
       "high": 0,
       "critical": 0,
@@ -17,7 +17,7 @@
     },
     {
       "image": "pootown-game-server:verification",
-      "imageId": "sha256:847951ea45a176cca5a4a953da5c6dce5a1b75aa6462bca56c782a5491366761",
+      "imageId": "sha256:b30e236938a3c26401eeb1607641a9f0e63a347ace4344231b427d9b5310246e",
       "sbomPackages": 147,
       "high": 0,
       "critical": 0,
@@ -25,7 +25,7 @@
     },
     {
       "image": "pootown-web:verification",
-      "imageId": "sha256:8f9450f267722e398d33b5d0906e714b819a0da821911431d7c0c271412c6147",
+      "imageId": "sha256:bddbcb002378c234955e397d2c928d49614bfc1097722b4c079f4daa594fa990",
       "sbomPackages": 47,
       "high": 0,
       "critical": 0,
