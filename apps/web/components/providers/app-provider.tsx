@@ -1,5 +1,5 @@
 import { GameProvider } from "@/components/providers/game-provider";
-import { PrivyWalletProvider } from "./privy-provider";
+import { AuthProvider } from "./auth-provider";
 import { GameEventsProvider } from "./game-events-provider";
 import { GameLogsProvider } from "./game-logs-provider";
 import { ApiProvider } from "./api-provider";
@@ -7,7 +7,7 @@ import { RoomProvider } from "./room-provider";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
-      <PrivyWalletProvider>
+      <AuthProvider>
         <ApiProvider>
           <RoomProvider>
             <GameProvider>
@@ -19,6 +19,6 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
             </GameProvider>
           </RoomProvider>
         </ApiProvider>
-      </PrivyWalletProvider>
+      </AuthProvider>
   );
 }

@@ -12,7 +12,6 @@
   "dependencies": {
     "@colyseus/sdk": "0.17.43",
     "@pootown/game-contracts": "workspace:^",
-    "@privy-io/react-auth": "^2.24.0",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-dialog": "^1.1.15",

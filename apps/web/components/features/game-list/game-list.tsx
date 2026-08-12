@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { usePrivy } from "@privy-io/react-auth";
 import type {
   AdmissionResponse,
   GameDefinitionId,
@@ -12,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { GameDefinitionDialog } from "@/components/game-definition-dialog";
+import { useAuth } from "@/components/providers/auth-provider";
 import { useApi } from "@/components/providers/api-provider";
 import { useRoom } from "@/components/providers/room-provider";
 import { Button } from "@/components/ui/button";
@@ -43,7 +43,7 @@ function requestId(): string {
 
 export function GameList() {
   const router = useRouter();
-  const { authenticated, login } = usePrivy();
+  const { authenticated, openLogin } = useAuth();
   const { sessions } = useApi();
   const { connect } = useRoom();
   const [statusFilter, setStatusFilter] = useState<GameStatusFilter>("all");
@@ -62,7 +62,7 @@ export function GameList() {
 
   const handleJoinGame = async (game: SessionView) => {
     if (!authenticated) {
-      login();
+      openLogin();
       return;
     }
     setJoiningGameId(game.gameId);
@@ -152,7 +152,7 @@ export function GameList() {
 
 function CreateGameButton() {
   const router = useRouter();
-  const { authenticated, login } = usePrivy();
+  const { authenticated, openLogin } = useAuth();
   const { sessions } = useApi();
   const { connect } = useRoom();
   const definitions = useGameDefinitions();
@@ -161,7 +161,7 @@ function CreateGameButton() {
 
   const openDialog = () => {
     if (!authenticated) {
-      login();
+      openLogin();
       return;
     }
     if (definitions.error !== undefined) {

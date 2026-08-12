@@ -34,11 +34,13 @@ describe("HTTP foundation", () => {
     assert.throws(() => pipe.transform({ value: "ok", actorId: "forged" }), /Request validation failed/);
   });
 
-  it("redacts authorization, cookies, tickets, and ticket hashes", () => {
+  it("redacts authorization, passwords, cookies, tickets, and ticket hashes", () => {
     for (const required of [
       "req.headers.authorization",
       "req.headers.cookie",
       "*.*.ticket",
+      "*.*.password",
+      "passwordHash",
       "ticketHash",
       "checkpointChecksum",
     ]) {
@@ -60,6 +62,7 @@ describe("HTTP foundation", () => {
     logger.info({
       payload: {
         token: "nested-token-secret",
+        password: "nested-password-secret",
         admission: { ticket: "nested-ticket-secret", ticketHash: "nested-hash-secret" },
       },
       checkpointChecksum: "checkpoint-secret",
@@ -72,6 +75,7 @@ describe("HTTP foundation", () => {
     const output = lines.join("");
     for (const secret of [
       "nested-token-secret",
+      "nested-password-secret",
       "nested-ticket-secret",
       "nested-hash-secret",
       "checkpoint-secret",

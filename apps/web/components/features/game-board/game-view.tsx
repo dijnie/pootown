@@ -5,7 +5,7 @@ import GameBoard from "./game-board";
 
 import { useGameContext } from "@/components/providers/game-provider";
 import { useParams } from "next/navigation";
-import { usePrivy } from "@privy-io/react-auth";
+import { useAuth } from "@/components/providers/auth-provider";
 import { LeftPanel } from "./left-panel";
 import { RightPanel } from "./right-panel";
 import { Spinner } from "@/components/ui/spinner";
@@ -16,7 +16,7 @@ import { GameIdSchema } from "@pootown/game-contracts";
 
 export function GameView() {
   const { address: gameAddress } = useParams<{ address: string }>();
-  const { authenticated, login, ready } = usePrivy();
+  const { authenticated, openLogin, ready } = useAuth();
   const { sessions } = useApi();
   const room = useRoom();
   const { connect, disconnect, state: roomState, status: roomStatus } = room;
@@ -83,7 +83,7 @@ export function GameView() {
   if (!authenticated) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
-        <Button onClick={login}>Sign in to reconnect</Button>
+        <Button onClick={openLogin}>Sign in to reconnect</Button>
       </div>
     );
   }

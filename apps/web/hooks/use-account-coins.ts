@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CoinBalanceResponse, UserView } from "@pootown/game-contracts";
-import { usePrivy } from "@privy-io/react-auth";
 
 import { useApi } from "@/components/providers/api-provider";
+import { useAuth } from "@/components/providers/auth-provider";
 
 type AccountCoinState = {
   readonly balance: CoinBalanceResponse | null;
@@ -15,7 +15,7 @@ type AccountCoinState = {
 };
 
 export function useAccountCoins(): AccountCoinState {
-  const { authenticated, ready } = usePrivy();
+  const { authenticated, ready } = useAuth();
   const { accounts } = useApi();
   const generation = useRef(0);
   const [balance, setBalance] = useState<CoinBalanceResponse | null>(null);

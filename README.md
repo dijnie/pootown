@@ -7,7 +7,7 @@ The legacy Rust/Anchor program remains in this repository as the frozen source o
 ## Architecture
 
 ```text
-Next.js web + Privy authentication
+Next.js web + email authentication
         | HTTPS bearer API             | WSS room ticket
         v                              v
 NestJS API ----------------------> Colyseus game server
@@ -17,7 +17,7 @@ NestJS API ----------------------> Colyseus game server
 ```
 
 - `apps/web`: Next.js frontend. It consumes typed API contracts and canonical Colyseus state. It contains no wallet signing, RPC, generated Solana SDK, or client-authorized settlement.
-- `apps/api`: NestJS authority for Privy identity, Account Coin, game definitions, admission, durable finalization, settlement, history, and leaderboard.
+- `apps/api`: NestJS authority for email identity, rotating login sessions, Account Coin, game definitions, admission, durable finalization, settlement, history, and leaderboard.
 - `apps/game-server`: Colyseus rooms, authoritative match transitions, lease fencing, recovery, and checkpoints.
 - `packages/game-contracts`: strict HTTP, room, command, event, and public-state schemas.
 - `packages/game-core`: deterministic rules derived from the approved Rust source.
@@ -75,16 +75,15 @@ The tracked public web environment template defines these deployment variables:
 ```dotenv
 NEXT_PUBLIC_API_URL=https://api.example.com
 NEXT_PUBLIC_GAME_SERVER_URL=wss://game.example.com
-NEXT_PUBLIC_PRIVY_APP_ID=your-privy-app-id
 ```
 
-Both service URLs must be canonical origins: no credentials, extra path, query, or fragment. Never expose a Privy private key, service credential, access token, or realtime ticket through a `NEXT_PUBLIC_*` variable.
+Both service URLs must be canonical origins: no credentials, extra path, query, or fragment. Never expose an auth secret, service credential, access token, or realtime ticket through a `NEXT_PUBLIC_*` variable.
 
-The API and game server validate their private runtime settings at startup. Their required variables and constraints are defined in `apps/api/src/config/api-config.ts` and `apps/game-server/src/app-config.ts`; secrets belong in the deployment secret manager, not files committed to Git.
+The API requires distinct `AUTH_ACCESS_TOKEN_SECRET` and `AUTH_REFRESH_TOKEN_SECRET` values of at least 32 characters, plus its database, CORS, and internal-service settings. The API and game server validate private runtime settings at startup. Their exact constraints are defined in `apps/api/src/config/api-config.ts` and `apps/game-server/src/app-config.ts`; secrets belong in the deployment secret manager, not files committed to Git.
 
 ## Run built services
 
-After configuring PostgreSQL, Privy verification, internal service credentials, and allowed browser origins:
+After starting/migrating PostgreSQL and configuring auth secrets, internal service credentials, and allowed browser origins:
 
 ```bash
 pnpm --filter @pootown/api build
@@ -100,10 +99,11 @@ The API defaults to port `3001`, the game server to `2567`, and the web developm
 
 ## Security boundary
 
-- Privy access tokens authenticate the browser to the API; identity fields in request bodies are not trusted.
+- Email passwords are bcrypt-hashed at cost 12. Short-lived access tokens stay in browser memory; rotating refresh tokens use an `HttpOnly`, `SameSite=Strict` cookie and only their SHA-256 hash is stored in PostgreSQL.
+- Identity fields in request bodies are not trusted; authenticated user and session IDs come only from the verified access token.
 - Realtime tickets are short-lived, one-use, hash-only credentials and are sent only in the Colyseus join payload.
 - The API alone owns Account Coin, reservations, ledger entries, and settlement.
 - The game server owns match state and writes fenced checkpoints and terminal proofs; it cannot directly mutate API-owned balances.
-- Browser security headers allow only the configured API, game server, and Privy authentication endpoints.
+- Browser security headers allow only the configured API and game server endpoints.
 
 Implementation plans, phase evidence, and remaining release gates are tracked under `plans/260811-0313-nestjs-colyseus-monorepo-refactor/`.

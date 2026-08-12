@@ -14,9 +14,9 @@ export function createWebSecurityHeaders(rawApiOrigin: string, rawGameServerEndp
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    "child-src https://auth.privy.io",
-    "frame-src https://auth.privy.io https://challenges.cloudflare.com",
-    `connect-src 'self' https://auth.privy.io ${apiOrigin} ${gameServerEndpoint}`,
+    "child-src 'none'",
+    "frame-src https://challenges.cloudflare.com",
+    `connect-src 'self' ${apiOrigin} ${gameServerEndpoint}`,
     "worker-src 'self' blob:",
     "manifest-src 'self'",
   ].join("; ");

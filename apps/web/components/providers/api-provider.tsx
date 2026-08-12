@@ -1,9 +1,9 @@
 "use client";
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
-import { usePrivy } from "@privy-io/react-auth";
 
 import envConfig from "@/configs/env";
+import { useAuth } from "@/components/providers/auth-provider";
 import { createApiClient, type ApiClient } from "@/services/api-client";
 import { createSessionApi } from "@/services/session-api";
 import { createAccountApi } from "@/services/account-api";
@@ -17,18 +17,19 @@ type ApiContextValue = {
 const ApiContext = createContext<ApiContextValue | null>(null);
 
 export function ApiProvider({ children }: { readonly children: ReactNode }) {
-  const { getAccessToken } = usePrivy();
+  const { getAccessToken, refreshAccessToken } = useAuth();
   const value = useMemo<ApiContextValue>(() => {
     const client = createApiClient({
       baseUrl: envConfig.NEXT_PUBLIC_API_URL,
       getAccessToken,
+      refreshAccessToken,
     });
     return {
       client,
       accounts: createAccountApi(client),
       sessions: createSessionApi(client),
     };
-  }, [getAccessToken]);
+  }, [getAccessToken, refreshAccessToken]);
 
   return <ApiContext.Provider value={value}>{children}</ApiContext.Provider>;
 }

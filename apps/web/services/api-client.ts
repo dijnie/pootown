@@ -27,10 +27,12 @@ export class ApiError extends Error {
 }
 
 export type AccessTokenProvider = () => Promise<string | null>;
+export type AccessTokenRefresher = () => Promise<string | null>;
 
 export type ApiClientOptions = {
   baseUrl: string;
   getAccessToken?: AccessTokenProvider;
+  refreshAccessToken?: AccessTokenRefresher;
   timeoutMs?: number;
   fetcher?: typeof fetch;
 };
@@ -165,7 +167,10 @@ export function createApiClient(options: ApiClientOptions) {
     if (!response.ok && requestOptions.authenticated === true && response.status === 401) {
       const firstError = responseError(response, body);
       if (firstError.code === "AUTH_TOKEN_EXPIRED" || firstError.code === "AUTH_TOKEN_INVALID") {
-        ({ response, body } = await attempt(path, requestOptions));
+        const refreshed = await options.refreshAccessToken?.();
+        if (refreshed !== undefined && refreshed !== null) {
+          ({ response, body } = await attempt(path, requestOptions));
+        }
       }
     }
     if (!response.ok) throw responseError(response, body);

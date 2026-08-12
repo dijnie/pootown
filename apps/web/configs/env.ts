@@ -4,14 +4,12 @@ import { normalizeApiOrigin } from "@/services/api-origin";
 import { normalizeGameServerEndpoint } from "@/services/game-server-origin";
 
 const configSchema = z.object({
-  NEXT_PUBLIC_PRIVY_APP_ID: z.string(),
   NEXT_PUBLIC_API_URL: z.string().transform(normalizeApiOrigin),
   NEXT_PUBLIC_GAME_SERVER_URL: z.string().transform(normalizeGameServerEndpoint),
   NEXT_PUBLIC_LEADERBOARD_POLL_INTERVAL_MS: z
-    .preprocess((v) => (v === undefined ? undefined : Number(v)), z.number().optional()),
+    .preprocess((value) => (value === undefined ? undefined : Number(value)), z.number().optional()),
   NEXT_PUBLIC_LEADERBOARD_POLL_OFFSET_MS: z
-    .preprocess((v) => (v === undefined ? undefined : Number(v)), z.number().optional()),
-
+    .preprocess((value) => (value === undefined ? undefined : Number(value)), z.number().optional()),
   IS_DEVELOPMENT: z.boolean(),
 }).superRefine((configuration, context) => {
   if (!configuration.IS_DEVELOPMENT && !configuration.NEXT_PUBLIC_GAME_SERVER_URL.startsWith("wss://")) {
@@ -23,16 +21,13 @@ const configSchema = z.object({
   }
 });
 
+const runtimeEnvironment = process["env"];
 const configProject = configSchema.safeParse({
-  NEXT_PUBLIC_PRIVY_APP_ID: process.env.NEXT_PUBLIC_PRIVY_APP_ID,
-  NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-  NEXT_PUBLIC_GAME_SERVER_URL: process.env.NEXT_PUBLIC_GAME_SERVER_URL,
-  NEXT_PUBLIC_LEADERBOARD_POLL_INTERVAL_MS:
-    process.env.NEXT_PUBLIC_LEADERBOARD_POLL_INTERVAL_MS,
-  NEXT_PUBLIC_LEADERBOARD_POLL_OFFSET_MS:
-    process.env.NEXT_PUBLIC_LEADERBOARD_POLL_OFFSET_MS,
-
-  IS_DEVELOPMENT: process.env.NODE_ENV === "development",
+  NEXT_PUBLIC_API_URL: runtimeEnvironment["NEXT_PUBLIC_API_URL"],
+  NEXT_PUBLIC_GAME_SERVER_URL: runtimeEnvironment["NEXT_PUBLIC_GAME_SERVER_URL"],
+  NEXT_PUBLIC_LEADERBOARD_POLL_INTERVAL_MS: runtimeEnvironment["NEXT_PUBLIC_LEADERBOARD_POLL_INTERVAL_MS"],
+  NEXT_PUBLIC_LEADERBOARD_POLL_OFFSET_MS: runtimeEnvironment["NEXT_PUBLIC_LEADERBOARD_POLL_OFFSET_MS"],
+  IS_DEVELOPMENT: runtimeEnvironment["NODE_ENV"] === "development",
 });
 
 if (!configProject.success) {

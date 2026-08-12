@@ -4,11 +4,12 @@ import { describe, it } from "node:test";
 import { createWebSecurityHeaders } from "../services/security-headers.js";
 
 describe("web security headers", () => {
-  it("allows only the canonical API and room endpoints alongside Privy authentication", () => {
+  it("allows only the canonical API and room endpoints", () => {
     const headers = createWebSecurityHeaders("https://api.example", "wss://rooms.example");
     const policy = headers.find((header) => header.key === "Content-Security-Policy")?.value;
     assert.match(policy ?? "", /frame-ancestors 'none'/);
-    assert.match(policy ?? "", /connect-src 'self' https:\/\/auth\.privy\.io https:\/\/api\.example wss:\/\/rooms\.example/);
+    assert.match(policy ?? "", /connect-src 'self' https:\/\/api\.example wss:\/\/rooms\.example/);
+    assert.doesNotMatch(policy ?? "", /privy/i);
     assert.equal(policy?.includes("unsafe-eval"), false);
     assert.equal(policy?.includes("ticket"), false);
   });

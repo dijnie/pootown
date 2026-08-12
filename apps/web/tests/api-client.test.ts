@@ -39,9 +39,14 @@ describe("typed web API client", () => {
   it("refreshes an invalid access token at most once", async () => {
     let tokenCalls = 0;
     let fetchCalls = 0;
+    let refreshCalls = 0;
     const client = createApiClient({
       baseUrl: "https://api.example",
       getAccessToken: async () => `token-${++tokenCalls}`,
+      refreshAccessToken: async () => {
+        refreshCalls += 1;
+        return "token-2";
+      },
       fetcher: async (_input, init) => {
         fetchCalls += 1;
         const headers = init?.headers as Record<string, string>;
@@ -58,6 +63,7 @@ describe("typed web API client", () => {
     assert.deepEqual(await client.get("/v1/me", undefined, responseSchema, true), { value: "ok" });
     assert.equal(fetchCalls, 2);
     assert.equal(tokenCalls, 2);
+    assert.equal(refreshCalls, 1);
   });
 
   it("fails closed on malformed success and error envelopes", async () => {
