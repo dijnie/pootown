@@ -15,7 +15,7 @@ export class ProvisioningTestIdentityService extends IdentityService {
     const email = `${createHash("sha256").update(principal.userId).digest("hex")}@example.test`;
     await client.query(
       `INSERT INTO identity.users (id, email, password_hash, created_at, updated_at, last_seen_at)
-       VALUES ($1, $2, $3, $4, $4, $4) ON CONFLICT (id) DO NOTHING`,
+       VALUES ($1, $2, $3, $4, $4, $4) ON CONFLICT DO NOTHING`,
       [principal.userId, email, TEST_PASSWORD_HASH, now],
     );
     return super.findAndTouchPrincipal(client, principal, now);
