@@ -343,7 +343,7 @@ describe("server-authoritative room command handler", () => {
     }
   });
 
-  it("does not predate a late admitted seat when the host clock rolls back", async () => {
+  it("does not predate a late admitted seat when storage and host clocks lag", async () => {
     const store = new FakeStore();
     const joinedAtMs = Date.parse("2026-08-11T21:00:02.000Z");
     const state = waitingState();
@@ -351,6 +351,7 @@ describe("server-authoritative room command handler", () => {
       index === 1 && seat !== null ? Object.freeze({ ...seat, joinedAtMs }) : seat);
     const handler = new RoomCommandHandler({
       initialState: Object.freeze({ ...state, seats: Object.freeze(seats) }),
+      initialCommittedAtMs: joinedAtMs - 2_000,
       lease,
       nowMs: () => joinedAtMs - 1_000,
       store,

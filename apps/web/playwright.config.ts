@@ -30,7 +30,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `pnpm build && pnpm start --hostname 127.0.0.1 --port ${port}`,
+    command: `pnpm build && HOSTNAME=127.0.0.1 PORT=${port} pnpm start`,
     cwd: ".",
     env: {
       NEXT_PUBLIC_API_URL: "https://api.example.com",

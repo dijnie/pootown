@@ -95,7 +95,7 @@ describe("immutable card decks", () => {
       {
         name: "chance-and-community-cards",
         status: "source-evidenced",
-        evidence: ["programs/panda-monopoly/src/instructions/special_spaces.rs"],
+        evidence: ["packages/game-core/test/card-decks.test.ts"],
       },
     );
   });

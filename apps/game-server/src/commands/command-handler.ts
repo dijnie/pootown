@@ -276,10 +276,10 @@ export class RoomCommandHandler {
   public constructor(private readonly options: RoomCommandHandlerOptions) {
     this.state = options.initialState;
     const initialFloor = options.initialCommittedAtMs ?? committedTimestampFloor(options.initialState);
-    if (!Number.isSafeInteger(initialFloor) || initialFloor < committedTimestampFloor(options.initialState)) {
+    if (!Number.isSafeInteger(initialFloor) || initialFloor < 0) {
       throw new InvalidRoomCommandError("Initial committed timestamp is invalid");
     }
-    this.committedAtMs = initialFloor;
+    this.committedAtMs = Math.max(initialFloor, committedTimestampFloor(options.initialState));
   }
 
   public handle(

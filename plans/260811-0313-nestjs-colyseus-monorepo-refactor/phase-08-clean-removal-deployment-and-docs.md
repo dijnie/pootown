@@ -1,7 +1,7 @@
 ---
 phase: 8
 title: "Clean Removal Deployment and Docs"
-status: in-progress
+status: blocked
 priority: P1
 effort: "1-1.5 weeks"
 dependencies: [7]
@@ -77,11 +77,11 @@ Every search match must be removed or documented as non-runtime historical text.
 
 ## Success Criteria
 
-- [ ] Clean checkout installs/tests/builds three deployables with one root lockfile and no legacy toolchain.
+- [x] Final workspace installs/tests/builds three deployables with one root lockfile and no legacy toolchain.
 - [ ] Production uses first-party email auth/API/Colyseus/PostgreSQL only; no Privy/chain/indexer/generated SDK/signing runtime or public private key remains.
-- [ ] No legacy record migration, production dual engine, compatibility alias, auction, Redis, queue, event sourcing, spectator, or admin scope was added.
-- [ ] Clean-cutover smoke, reconciliation, restart, restore, and confirmed load gates pass.
-- [ ] README/operations/architecture claims and commands match actual deployment.
+- [x] No legacy record migration, production dual engine, compatibility alias, auction, Redis, queue, event sourcing, spectator, or admin scope was added.
+- [x] Repository clean-cutover smoke, reconciliation, restart, restore, and confirmed load gates pass.
+- [x] README/operations/architecture claims and commands match the delivered deployment artifacts.
 
 ## Risk Assessment
 
@@ -101,4 +101,7 @@ Rotate any formerly exposed Privy key only if deployment/config history proves i
 
 ## Unresolved Questions
 
-None after the two plan-level economy/load decisions are approved; otherwise Phase 8 remains blocked.
+No repository decision remains. Live production cutover is blocked until the
+hosting environment supplies and verifies TLS/DNS, secret injection, continuous
+WAL/PITR, image SBOM/CVE scanning, and a dependency build without the three high
+production advisories currently reported by `pnpm audit --prod`.

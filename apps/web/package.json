@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "build": "next build && node scripts/prepare-standalone.mjs",
+    "start": "node .next/standalone/apps/web/server.js",
     "lint": "eslint",
     "test": "pnpm --filter @pootown/game-contracts build && tsc -p tsconfig.test.json && node --test .test-dist/tests/*.test.js",
     "test:visual": "playwright test --config playwright.config.ts"

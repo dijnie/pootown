@@ -8,11 +8,20 @@ REVOKE ALL ON SCHEMA identity, economy, game, readmodel, realtime FROM PUBLIC;
 
 CREATE TABLE identity.users (
   id varchar(128) PRIMARY KEY,
-  privy_did varchar(256) NOT NULL UNIQUE,
+  email varchar(254) NOT NULL UNIQUE,
+  password_hash varchar(60) NOT NULL,
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   last_seen_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-  CONSTRAINT users_timestamps_ordered CHECK (created_at <= updated_at AND created_at <= last_seen_at)
+  CONSTRAINT users_timestamps_ordered CHECK (created_at <= updated_at AND created_at <= last_seen_at),
+  CONSTRAINT users_email_canonical CHECK (
+    email = lower(email)
+    AND email !~ '[[:space:]]'
+    AND email ~ '^[^@]+@[^@]+\.[^@]+$'
+  ),
+  CONSTRAINT users_password_hash_bcrypt CHECK (
+    password_hash ~ '^\$2[aby]\$12\$[./A-Za-z0-9]{53}$'
+  )
 );
 
 CREATE TABLE game.game_definitions (
@@ -329,7 +338,8 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
   IF OLD.id IS DISTINCT FROM NEW.id
-    OR OLD.privy_did IS DISTINCT FROM NEW.privy_did
+    OR OLD.email IS DISTINCT FROM NEW.email
+    OR OLD.password_hash IS DISTINCT FROM NEW.password_hash
     OR OLD.created_at IS DISTINCT FROM NEW.created_at THEN
     RAISE EXCEPTION 'user identity is immutable' USING ERRCODE = '55000';
   END IF;
@@ -575,7 +585,10 @@ REVOKE ALL ON ALL TABLES IN SCHEMA identity, economy, game, readmodel, realtime 
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA identity, economy, game, realtime FROM PUBLIC;
 
 GRANT USAGE ON SCHEMA identity, economy, game, readmodel TO api_runtime;
-GRANT SELECT, INSERT ON identity.users TO api_runtime;
+GRANT SELECT (id, email, password_hash, created_at, updated_at, last_seen_at)
+  ON identity.users TO api_runtime;
+GRANT INSERT (id, email, password_hash, created_at, updated_at, last_seen_at)
+  ON identity.users TO api_runtime;
 GRANT UPDATE (updated_at, last_seen_at) ON identity.users TO api_runtime;
 GRANT SELECT, INSERT ON economy.coin_accounts, economy.coin_operations, economy.coin_reservations, economy.game_settlements TO api_runtime;
 GRANT UPDATE (available_coin, reserved_coin, version, updated_at, last_rescue_grant_at)

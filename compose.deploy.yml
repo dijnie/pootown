@@ -1,0 +1,116 @@
+services:
+  postgres:
+    image: postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+    environment:
+      POSTGRES_DB: ${POOTOWN_POSTGRES_DB:-pootown}
+      POSTGRES_USER: ${POOTOWN_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POOTOWN_POSTGRES_PASSWORD:?required}
+    volumes:
+      - pootown-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    image: pootown-api:${POOTOWN_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["sh", "-c", "exec node dist/database/migrate-database.js \"$${DATABASE_URL}\""]
+    environment:
+      DATABASE_URL: ${POOTOWN_MIGRATION_DATABASE_URL:?required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  provision-runtime-roles:
+    image: postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+    command:
+      - sh
+      - -ec
+      - >-
+        psql "$${DATABASE_URL}"
+        -v api_runtime_password="$${API_RUNTIME_PASSWORD}"
+        -v realtime_runtime_password="$${REALTIME_RUNTIME_PASSWORD}"
+        -f /opt/pootown/provision-runtime-logins.sql
+    environment:
+      DATABASE_URL: ${POOTOWN_MIGRATION_DATABASE_URL:?required}
+      API_RUNTIME_PASSWORD: ${POOTOWN_API_DATABASE_PASSWORD:?required}
+      REALTIME_RUNTIME_PASSWORD: ${POOTOWN_REALTIME_DATABASE_PASSWORD:?required}
+    volumes:
+      - ./deploy/provision-runtime-logins.sql:/opt/pootown/provision-runtime-logins.sql:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  api:
+    image: pootown-api:${POOTOWN_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: production
+      API_HOST: 0.0.0.0
+      API_PORT: 3001
+      DATABASE_URL: ${POOTOWN_API_DATABASE_URL:?required}
+      CORS_ORIGINS: ${POOTOWN_WEB_ORIGIN:?required}
+      AUTH_ACCESS_TOKEN_SECRET: ${AUTH_ACCESS_TOKEN_SECRET:?required}
+      AUTH_REFRESH_TOKEN_SECRET: ${AUTH_REFRESH_TOKEN_SECRET:?required}
+      AUTH_ACCESS_TOKEN_TTL_SECONDS: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:-900}
+      AUTH_REFRESH_TOKEN_TTL_SECONDS: ${AUTH_REFRESH_TOKEN_TTL_SECONDS:-2592000}
+      INTERNAL_JWT_ISSUER: ${INTERNAL_JWT_ISSUER:-pootown-api}
+      INTERNAL_JWT_AUDIENCE: ${INTERNAL_JWT_AUDIENCE:-pootown-internal}
+      INTERNAL_JWT_PUBLIC_KEY: ${INTERNAL_JWT_PUBLIC_KEY:?required}
+    ports:
+      - "${POOTOWN_API_PORT:-3001}:3001"
+    depends_on:
+      provision-runtime-roles:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  game-server:
+    image: pootown-game-server:${POOTOWN_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: apps/game-server/Dockerfile
+    environment:
+      API_BASE_URL: http://api:3001
+      DATABASE_URL: ${POOTOWN_REALTIME_DATABASE_URL:?required}
+      GAME_SERVER_INSTANCE_ID: ${GAME_SERVER_INSTANCE_ID:-pootown-1}
+      GAME_SERVER_ORIGINS: ${POOTOWN_WEB_ORIGIN:?required}
+      GAME_SERVER_PORT: 2567
+      INTERNAL_SERVICE_AUDIENCE: ${INTERNAL_JWT_AUDIENCE:-pootown-internal}
+      INTERNAL_SERVICE_ID: game-server
+      INTERNAL_SERVICE_ISSUER: ${INTERNAL_JWT_ISSUER:-pootown-api}
+      INTERNAL_SERVICE_PRIVATE_KEY: ${INTERNAL_SERVICE_PRIVATE_KEY:?required}
+    ports:
+      - "${POOTOWN_GAME_SERVER_PORT:-2567}:2567"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    image: pootown-web:${POOTOWN_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${POOTOWN_PUBLIC_API_URL:?required}
+        NEXT_PUBLIC_GAME_SERVER_URL: ${POOTOWN_PUBLIC_GAME_SERVER_URL:?required}
+    ports:
+      - "${POOTOWN_WEB_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+      game-server:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pootown-postgres-data:

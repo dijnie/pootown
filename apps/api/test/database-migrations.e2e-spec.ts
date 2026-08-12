@@ -299,6 +299,21 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       await client.query("BEGIN");
       try {
         await client.query(`
+          INSERT INTO identity.users
+            (id, email, password_hash, created_at, updated_at, last_seen_at)
+          VALUES (
+            'runtime_registration_probe',
+            'runtime-registration@example.test',
+            '$2b$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            now(), now(), now()
+          )
+        `);
+      } finally {
+        await client.query("ROLLBACK");
+      }
+      await client.query("BEGIN");
+      try {
+        await client.query(`
           INSERT INTO game.realtime_tickets
             (id, token_hash, user_id, game_session_id, room_id, reservation_id, player_id, role, expires_at)
           VALUES ('ticket_expiry_probe', decode(repeat('6b', 32), 'hex'), 'user_1', 'game_1', 'room_1',

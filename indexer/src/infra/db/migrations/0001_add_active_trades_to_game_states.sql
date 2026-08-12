@@ -1,1 +1,0 @@
-ALTER TABLE "game_states" ADD COLUMN "active_trades" json DEFAULT '[]'::json NOT NULL;

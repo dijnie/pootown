@@ -54,7 +54,11 @@ case "${gate}" in
   security) run_security ;;
   reliability) run_reliability ;;
   restore) ./scripts/run-backup-restore-drill.sh ;;
-  load) shift; ./scripts/run-load-gate.sh "$@" ;;
+  load)
+    shift
+    if [[ "${1:-}" == "--" ]]; then shift; fi
+    ./scripts/run-load-gate.sh "$@"
+    ;;
   all)
     run_quality
     run_contracts

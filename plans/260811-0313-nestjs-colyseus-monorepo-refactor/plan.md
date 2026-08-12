@@ -1,13 +1,13 @@
 ---
 title: "Pootown NestJS and Colyseus Monorepo Refactor"
 description: "Cleanly replace the Solana runtime with independently deployable NestJS and Colyseus services while preserving the current web experience and executed game rules."
-status: in-progress
+status: blocked
 priority: P1
 effort: 10-13 weeks
 issue: null
 branch: main
 tags: [refactor, frontend, backend, database, api, auth, critical]
-blockedBy: []
+blockedBy: [hosting-security-and-production-cutover]
 blocks: []
 created: 2026-08-11
 ---
@@ -45,23 +45,26 @@ Authority precedence: accepted CEO decisions and this implementation plan overri
 | 5 | [Colyseus rooms and recovery](./phase-05-colyseus-rooms-and-recovery.md) | 3, 4 | Complete |
 | 6 | [Frontend runtime cutover](./phase-06-frontend-runtime-cutover.md) | 4, 5 | Complete |
 | 7 | [Reliability, security, and load gates](./phase-07-reliability-security-and-load-gates.md) | 6 | Complete |
-| 8 | [Clean removal, deployment, and docs](./phase-08-clean-removal-deployment-and-docs.md) | 7 | In progress |
+| 8 | [Clean removal, deployment, and docs](./phase-08-clean-removal-deployment-and-docs.md) | 7 | Repository complete; production blocked |
 
 Critical path: `1 -> 2 -> 3/4 -> 5 -> 6 -> 7 -> 8`. Phases 3 and 4 may proceed concurrently after Phase 2 if file ownership remains separate.
 
 ## Acceptance Criteria
 
-- [ ] Email/password login with rotating server sessions; every API request/room command is authenticated, authorized, schema-validated, and server-authoritative.
-- [ ] Create, discover, join, start, play, reconnect, finish, settle, review, and leaderboard flows preserve current visible UX with no new action.
-- [ ] Account coin and in-match cash are distinct; ledger, reservations, refunds, and settlements remain atomic and idempotent under retries/concurrency.
-- [ ] Every accepted command commits its full versioned checkpoint before ack/broadcast; lease fencing and restart/restore tests prevent split ownership or lost state.
-- [ ] Reachable Rust behavior has executable characterization evidence; the approved frozen-source authority covers runtime paths unreachable after the legacy start rollback. Unsupported auction and absent card effects are not invented.
-- [ ] API, game server, and web build/deploy/restart independently; database-role tests, backup/restore drill, visual regression, crash matrix, and confirmed 200-client/~50-room gate pass.
-- [ ] Browser and production backend contain no Solana, Anchor, Magic Block, indexer, generated SDK, wallet-signing, or Privy runtime surface.
+- [x] Email/password login with rotating server sessions; every API request/room command is authenticated, authorized, schema-validated, and server-authoritative.
+- [x] Create, discover, join, start, play, reconnect, finish, settle, review, and leaderboard flows preserve current visible UX with no new action.
+- [x] Account coin and in-match cash are distinct; ledger, reservations, refunds, and settlements remain atomic and idempotent under retries/concurrency.
+- [x] Every accepted command commits its full versioned checkpoint before ack/broadcast; lease fencing and restart/restore tests prevent split ownership or lost state.
+- [x] Reachable Rust behavior has executable characterization evidence; the approved frozen-source authority covers runtime paths unreachable after the legacy start rollback. Unsupported auction and absent card effects are not invented.
+- [x] API, game server, and web build/deploy/restart independently; database-role tests, backup/restore drill, visual regression, crash matrix, and confirmed 200-client/~50-room gate pass.
+- [ ] The live production deployment contains no Solana, Anchor, Magic Block, indexer, generated SDK, wallet-signing, or Privy runtime surface. Repository and image scans pass; live cutover remains external.
 
 ## Unresolved Questions
 
-None.
+No product or repository question remains. Production publication is blocked on
+a hosting-owned TLS/DNS/secrets/WAL-PITR rehearsal, an image CVE/SBOM gate, and
+resolution of the three high production dependency advisories reported by
+`pnpm audit --prod`.
 
 ## Red Team Review
 
@@ -71,7 +74,9 @@ None.
 
 ## Validation Log
 
-- 2026-08-12 — Phase 7 completed after review strengthened monotonic room timestamps, row-level restore fingerprints, dependency/visual gates, and source-manifest provenance. The final 200-player/50-room/30-minute gate accepted 95,502 realistic commands (including property purchase, rent, tax, cards, bankruptcy, and trade) plus one settlement with zero rejects, duplicate durable commands, or ledger mismatches. Join p95 was 32.5ms; command ack p95/p99 was 73.8/83.9ms; API pool peak was 60%; event-loop p99 was 22.2ms; PostgreSQL CPU p95 was 0.87%. Reports: [load](./reports/phase-07-load-results.json) · [restore](./reports/phase-07-restore-results.json).
+- 2026-08-12 — Phase 8 repository delivery completed: legacy Rust/Anchor/indexer/runtime surfaces were removed; three pinned non-root images passed package inventory; production-like Compose smoke passed isolated migration/API/realtime roles, email auth, web, gameplay, and settlement; and clean-cluster encrypted restore matched source fingerprints with zero ledger mismatches. Production publication remains blocked by the external controls recorded above.
+
+- 2026-08-12 — Phase 7 completed after review strengthened monotonic room timestamps, row-level restore fingerprints, dependency/visual gates, and source-manifest provenance. The final current-source 200-player/50-room/30-minute gate accepted 93,336 realistic commands (including property purchase, rent, tax, cards, bankruptcy, and trade) plus two settlements with zero rejects, duplicate durable commands, ledger mismatches, or DB lock waiters. Join p95 was 30.7ms; command ack p95/p99 was 71.4/81.1ms; API pool peak was 50%; event-loop p99 was 22.1ms; PostgreSQL CPU p95 was 0.84%. Reports: [load](./reports/phase-07-load-results.json) · [restore](./reports/phase-07-restore-results.json).
 
 - 2026-08-12 — Phase 6 frontend cutover completed. Web unit tests passed 38/38; API unit tests passed 28/28; web/API lint, typecheck, and production builds passed; public desktop/mobile visual checks passed 6/6; and the isolated PostgreSQL/API/Colyseus/production-web vertical passed create, join, start, and canonical reload on desktop and mobile. Six additional fresh desktop environments passed consecutively. Automatic reconnect preserves and replays pending request IDs, while explicit disconnect remains destructive. Full play-to-finish, outage/fault injection, browser error-state, restore, and load evidence remains owned by Phase 7; the prior isolated join 500 is not currently reproducible and remains a Phase 7 observability target.
 

@@ -1,18 +1,15 @@
 # Executed rules authority
 
-`manifest.json` freezes the implementation boundary before the off-chain port.
-The pre-start lifecycle and start-runtime-boundary fixtures are verified against
-the compiled Anchor program on a local Solana validator with the pinned
-MagicBlock programs. The start attempt currently rolls back after delegation
-and event logs because the SBF runtime reports an access violation; the fixture
-does not describe that attempt as a successful state transition. Other families
-remain explicitly source-evidenced until they gain an executable observation.
-The characterization test fails if those sources disappear or the two primary
-source hashes drift.
+`manifest.json` freezes the implementation boundary captured before the
+off-chain port. It is now a self-contained, transport-neutral parity corpus:
+the legacy validator, program, generated client, and characterization runner
+were removed after the target core and release gates passed. Source hashes and
+the rolled-back start observation remain historical provenance only; no test
+requires a chain toolchain or source checkout.
 
-The source hashes are provenance, not a target API. Phase 2 and Phase 3 consume
-transport-neutral expectations and must not reproduce PDA, signature, wallet,
-callback, or transaction shapes.
+The source hashes are provenance, not a target API. Target tests consume only
+transport-neutral expectations and must not reproduce chain account, signature,
+wallet, callback, or transaction shapes.
 
 The legacy Community Chest card sends the player to position 21 even though the
 board defines Free Parking at position 20. Position 21 is retained here only as

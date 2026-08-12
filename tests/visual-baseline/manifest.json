@@ -14,7 +14,7 @@
     { "route": "/", "viewport": "mobile", "file": "mobile/landing.png", "sha256": "f95fb6fed24eccacff0095c52aa0a669a3ec816a6c46887c4fef2b956b627642" }
   ],
   "limitations": [
-    "Authenticated dialogs require a real Privy application and funded local game state; no secret or production identity was used for baseline capture.",
-    "Board, dialog, and authenticated interaction baselines remain missing; the CEO explicitly deferred this Phase 1 sub-gate while retaining it as a mandatory Phase 6/7 release gate. Invalid blank/error screenshots were removed."
+    "This original public baseline predates first-party email authentication and used no secret or production identity.",
+    "Authenticated board, dialog, and interaction coverage is maintained by the Phase 6 production-browser vertical suite rather than this historical baseline set."
   ]
 }

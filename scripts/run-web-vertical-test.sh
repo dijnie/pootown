@@ -132,7 +132,8 @@ game_server_pid=$!
 setsid env \
   NEXT_PUBLIC_API_URL="http://127.0.0.1:${api_port}" \
   NEXT_PUBLIC_GAME_SERVER_URL="ws://127.0.0.1:${game_server_port}" \
-  pnpm --filter ./apps/web start --hostname 127.0.0.1 --port "${web_port}" >"${task_tmp_dir}/web.log" 2>&1 &
+  HOSTNAME=127.0.0.1 PORT="${web_port}" \
+    pnpm --filter ./apps/web start >"${task_tmp_dir}/web.log" 2>&1 &
 web_pid=$!
 
 wait_for_url() {

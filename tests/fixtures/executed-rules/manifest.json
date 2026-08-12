@@ -18,17 +18,17 @@
   "ruleFamilies": [
     {
       "name": "pre-start-lifecycle-and-seating",
-      "status": "characterized",
+      "status": "fixture-frozen",
       "evidence": [
-        "tests/characterization/anchor-lifecycle.test.ts",
+        "packages/game-core/test/lifecycle.test.ts",
         "tests/fixtures/executed-rules/lifecycle.json"
       ]
     },
     {
       "name": "start-runtime-boundary",
-      "status": "characterized",
+      "status": "fixture-frozen",
       "evidence": [
-        "tests/characterization/anchor-start.test.ts",
+        "packages/game-core/test/lifecycle.test.ts",
         "tests/fixtures/executed-rules/start.json"
       ]
     },
@@ -36,41 +36,39 @@
       "name": "turn-and-movement",
       "status": "source-evidenced",
       "evidence": [
-        "tests/roll-dice.test.ts",
-        "tests/move-player.test.ts",
-        "tests/end-turn.test.ts"
+        "packages/game-core/test/gameplay-turn-transition.test.ts"
       ]
     },
     {
       "name": "board-and-property",
       "status": "source-evidenced",
       "evidence": [
-        "programs/panda-monopoly/src/constants.rs",
-        "programs/panda-monopoly/src/instructions/property.rs"
+        "packages/game-core/test/board-definition.test.ts",
+        "packages/game-core/test/property-rules.test.ts"
       ]
     },
     {
       "name": "chance-and-community-cards",
       "status": "source-evidenced",
-      "evidence": ["programs/panda-monopoly/src/instructions/special_spaces.rs"]
+      "evidence": ["packages/game-core/test/card-decks.test.ts"]
     },
     {
       "name": "jail",
       "status": "source-evidenced",
-      "evidence": ["tests/pay-jail-fine.test.ts"]
+      "evidence": ["packages/game-core/test/jail-rules.test.ts"]
     },
     {
       "name": "trade",
       "status": "source-evidenced",
-      "evidence": ["programs/panda-monopoly/src/instructions/trading.rs"]
+      "evidence": ["packages/game-core/test/trade-rules.test.ts"]
     },
     {
       "name": "bankruptcy-timeout-and-terminal",
       "status": "source-evidenced",
       "evidence": [
-        "programs/panda-monopoly/src/instructions/bankruptcy.rs",
-        "programs/panda-monopoly/src/instructions/permissionless.rs",
-        "programs/panda-monopoly/src/instructions/end_game.rs"
+        "packages/game-core/test/bankruptcy-rules.test.ts",
+        "packages/game-core/test/timeout-rules.test.ts",
+        "packages/game-core/test/terminal-rules.test.ts"
       ]
     },
     {
