@@ -105,6 +105,7 @@ test("duplicate start clicks commit once and reload recovers canonical state wit
     await joiner.reload();
     await expect(joiner).toHaveURL(new RegExp(`/game/${gameId}$`));
     await expect(joiner.getByText("Waiting for host to start game")).toHaveCount(0);
+    await expect(joiner.getByRole("button", { name: "GAME SETTINGS" })).toBeVisible({ timeout: 15_000 });
     expect(browserErrors).toEqual([]);
   } finally {
     await creatorContext.close();

@@ -19,7 +19,7 @@ export function GameView() {
   const { authenticated, openLogin, ready } = useAuth();
   const { sessions } = useApi();
   const room = useRoom();
-  const { disconnect, reconnect, state: roomState, status: roomStatus } = room;
+  const { disconnect, reconnect, state: roomState } = room;
   const { setGameId, gameState, gameLoading, gameError } = useGameContext();
   const [reconnectError, setReconnectError] = useState<Error | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
@@ -54,11 +54,14 @@ export function GameView() {
     if (
       !parsedGameId.success ||
       !ready ||
-      !authenticated ||
-      roomStatus === "connecting"
+      !authenticated
     )
       return;
-    if (roomState?.gameId === parsedGameId.data) return;
+    if (roomState?.gameId === parsedGameId.data) {
+      setReconnectError(null);
+      setReconnecting(false);
+      return;
+    }
     if (reconnectRequest.current.gameId !== parsedGameId.data) {
       reconnectRequest.current = {
         gameId: parsedGameId.data,
@@ -92,7 +95,6 @@ export function GameView() {
     reconnectAttempt,
     reconnect,
     roomState?.gameId,
-    roomStatus,
     sessions,
   ]);
 
