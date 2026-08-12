@@ -21,7 +21,7 @@ Preserve pages, board, dialogs, animation, sound, and interaction flow while rep
 ## Requirements
 
 - Functional: Privy login/refresh; session browse/create/join; ticket connection; state patches; ack/reject; reconnect/full replacement; results/history/leaderboard/account coin.
-- UX: no new visible action or redesign; same breakpoints/states. Auction and missing effects stay absent. Remove spectator controls. Preserve Claim Reward as a settlement status/idempotent retry control; it never calculates or authorizes payout.
+- UX: no new visible action or redesign; same breakpoints/states. Auction and missing effects stay absent. Remove spectator controls. Replace Claim Reward with read-only settlement status; server reconciliation retries automatically and the browser never calculates, authorizes, or triggers payout.
 - Use opaque user/player IDs. Clearly distinguish non-withdrawable account coin from in-match cash; remove wallet signature/deposit/withdraw semantics.
 - Stable request IDs survive retries; stale revision triggers full resync, never optimistic overwrite.
 
@@ -52,7 +52,7 @@ Delete after imports/tests prove unused: `/home/dijnie/project/persional/pootown
 4. Reimplement `GameProvider` visible methods as typed commands. Disable duplicate submit while pending; reconcile ack/reject/version.
 5. Adapt events/logs/sounds to domain events, timeout state, and the all-offline abort/refund result. Correct controls/results derive from canonical state if an event is missed.
 6. Replace lobby/indexer reads with API v1. Preserve meaningful visible fields; remove blockchain earnings/claim concepts rather than fake them.
-7. Replace wallet/balance copy with Privy profile and labeled account coin/in-match cash. Remove signature/deposit/withdraw/transaction/explorer/PDA flows without adding actions. Keep Claim Reward in its existing visual location, backed only by settlement status and an idempotent retry request.
+7. Replace wallet/balance copy with Privy profile and labeled account coin/in-match cash. Remove signature/deposit/withdraw/transaction/explorer/PDA flows without adding actions. Replace Claim Reward in its existing visual location with read-only settlement status sourced from the public session lifecycle; server reconciliation owns retries.
 8. Remove unused Solana adapters/dependencies only after green visual, interaction, contract, and bundle scans.
 9. Add a Privy-compatible web CSP/security-header policy: exact API/WSS `connect-src`, restrictive `frame-ancestors`, production-safe script policy/nonces where practical, and browser tests proving auth/join still work without token/ticket leakage.
 

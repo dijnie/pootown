@@ -58,7 +58,6 @@ interface GameContextType {
   payPriorityFeeTax: () => Promise<void>;
   declareBankruptcy: () => Promise<void>;
   endGame: () => Promise<void>;
-  claimReward: () => Promise<void>;
   createTrade: (receiver: string, initiatorOffer: TradeOffer, targetOffer: TradeOffer) => Promise<void>;
   acceptTrade: (tradeId: string, proposer: string) => Promise<void>;
   rejectTrade: (tradeId: string) => Promise<void>;
@@ -262,7 +261,6 @@ export function GameProvider({ children }: { readonly children: ReactNode }) {
     payPriorityFeeTax,
     declareBankruptcy,
     endGame: () => unsupported("Manual end game"),
-    claimReward: () => unsupported("Client-side reward claim"),
     createTrade,
     acceptTrade,
     rejectTrade,

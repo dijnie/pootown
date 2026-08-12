@@ -36,7 +36,7 @@ import {
 import { GameLogs } from "./game-logs";
 import { useRouter } from "next/navigation";
 import { GameStatus } from "@/types/schema";
-import { ClaimRewardButton } from "./claim-reward-button";
+import { SettlementStatusCard } from "./settlement-status-card";
 
 interface MonopolyBoardProps {
   boardRotation: number;
@@ -355,7 +355,7 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
 function GameEndedStatus() {
   return (
     <div className="flex items-center justify-center w-full h-full">
-      <ClaimRewardButton />
+      <SettlementStatusCard />
     </div>
   );
 }
