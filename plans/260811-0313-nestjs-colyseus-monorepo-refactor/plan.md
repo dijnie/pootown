@@ -7,7 +7,7 @@ effort: 10-13 weeks
 issue: null
 branch: main
 tags: [refactor, frontend, backend, database, api, auth, critical]
-blockedBy: [260812-0303-email-auth-and-local-postgresql-cutover]
+blockedBy: []
 blocks: []
 created: 2026-08-11
 ---

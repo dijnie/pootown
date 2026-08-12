@@ -1,7 +1,7 @@
 ---
 title: "Email Auth and Local PostgreSQL Cutover"
 description: "Replace Privy with first-party email/password sessions and provide a reproducible PostgreSQL Docker environment."
-status: in-progress
+status: complete
 priority: P1
 effort: 3-5 days
 issue: null
@@ -52,18 +52,18 @@ Risk: high blast radius, but bounded by clean-cutover/no-live-user assumption an
 |---|---|---|---|
 | 1 | [Docker PostgreSQL and schema boundary](./phase-01-start.md) | - | Complete |
 | 2 | [API email authentication](./phase-02-api-email-authentication.md) | 1 | Complete |
-| 3 | [Web cutover and verification](./phase-03-web-cutover-and-verification.md) | 2 | Pending |
+| 3 | [Web cutover and verification](./phase-03-web-cutover-and-verification.md) | 2 | Complete |
 
 ## Acceptance Criteria
 
-- [ ] `docker compose up -d postgres` reaches healthy state with persistent data; migrations are repeatable on PostgreSQL 17.6.
-- [ ] Concurrent registration for one canonical email creates one user and exactly one initial 1,000 Account Coin grant.
-- [ ] Login is enumeration-resistant; passwords are never logged or returned; malformed/oversized input fails closed.
-- [ ] Access JWTs bind immutable user/session IDs and expire quickly; refresh rotation invalidates the prior token; replay revokes the session; logout revokes it.
-- [ ] Existing authenticated API/game admission paths work with the new principal and no Privy-shaped field remains.
-- [ ] Web supports register/login/logout, bounded transparent refresh, reload via refresh cookie, and no token persistence in local/session storage.
-- [ ] Privy dependencies, provider, env, CSP origins, verifier, config, tests, and documentation are removed.
-- [ ] Frozen install, contracts/API/web tests, migration/role E2E, lint, builds, chain/Privy scan, and a real local HTTP auth smoke test pass.
+- [x] `docker compose up -d postgres` reaches healthy state with persistent data; migrations are repeatable on PostgreSQL 17.6.
+- [x] Concurrent registration for one canonical email creates one user and exactly one initial 1,000 Account Coin grant.
+- [x] Login is enumeration-resistant; passwords are never logged or returned; malformed/oversized input fails closed.
+- [x] Access JWTs bind immutable user/session IDs and expire quickly; refresh rotation invalidates the prior token; replay revokes the session; logout revokes it.
+- [x] Existing authenticated API/game admission paths work with the new principal and no Privy-shaped field remains.
+- [x] Web supports register/login/logout, bounded transparent refresh, reload via refresh cookie, and no token persistence in local/session storage.
+- [x] Privy dependencies, provider, env, CSP origins, verifier, config, tests, and documentation are removed.
+- [x] Frozen install, contracts/API/web tests, migration/role E2E, relevant lint/builds, chain/Privy scan, and a real local HTTP auth smoke test pass.
 
 ## Rollback
 

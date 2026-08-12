@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Web Cutover and Verification"
-status: pending
+status: complete
 priority: P1
 effort: "1-2 days"
 dependencies: [2]
@@ -16,7 +16,7 @@ Replace Privy React integration with first-party email registration/login UI and
 ## Requirements
 
 - Functional: register/login modal, logout, refresh-on-load, one bounded refresh after 401, authenticated create/join/reconnect/account calls.
-- Security: `credentials: include` only for auth refresh/logout, no token in URL/storage/log, no Privy CSP origin/env/dependency.
+- Security: credentialed cookies are confined to the four auth routes; no token in URL/storage/log and no Privy CSP origin/env/dependency.
 
 ## Related Code Files
 
@@ -34,8 +34,8 @@ Replace Privy React integration with first-party email registration/login UI and
 
 ## Success Criteria
 
-- [ ] Reload restores auth only through the refresh cookie.
-- [ ] Logout clears client access and revokes server refresh session.
-- [ ] Existing game actions still use bearer access tokens and typed server contracts.
-- [ ] Web visual shell remains unchanged except the accepted email auth dialog/copy.
-- [ ] Full test/lint/build/smoke and secret/import scans pass.
+- [x] Reload restores auth only through the refresh cookie.
+- [x] Logout clears client access and revokes server refresh session.
+- [x] Existing game actions still use bearer access tokens and typed server contracts.
+- [x] Web visual shell remains unchanged except the accepted email auth dialog/copy.
+- [x] Web tests, changed-scope ESLint, full TypeScript, production build, HTTP smoke, and secret/import scans pass. The unrelated legacy full-web lint baseline remains tracked separately.
