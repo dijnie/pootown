@@ -8,7 +8,7 @@ import type { AccessTokenVerifier } from "../src/auth/auth.types";
 import { InternalAuthGuard, type InternalAuthenticatedRequest } from "../src/auth/internal-auth.guard";
 import type { InternalCallerVerifier } from "../src/auth/internal-caller.types";
 import { verifyInternalToken } from "../src/auth/internal-service-token.verifier";
-import { PrivyAuthGuard } from "../src/auth/privy-auth.guard";
+import { UserAuthGuard } from "../src/auth/user-auth.guard";
 
 function contextFor(request: InternalAuthenticatedRequest): ExecutionContext {
   return {
@@ -80,7 +80,7 @@ describe("internal service authentication", () => {
     ));
   });
 
-  it("binds only internal routes and keeps Privy verification out of that boundary", async () => {
+  it("binds only internal routes and keeps user access verification out of that boundary", async () => {
     const verifier: InternalCallerVerifier = {
       async verify(token) {
         assert.equal(token, "header.payload.signature");
@@ -117,15 +117,15 @@ describe("internal service authentication", () => {
     assert.equal(await normalGuard.canActivate(contextFor({ headers: {} })), true);
     assert.equal(internalVerifierCalled, false);
 
-    let privyVerifierCalled = false;
-    const privyVerifier: AccessTokenVerifier = {
+    let accessVerifierCalled = false;
+    const accessVerifier: AccessTokenVerifier = {
       async verify() {
-        privyVerifierCalled = true;
+        accessVerifierCalled = true;
         throw new Error("must not run");
       },
     };
-    const privyGuard = new PrivyAuthGuard(reflector(true), privyVerifier);
-    assert.equal(await privyGuard.canActivate(contextFor({ headers: {} })), true);
-    assert.equal(privyVerifierCalled, false);
+    const userGuard = new UserAuthGuard(reflector(true), accessVerifier);
+    assert.equal(await userGuard.canActivate(contextFor({ headers: {} })), true);
+    assert.equal(accessVerifierCalled, false);
   });
 });

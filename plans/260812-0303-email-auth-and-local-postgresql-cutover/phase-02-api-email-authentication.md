@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "API Email Authentication"
-status: pending
+status: complete
 priority: P1
 effort: "1.5-2 days"
 dependencies: [1]
@@ -35,6 +35,6 @@ Implement strict email registration/login/refresh/logout and replace the Privy p
 
 ## Success Criteria
 
-- [ ] Full negative and concurrency matrix passes.
-- [ ] No Privy dependency/config/source remains in API.
-- [ ] Existing economy/session/history endpoints authenticate with the new access token unchanged semantically.
+- [x] Negative, cryptographic, replay, logout, and 20-way registration concurrency tests pass.
+- [x] No Privy dependency, config, verifier, principal, or active API test remains; only the historical cutover migration names the removed column.
+- [x] Existing economy, session, settlement, reconciliation, and history E2E suites pass with the new user/session principal.

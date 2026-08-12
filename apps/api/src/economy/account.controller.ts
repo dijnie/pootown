@@ -16,7 +16,7 @@ import {
 } from "@pootown/game-contracts";
 
 import { EconomyService } from "./economy.service";
-import type { AuthenticatedRequest } from "../auth/privy-auth.guard";
+import type { AuthenticatedRequest } from "../auth/user-auth.guard";
 import { ApiHttpException } from "../platform/http/api-http.exception";
 import {
   requireContractVersion,

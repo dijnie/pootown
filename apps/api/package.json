@@ -21,6 +21,7 @@
     "@nestjs/schedule": "6.1.3",
     "@nestjs/throttler": "6.5.0",
     "@pootown/game-contracts": "workspace:^",
+    "bcryptjs": "3.0.3",
     "jose": "4.15.9",
     "nestjs-pino": "4.6.1",
     "pg": "8.23.0",

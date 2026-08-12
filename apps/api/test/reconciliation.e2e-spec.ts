@@ -10,7 +10,7 @@ import type { AuthenticatedPrincipal } from "../src/auth/auth.types";
 import { runMigrations } from "../src/database/migration-runner";
 import { EconomyService } from "../src/economy/economy.service";
 import { GameSessionsService } from "../src/game-sessions/game-sessions.service";
-import { IdentityService } from "../src/identity/identity.service";
+import { ProvisioningTestIdentityService } from "./provisioning-test-identity.service";
 import { InternalSessionService } from "../src/internal/internal-session.service";
 import { InternalSettlementService } from "../src/internal/internal-settlement.service";
 import { ReconciliationService } from "../src/internal/reconciliation.service";
@@ -27,7 +27,7 @@ let settlements: InternalSettlementService;
 let reconciliation: ReconciliationService;
 
 function principal(id: string): AuthenticatedPrincipal {
-  return { privyDid: `did:privy:${id}`, privySessionId: `session_${id}` };
+  return { userId: id, sessionId: `session_${id}` };
 }
 
 async function startTwoPlayerGame(prefix: string, now: Date): Promise<{
@@ -109,7 +109,7 @@ describe("session reconciliation", { timeout: 120_000 }, () => {
       TICKET_RELEASE_GRACE_MS: TICKET_GRACE_MS,
       ACTIVE_RECOVERY_GRACE_MS: RECOVERY_GRACE_MS,
     });
-    const economy = new EconomyService(pool, config, new IdentityService());
+    const economy = new EconomyService(pool, config, new ProvisioningTestIdentityService());
     sessions = new GameSessionsService(pool, config, economy);
     internalSessions = new InternalSessionService(pool);
     settlements = new InternalSettlementService(pool);

@@ -6,43 +6,84 @@ import type { AuthenticatedPrincipal } from "../auth/auth.types";
 
 export interface UserRecord {
   readonly id: string;
-  readonly privyDid: string;
+  readonly email: string;
   readonly createdAt: Date;
   readonly lastSeenAt: Date;
 }
 
+export interface UserCredentialsRecord extends UserRecord {
+  readonly passwordHash: string;
+}
+
 interface UserRow {
   readonly id: string;
-  readonly privy_did: string;
+  readonly email: string;
+  readonly password_hash: string;
   readonly created_at: Date;
   readonly last_seen_at: Date;
 }
 
+function record(row: UserRow): UserCredentialsRecord {
+  return {
+    id: row.id,
+    email: row.email,
+    passwordHash: row.password_hash,
+    createdAt: row.created_at,
+    lastSeenAt: row.last_seen_at,
+  };
+}
+
 @Injectable()
 export class IdentityService {
-  public async upsertVerifiedPrincipal(
+  public async createEmailUser(
+    client: PoolClient,
+    email: string,
+    passwordHash: string,
+    now: Date,
+  ): Promise<UserCredentialsRecord> {
+    const result = await client.query<UserRow>(
+      `
+        INSERT INTO identity.users (id, email, password_hash, created_at, updated_at, last_seen_at)
+        VALUES ($1, $2, $3, $4, $4, $4)
+        RETURNING id, email, password_hash, created_at, last_seen_at
+      `,
+      [randomUUID(), email, passwordHash, now],
+    );
+    const row = result.rows[0];
+    if (row === undefined) throw new Error("Identity insert returned no user");
+    return record(row);
+  }
+
+  public async findByEmailForLogin(client: PoolClient, email: string): Promise<UserCredentialsRecord | null> {
+    const result = await client.query<UserRow>(
+      `
+        SELECT id, email, password_hash, created_at, last_seen_at
+        FROM identity.users
+        WHERE email = $1
+      `,
+      [email],
+    );
+    const row = result.rows[0];
+    return row === undefined ? null : record(row);
+  }
+
+  public async findAndTouchPrincipal(
     client: PoolClient,
     principal: AuthenticatedPrincipal,
     now: Date,
   ): Promise<UserRecord> {
     const result = await client.query<UserRow>(
       `
-        INSERT INTO identity.users (id, privy_did, created_at, updated_at, last_seen_at)
-        VALUES ($1, $2, $3, $3, $3)
-        ON CONFLICT (privy_did) DO UPDATE
-        SET updated_at = GREATEST(identity.users.updated_at, EXCLUDED.updated_at),
-            last_seen_at = GREATEST(identity.users.last_seen_at, EXCLUDED.last_seen_at)
-        RETURNING id, privy_did, created_at, last_seen_at
+        UPDATE identity.users
+        SET updated_at = GREATEST(updated_at, $2),
+            last_seen_at = GREATEST(last_seen_at, $2)
+        WHERE id = $1
+        RETURNING id, email, password_hash, created_at, last_seen_at
       `,
-      [randomUUID(), principal.privyDid, now],
+      [principal.userId, now],
     );
     const row = result.rows[0];
-    if (row === undefined) throw new Error("Identity upsert returned no user");
-    return {
-      id: row.id,
-      privyDid: row.privy_did,
-      createdAt: row.created_at,
-      lastSeenAt: row.last_seen_at,
-    };
+    if (row === undefined) throw new Error("Authenticated user does not exist");
+    return record(row);
   }
 }

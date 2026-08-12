@@ -9,15 +9,15 @@ import { Pool } from "pg";
 import type { AuthenticatedPrincipal } from "../src/auth/auth.types";
 import { runMigrations } from "../src/database/migration-runner";
 import { EconomyService } from "../src/economy/economy.service";
-import { IdentityService } from "../src/identity/identity.service";
+import { ProvisioningTestIdentityService } from "./provisioning-test-identity.service";
 
 let container: StartedPostgreSqlContainer;
 let pool: Pool;
 let economy: EconomyService;
 
 const principal = (session: number): AuthenticatedPrincipal => ({
-  privyDid: "did:privy:economy-user",
-  privySessionId: `session_${session}`,
+  userId: "economy-user",
+  sessionId: `session_${session}`,
 });
 
 async function spend(userId: string, amount: bigint, now: Date): Promise<void> {
@@ -152,7 +152,7 @@ describe("identity and account-coin authority", { timeout: 120_000 }, () => {
       RESCUE_BALANCE_COIN: "100",
       RESCUE_WINDOW_MS: 86_400_000,
     });
-    economy = new EconomyService(pool, config, new IdentityService());
+    economy = new EconomyService(pool, config, new ProvisioningTestIdentityService());
   });
 
   after(async () => {

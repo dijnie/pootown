@@ -20,6 +20,11 @@ import {
 } from "../primitives";
 
 const boundedLabel = z.string().min(1).max(80);
+export const EmailAddressSchema = z
+  .email()
+  .max(254)
+  .refine((email) => email === email.toLowerCase(), "email must be canonical lowercase");
+export const PasswordSchema = z.string().min(12).max(128);
 const signedAccountCoinDelta = z
   .string()
   .min(1)
@@ -33,6 +38,37 @@ export const ContractHeadersSchema = z.strictObject({
 export const MutationHeadersSchema = z.strictObject({
   contractVersion: ContractVersionSchema,
   idempotencyKey: IdempotencyKeySchema,
+});
+
+export const RegisterRequestSchema = z.strictObject({
+  contractVersion: ContractVersionSchema,
+  email: EmailAddressSchema,
+  password: PasswordSchema,
+});
+
+export const LoginRequestSchema = RegisterRequestSchema;
+
+export const RefreshSessionRequestSchema = z.strictObject({
+  contractVersion: ContractVersionSchema,
+});
+
+export const LogoutRequestSchema = RefreshSessionRequestSchema;
+
+export const AuthUserSchema = z.strictObject({
+  userId: UserIdSchema,
+  email: EmailAddressSchema,
+});
+
+export const AuthSessionResponseSchema = z.strictObject({
+  contractVersion: ContractVersionSchema,
+  accessToken: z.string().min(32).max(4096),
+  accessTokenExpiresAtMs: EpochMillisecondsSchema,
+  user: AuthUserSchema,
+});
+
+export const LogoutResponseSchema = z.strictObject({
+  contractVersion: ContractVersionSchema,
+  loggedOut: z.literal(true),
 });
 
 export const UserViewSchema = z.strictObject({
@@ -275,6 +311,11 @@ export const ReadyHealthResponseSchema = z.strictObject({
 });
 
 export type MutationHeaders = z.infer<typeof MutationHeadersSchema>;
+export type RegisterRequest = z.infer<typeof RegisterRequestSchema>;
+export type LoginRequest = z.infer<typeof LoginRequestSchema>;
+export type AuthSessionResponse = z.infer<typeof AuthSessionResponseSchema>;
+export type AuthUser = z.infer<typeof AuthUserSchema>;
+export type LogoutResponse = z.infer<typeof LogoutResponseSchema>;
 export type UserView = z.infer<typeof UserViewSchema>;
 export type CoinBalanceResponse = z.infer<typeof CoinBalanceResponseSchema>;
 export type CoinOperationsResponse = z.infer<typeof CoinOperationsResponseSchema>;

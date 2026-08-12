@@ -92,10 +92,15 @@ export class EconomyService {
 
   public provisionPrincipal(principal: AuthenticatedPrincipal, now = new Date()): Promise<ProvisionedAccount> {
     return withTransaction(this.pool, async (client) => {
-      const user = await this.identity.upsertVerifiedPrincipal(client, principal, now);
-      await this.ensureAccountInfrastructure(client, user.id, now);
-      let account = await this.lockAccount(client, user.id);
-      const inserted = await client.query<{ id: string }>(
+      const user = await this.identity.findAndTouchPrincipal(client, principal, now);
+      return this.provisionUser(client, user, now);
+    });
+  }
+
+  public async provisionUser(client: PoolClient, user: UserRecord, now: Date): Promise<ProvisionedAccount> {
+    await this.ensureAccountInfrastructure(client, user.id, now);
+    let account = await this.lockAccount(client, user.id);
+    const inserted = await client.query<{ id: string }>(
         `
           INSERT INTO economy.coin_operations
             (id, actor_user_id, operation_scope, idempotency_key, request_hash)
@@ -105,12 +110,11 @@ export class EconomyService {
         `,
         [randomUUID(), user.id, INITIAL_GRANT_SCOPE, INITIAL_GRANT_KEY, INITIAL_GRANT_HASH],
       );
-      const operationId = inserted.rows[0]?.id;
-      if (operationId !== undefined) {
-        account = await this.applyGrant(client, user.id, operationId, this.initialGrantCoin, now);
-      }
-      return { user: userView(user), balance: balanceView(account) };
-    });
+    const operationId = inserted.rows[0]?.id;
+    if (operationId !== undefined) {
+      account = await this.applyGrant(client, user.id, operationId, this.initialGrantCoin, now);
+    }
+    return { user: userView(user), balance: balanceView(account) };
   }
 
   public async rescue(

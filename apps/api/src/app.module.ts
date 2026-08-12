@@ -7,7 +7,7 @@ import { ScheduleModule } from "@nestjs/schedule";
 
 import { AuthModule } from "./auth/auth.module";
 import { InternalAuthGuard } from "./auth/internal-auth.guard";
-import { PrivyAuthGuard } from "./auth/privy-auth.guard";
+import { UserAuthGuard } from "./auth/user-auth.guard";
 import { parseApiEnvironment } from "./config/api-config";
 import { DatabaseModule } from "./database/database.module";
 import { EconomyModule } from "./economy/economy.module";
@@ -32,7 +32,7 @@ import { ReadModelsModule } from "./read-models/read-models.module";
     HealthModule,
   ],
   providers: [
-    { provide: APP_GUARD, useClass: PrivyAuthGuard },
+    { provide: APP_GUARD, useClass: UserAuthGuard },
     { provide: APP_GUARD, useClass: InternalAuthGuard },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],

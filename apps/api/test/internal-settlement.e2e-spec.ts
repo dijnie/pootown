@@ -11,7 +11,7 @@ import type { AuthenticatedPrincipal } from "../src/auth/auth.types";
 import { runMigrations } from "../src/database/migration-runner";
 import { EconomyService } from "../src/economy/economy.service";
 import { GameSessionsService } from "../src/game-sessions/game-sessions.service";
-import { IdentityService } from "../src/identity/identity.service";
+import { ProvisioningTestIdentityService } from "./provisioning-test-identity.service";
 import { InternalSessionService } from "../src/internal/internal-session.service";
 import { InternalSettlementService } from "../src/internal/internal-settlement.service";
 import { ReadModelsService } from "../src/read-models/read-models.service";
@@ -29,7 +29,7 @@ let readModels: ReadModelsService;
 const SCENARIO_DATE = "2099-08-11";
 
 function principal(id: string): AuthenticatedPrincipal {
-  return { privyDid: `did:privy:${id}`, privySessionId: `session_${id}` };
+  return { userId: id, sessionId: `session_${id}` };
 }
 
 function apiCode(error: unknown): string | undefined {
@@ -130,7 +130,7 @@ describe("internal settlement authority", { timeout: 120_000 }, () => {
       RESCUE_WINDOW_MS: 86_400_000,
       REALTIME_TICKET_TTL_MS: 60_000,
     });
-    economy = new EconomyService(pool, config, new IdentityService());
+    economy = new EconomyService(pool, config, new ProvisioningTestIdentityService());
     sessions = new GameSessionsService(pool, config, economy);
     internalSessions = new InternalSessionService(pool);
     settlements = new InternalSettlementService(pool);

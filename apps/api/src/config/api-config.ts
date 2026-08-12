@@ -13,8 +13,13 @@ const ApiEnvironmentSchema = z.object({
     return protocol === "postgres:" || protocol === "postgresql:";
   }, "must use postgres or postgresql protocol"),
   CORS_ORIGINS: z.string().min(1),
-  PRIVY_APP_ID: z.string().min(1).max(128),
-  PRIVY_VERIFICATION_KEY: privateKey,
+  AUTH_ACCESS_TOKEN_SECRET: z.string().min(32).max(512),
+  AUTH_REFRESH_TOKEN_SECRET: z.string().min(32).max(512),
+  AUTH_TOKEN_ISSUER: z.string().min(1).max(128).default("pootown-api"),
+  AUTH_ACCESS_TOKEN_AUDIENCE: z.string().min(1).max(128).default("pootown-web"),
+  AUTH_REFRESH_TOKEN_AUDIENCE: z.string().min(1).max(128).default("pootown-refresh"),
+  AUTH_ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(3_600).default(900),
+  AUTH_REFRESH_TOKEN_TTL_SECONDS: z.coerce.number().int().min(3_600).max(7_776_000).default(2_592_000),
   INTERNAL_JWT_ISSUER: z.string().min(1).max(256),
   INTERNAL_JWT_AUDIENCE: z.string().min(1).max(256),
   INTERNAL_JWT_PUBLIC_KEY: privateKey,
@@ -26,6 +31,13 @@ const ApiEnvironmentSchema = z.object({
   TICKET_RELEASE_GRACE_MS: z.coerce.number().int().min(1_000).max(300_000).default(30_000),
   ACTIVE_RECOVERY_GRACE_MS: z.coerce.number().int().min(30_000).max(900_000).default(120_000),
 }).superRefine((environment, context) => {
+  if (environment.AUTH_ACCESS_TOKEN_SECRET === environment.AUTH_REFRESH_TOKEN_SECRET) {
+    context.addIssue({
+      code: "custom",
+      path: ["AUTH_REFRESH_TOKEN_SECRET"],
+      message: "must differ from access token secret",
+    });
+  }
   if (BigInt(environment.INITIAL_GRANT_COIN) < BigInt(environment.RESCUE_BALANCE_COIN)) {
     context.addIssue({
       code: "custom",
@@ -38,9 +50,6 @@ const ApiEnvironmentSchema = z.object({
 export type ApiEnvironment = z.infer<typeof ApiEnvironmentSchema>;
 
 export function parseApiEnvironment(environment: Record<string, unknown>): ApiEnvironment {
-  if (environment.NEXT_PUBLIC_AUTH_PRIVATE_KEY_PRIVY !== undefined) {
-    throw new Error("Invalid API environment: public private-key configuration is forbidden");
-  }
   const result = ApiEnvironmentSchema.safeParse(environment);
   if (!result.success) {
     throw new Error(`Invalid API environment: ${z.prettifyError(result.error)}`);

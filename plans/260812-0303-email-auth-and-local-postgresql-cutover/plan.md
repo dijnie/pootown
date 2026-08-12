@@ -51,7 +51,7 @@ Risk: high blast radius, but bounded by clean-cutover/no-live-user assumption an
 | # | Phase | Depends on | Status |
 |---|---|---|---|
 | 1 | [Docker PostgreSQL and schema boundary](./phase-01-start.md) | - | Complete |
-| 2 | [API email authentication](./phase-02-api-email-authentication.md) | 1 | Pending |
+| 2 | [API email authentication](./phase-02-api-email-authentication.md) | 1 | Complete |
 | 3 | [Web cutover and verification](./phase-03-web-cutover-and-verification.md) | 2 | Pending |
 
 ## Acceptance Criteria

@@ -1,7 +1,16 @@
 import type { Params } from "nestjs-pino";
 import type { LoggerOptions } from "pino";
 
-const sensitiveFieldNames = ["token", "ticket", "ticketHash", "checkpointChecksum"] as const;
+const sensitiveFieldNames = [
+  "token",
+  "accessToken",
+  "refreshToken",
+  "password",
+  "passwordHash",
+  "ticket",
+  "ticketHash",
+  "checkpointChecksum",
+] as const;
 const nestedSensitivePaths = sensitiveFieldNames.flatMap((field) => [
   field,
   `*.${field}`,

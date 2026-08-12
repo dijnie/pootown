@@ -7,8 +7,8 @@ const validEnvironment = {
   NODE_ENV: "test",
   DATABASE_URL: "postgres://api:password@localhost:5432/pootown",
   CORS_ORIGINS: "https://play.example.com,https://admin.example.com/",
-  PRIVY_APP_ID: "privy-app",
-  PRIVY_VERIFICATION_KEY: "-----BEGIN PUBLIC KEY-----\\nplaceholder-key-material\\n-----END PUBLIC KEY-----",
+  AUTH_ACCESS_TOKEN_SECRET: "access-secret-that-is-at-least-thirty-two-bytes",
+  AUTH_REFRESH_TOKEN_SECRET: "refresh-secret-that-is-at-least-thirty-two-bytes",
   INTERNAL_JWT_ISSUER: "pootown-internal",
   INTERNAL_JWT_AUDIENCE: "pootown-api",
   INTERNAL_JWT_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\\nplaceholder-key-material\\n-----END PUBLIC KEY-----",
@@ -23,7 +23,8 @@ describe("API configuration", () => {
     assert.equal(config.TICKET_RELEASE_GRACE_MS, 30_000);
     assert.equal(config.ACTIVE_RECOVERY_GRACE_MS, 120_000);
     assert.deepEqual([...corsOrigins(config)], ["https://play.example.com", "https://admin.example.com"]);
-    assert.equal(config.PRIVY_VERIFICATION_KEY.includes("\\n"), false);
+    assert.equal(config.AUTH_ACCESS_TOKEN_TTL_SECONDS, 900);
+    assert.equal(config.AUTH_REFRESH_TOKEN_TTL_SECONDS, 2_592_000);
   });
 
   it("bounds reconciliation timing policy", () => {
@@ -32,7 +33,16 @@ describe("API configuration", () => {
     assert.throws(() => parseApiEnvironment({ ...validEnvironment, ACTIVE_RECOVERY_GRACE_MS: 29_999 }));
   });
 
-  it("rejects wildcard origins and public private-key names", () => {
+  it("requires distinct bounded auth secrets and token lifetimes", () => {
+    assert.throws(() => parseApiEnvironment({
+      ...validEnvironment,
+      AUTH_REFRESH_TOKEN_SECRET: validEnvironment.AUTH_ACCESS_TOKEN_SECRET,
+    }));
+    assert.throws(() => parseApiEnvironment({ ...validEnvironment, AUTH_ACCESS_TOKEN_TTL_SECONDS: 59 }));
+    assert.throws(() => parseApiEnvironment({ ...validEnvironment, AUTH_REFRESH_TOKEN_TTL_SECONDS: 3_599 }));
+  });
+
+  it("rejects wildcard and unsafe origins", () => {
     assert.throws(() => parseApiEnvironment({ ...validEnvironment, CORS_ORIGINS: "*" }));
     for (const origin of [
       "javascript:alert(1)",
@@ -44,12 +54,6 @@ describe("API configuration", () => {
     ]) {
       assert.throws(() => parseApiEnvironment({ ...validEnvironment, CORS_ORIGINS: origin }));
     }
-    assert.throws(() =>
-      parseApiEnvironment({
-        ...validEnvironment,
-        NEXT_PUBLIC_AUTH_PRIVATE_KEY_PRIVY: "must-never-be-accepted",
-      }),
-    );
   });
 
   it("accepts only PostgreSQL database URLs", () => {

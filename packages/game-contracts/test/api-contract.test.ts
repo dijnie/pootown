@@ -3,13 +3,17 @@ import { describe, it } from "node:test";
 
 import {
   AdmissionResponseSchema,
+  AuthSessionResponseSchema,
   CoinBalanceResponseSchema,
   CoinOperationViewSchema,
   CreateSessionRequestSchema,
   GameDefinitionsResponseSchema,
   LeaderboardResponseSchema,
+  LoginRequestSchema,
+  LogoutResponseSchema,
   MutationHeadersSchema,
   PublicMutationContractSchemas,
+  RegisterRequestSchema,
   RescueGrantResponseSchema,
   SessionHistoryEntrySchema,
   TicketGrantSchema,
@@ -29,6 +33,31 @@ const requestId = "00000000-0000-4000-8000-000000000401";
 const ticket = "A".repeat(43);
 
 describe("HTTP API contracts", () => {
+  it("strictly validates email auth without exposing refresh or password material", () => {
+    const credentials = { contractVersion: 1, email: "player@example.test", password: "correct-horse-42" };
+    assert.equal(RegisterRequestSchema.safeParse(credentials).success, true);
+    assert.equal(LoginRequestSchema.safeParse(credentials).success, true);
+    for (const invalid of [
+      { ...credentials, email: "Player@example.test" },
+      { ...credentials, email: "not-an-email" },
+      { ...credentials, password: "too-short" },
+      { ...credentials, contractVersion: 2 },
+      { ...credentials, userId: "forged" },
+    ]) {
+      assert.equal(RegisterRequestSchema.safeParse(invalid).success, false);
+    }
+    const response = {
+      contractVersion: 1,
+      accessToken: "a".repeat(32),
+      accessTokenExpiresAtMs: 1,
+      user: { userId: "user_1", email: "player@example.test" },
+    };
+    assert.equal(AuthSessionResponseSchema.safeParse(response).success, true);
+    assert.equal(AuthSessionResponseSchema.safeParse({ ...response, refreshToken: "forbidden" }).success, false);
+    assert.equal(AuthSessionResponseSchema.safeParse({ ...response, passwordHash: "forbidden" }).success, false);
+    assert.equal(LogoutResponseSchema.safeParse({ contractVersion: 1, loggedOut: true }).success, true);
+  });
+
   it("requires strict versioned idempotency headers", () => {
     const headers = { contractVersion: 1, idempotencyKey: "create:client-1" };
     assert.equal(MutationHeadersSchema.safeParse(headers).success, true);

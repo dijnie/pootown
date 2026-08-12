@@ -1,6 +1,6 @@
 export interface AuthenticatedPrincipal {
-  readonly privyDid: string;
-  readonly privySessionId: string;
+  readonly userId: string;
+  readonly sessionId: string;
 }
 
 export interface AccessTokenVerifier {

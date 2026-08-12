@@ -22,7 +22,7 @@ import {
 } from "@pootown/game-contracts";
 
 import { GameSessionsService } from "./game-sessions.service";
-import type { AuthenticatedRequest } from "../auth/privy-auth.guard";
+import type { AuthenticatedRequest } from "../auth/user-auth.guard";
 import { Public } from "../auth/public.decorator";
 import { ApiHttpException } from "../platform/http/api-http.exception";
 import {

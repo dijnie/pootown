@@ -2,7 +2,7 @@ import { Controller, Get, Headers, Query, Req } from "@nestjs/common";
 import type { LeaderboardResponse, SessionHistoryResponse } from "@pootown/game-contracts";
 
 import { ReadModelsService } from "./read-models.service";
-import type { AuthenticatedRequest } from "../auth/privy-auth.guard";
+import type { AuthenticatedRequest } from "../auth/user-auth.guard";
 import { Public } from "../auth/public.decorator";
 import { ApiHttpException } from "../platform/http/api-http.exception";
 import { requireContractVersion, type HttpHeaders } from "../platform/http/contract-headers";

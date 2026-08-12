@@ -10,7 +10,7 @@ import type { AuthenticatedPrincipal } from "../src/auth/auth.types";
 import { runMigrations } from "../src/database/migration-runner";
 import { EconomyService } from "../src/economy/economy.service";
 import { GameSessionsService } from "../src/game-sessions/game-sessions.service";
-import { IdentityService } from "../src/identity/identity.service";
+import { ProvisioningTestIdentityService } from "./provisioning-test-identity.service";
 import { InternalSessionService } from "../src/internal/internal-session.service";
 
 let container: StartedPostgreSqlContainer;
@@ -24,7 +24,7 @@ let internalSessions: InternalSessionService;
 const SCENARIO_DATE = "2099-08-11";
 
 function principal(id: string): AuthenticatedPrincipal {
-  return { privyDid: `did:privy:${id}`, privySessionId: `session_${id}` };
+  return { userId: id, sessionId: `session_${id}` };
 }
 
 function apiCode(error: unknown): string | undefined {
@@ -105,7 +105,7 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
       RESCUE_WINDOW_MS: 86_400_000,
       REALTIME_TICKET_TTL_MS: 60_000,
     });
-    economy = new EconomyService(pool, config, new IdentityService());
+    economy = new EconomyService(pool, config, new ProvisioningTestIdentityService());
     sessions = new GameSessionsService(pool, config, economy);
     internalSessions = new InternalSessionService(pool);
     await pool.query(`
@@ -289,10 +289,10 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
       SELECT
         (SELECT count(*)::int FROM game.game_sessions session
          JOIN identity.users users ON users.id = session.creator_user_id
-         WHERE users.privy_did = 'did:privy:too-poor') AS sessions,
+         WHERE users.id = 'too-poor') AS sessions,
         (SELECT count(*)::int FROM economy.coin_operations operation
          JOIN identity.users users ON users.id = operation.actor_user_id
-         WHERE users.privy_did = 'did:privy:too-poor' AND operation.operation_scope = 'createSession') AS operations
+         WHERE users.id = 'too-poor' AND operation.operation_scope = 'createSession') AS operations
     `);
     assert.deepEqual(failed.rows, [{ sessions: 0, operations: 0 }]);
 
@@ -452,8 +452,8 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
       SELECT account.available_coin::text, account.reserved_coin::text
       FROM economy.coin_accounts account
       JOIN identity.users users ON users.id = account.user_id
-      WHERE users.privy_did IN ('did:privy:cancel-owner', 'did:privy:cancel-player')
-      ORDER BY users.privy_did
+      WHERE users.id IN ('cancel-owner', 'cancel-player')
+      ORDER BY users.id
     `);
     assert.deepEqual(balances.rows, [
       { available_coin: "1000", reserved_coin: "0" },
