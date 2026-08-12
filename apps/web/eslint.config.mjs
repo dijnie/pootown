@@ -1,26 +1,24 @@
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTypeScript from "eslint-config-next/typescript";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-});
-
-const eslintConfig = [
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+const eslintConfig = defineConfig([
+  ...nextVitals,
+  ...nextTypeScript,
   {
-    ignores: [
-      "node_modules/**",
-      ".next/**",
-      ".test-dist/**",
-      "out/**",
-      "build/**",
-      "next-env.d.ts",
-    ],
+    rules: {
+      // React Compiler is not enabled; preserve the existing effect-driven UI
+      // synchronization until it can be changed as a separately tested UX refactor.
+      "react-hooks/set-state-in-effect": "off",
+    },
   },
-];
+  globalIgnores([
+    ".next/**",
+    ".test-dist/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+  ]),
+]);
 
 export default eslintConfig;

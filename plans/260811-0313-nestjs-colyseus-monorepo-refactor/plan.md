@@ -62,9 +62,8 @@ Critical path: `1 -> 2 -> 3/4 -> 5 -> 6 -> 7 -> 8`. Phases 3 and 4 may proceed c
 ## Unresolved Questions
 
 No product or repository question remains. Production publication is blocked on
-a hosting-owned TLS/DNS/secrets/WAL-PITR rehearsal, an image CVE/SBOM gate, and
-resolution of the three high production dependency advisories reported by
-`pnpm audit --prod`.
+a hosting-owned TLS/DNS/secrets/WAL-PITR rehearsal and live cutover evidence.
+The repository-owned dependency and image CVE/SBOM gates are green.
 
 ## Red Team Review
 
@@ -73,6 +72,8 @@ resolution of the three high production dependency advisories reported by
 - Rejected as non-findings: the approved one-replica topology, no Redis/queue, full checkpoint-per-command pending measurement, secure server RNG without VRF, no production dual engine, and fail-closed corrupt-checkpoint handling.
 
 ## Validation Log
+
+- 2026-08-12 — CEO approved the Next.js 16 security upgrade. Next.js 16.3.0 and React 19.2.8 passed monorepo quality, production build, public visual 6/6, authenticated vertical 6/6, production-like container smoke, and production dependency audit. Digest-pinned Trivy reported 0 HIGH and 0 CRITICAL findings for all three verification images.
 
 - 2026-08-12 — Phase 8 repository delivery completed: legacy Rust/Anchor/indexer/runtime surfaces were removed; three pinned non-root images passed package inventory; production-like Compose smoke passed isolated migration/API/realtime roles, email auth, web, gameplay, and settlement; and clean-cluster encrypted restore matched source fingerprints with zero ledger mismatches. Production publication remains blocked by the external controls recorded above.
 

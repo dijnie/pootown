@@ -57,9 +57,6 @@ const nextConfig: NextConfig = {
 
     return config;
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   async rewrites() {
     const origin = normalizeApiOrigin(
       process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"

@@ -103,5 +103,5 @@ Rotate any formerly exposed Privy key only if deployment/config history proves i
 
 No repository decision remains. Live production cutover is blocked until the
 hosting environment supplies and verifies TLS/DNS, secret injection, continuous
-WAL/PITR, image SBOM/CVE scanning, and a dependency build without the three high
-production advisories currently reported by `pnpm audit --prod`.
+WAL/PITR, and the scheduled cutover observation window. Repository-owned
+dependency and digest-pinned image SBOM/CVE gates are green.

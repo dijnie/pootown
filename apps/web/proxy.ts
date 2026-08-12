@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { createWebSecurityHeaders } from "./services/security-headers";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const nonce = btoa(crypto.randomUUID());
   const securityHeaders = createWebSecurityHeaders(
     process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:8080",

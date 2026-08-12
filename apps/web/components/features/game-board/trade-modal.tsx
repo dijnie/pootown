@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -246,39 +246,30 @@ export function CreateTradeDialog({
     selectedPlayer?.cashBalance ?? "0"
   );
 
-  const availableTradeTypes = useMemo(() => {
-    const types = [];
+  const availableTradeTypes: TradeType[] = [];
 
-    // Money for Money - both players need money
-    if (currentPlayerMoney > 0 && selectedPlayerMoney > 0) {
-      types.push("money-money");
-    }
+  // Money for Money - both players need money
+  if (currentPlayerMoney > 0 && selectedPlayerMoney > 0) {
+    availableTradeTypes.push("money-money");
+  }
 
-    // Money for Property - current player needs money, selected player needs properties
-    if (currentPlayerMoney > 0 && selectedPlayerProperties.length > 0) {
-      types.push("money-property");
-    }
+  // Money for Property - current player needs money, selected player needs properties
+  if (currentPlayerMoney > 0 && selectedPlayerProperties.length > 0) {
+    availableTradeTypes.push("money-property");
+  }
 
-    // Property for Money - current player needs properties, selected player needs money
-    if (currentPlayerProperties.length > 0 && selectedPlayerMoney > 0) {
-      types.push("property-money");
-    }
+  // Property for Money - current player needs properties, selected player needs money
+  if (currentPlayerProperties.length > 0 && selectedPlayerMoney > 0) {
+    availableTradeTypes.push("property-money");
+  }
 
-    // Property for Property - both players need properties
-    if (
-      currentPlayerProperties.length > 0 &&
-      selectedPlayerProperties.length > 0
-    ) {
-      types.push("property-property");
-    }
-
-    return types;
-  }, [
-    currentPlayerMoney,
-    selectedPlayerMoney,
-    currentPlayerProperties.length,
-    selectedPlayerProperties.length,
-  ]);
+  // Property for Property - both players need properties
+  if (
+    currentPlayerProperties.length > 0 &&
+    selectedPlayerProperties.length > 0
+  ) {
+    availableTradeTypes.push("property-property");
+  }
 
   // Auto-select first available trade type when player is selected
   const handlePlayerSelection = (playerId: string) => {
@@ -482,7 +473,7 @@ export function CreateTradeDialog({
                   },
                 ].map((option) => {
                   const isDisabled = !availableTradeTypes.includes(
-                    option.value
+                    option.value as TradeType
                   );
                   const disabledReason = getTradeTypeDisabledReason(
                     option.value as TradeType

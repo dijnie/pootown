@@ -186,7 +186,7 @@ export const PropertyPopover: React.FC<PropertyPopoverProps> = ({
     }
   };
 
-  const BuildHouseButton = () => {
+  const renderBuildHouseButton = () => {
     const baseConditions =
       hasMonopoly && !hasHotel && houses < 4 && !isMortgaged;
     const isDisabled =
@@ -219,7 +219,7 @@ export const PropertyPopover: React.FC<PropertyPopoverProps> = ({
     return button;
   };
 
-  const BuildHotelButton = () => {
+  const renderBuildHotelButton = () => {
     const baseConditions =
       hasMonopoly && houses === 4 && !hasHotel && !isMortgaged;
     const isDisabled =
@@ -430,7 +430,7 @@ export const PropertyPopover: React.FC<PropertyPopoverProps> = ({
                                     <ChevronDown className="w-3 h-3" />
                                   </Button>
                                 )}
-                                <BuildHouseButton />
+                                {renderBuildHouseButton()}
                               </div>
                             )}
                           </>
@@ -459,7 +459,7 @@ export const PropertyPopover: React.FC<PropertyPopoverProps> = ({
                                 <ChevronDown className="w-3 h-3" />
                               </Button>
                             ) : (
-                              <BuildHotelButton />
+                              renderBuildHotelButton()
                             )}
                           </div>
                         )}

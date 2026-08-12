@@ -1,15 +1,15 @@
 {
-  "generatedAt": "2026-08-12T14:18:11.876Z",
+  "generatedAt": "2026-08-12T14:40:15.461Z",
   "scannerImage": "ghcr.io/aquasecurity/trivy@sha256:7cced7cae583819fc7806d4cbc0dbbc7cad18b99f7d3e235192e6da8c091045c",
   "severityGate": [
     "HIGH",
     "CRITICAL"
   ],
-  "status": "fail",
+  "status": "pass",
   "images": [
     {
       "image": "pootown-api:verification",
-      "imageId": "sha256:7cab2c95a83dcc02e503e86191028a40f4d2bc7f37e2262bbff2866c3526fbbd",
+      "imageId": "sha256:6580c31233bcb39c3aeba5f72409a56810811088635c542a22be25dd56b66ab6",
       "sbomPackages": 133,
       "high": 0,
       "critical": 0,
@@ -17,7 +17,7 @@
     },
     {
       "image": "pootown-game-server:verification",
-      "imageId": "sha256:dac54e3180afebf7769d6cf3e0c9af7ca9a9e527e9e5d0322b54044be0ca3511",
+      "imageId": "sha256:847951ea45a176cca5a4a953da5c6dce5a1b75aa6462bca56c782a5491366761",
       "sbomPackages": 147,
       "high": 0,
       "critical": 0,
@@ -25,36 +25,11 @@
     },
     {
       "image": "pootown-web:verification",
-      "imageId": "sha256:4b3617facdfef35be3e63330d64889cd6d6165ee18b6c37c470dc653ef8c435d",
+      "imageId": "sha256:8f9450f267722e398d33b5d0906e714b819a0da821911431d7c0c271412c6147",
       "sbomPackages": 47,
-      "high": 3,
+      "high": 0,
       "critical": 0,
-      "findings": [
-        {
-          "id": "CVE-2026-45623",
-          "package": "postcss",
-          "installedVersion": "8.4.31",
-          "fixedVersion": "8.5.12",
-          "severity": "HIGH",
-          "path": "app/node_modules/.pnpm/postcss@8.4.31/node_modules/postcss/package.json"
-        },
-        {
-          "id": "GHSA-r28c-9q8g-f849",
-          "package": "postcss",
-          "installedVersion": "8.4.31",
-          "fixedVersion": "8.5.18",
-          "severity": "HIGH",
-          "path": "app/node_modules/.pnpm/postcss@8.4.31/node_modules/postcss/package.json"
-        },
-        {
-          "id": "GHSA-f88m-g3jw-g9cj",
-          "package": "sharp",
-          "installedVersion": "0.34.5",
-          "fixedVersion": "0.35.0",
-          "severity": "HIGH",
-          "path": "app/node_modules/.pnpm/sharp@0.34.5/node_modules/sharp/package.json"
-        }
-      ]
+      "findings": []
     }
   ]
 }

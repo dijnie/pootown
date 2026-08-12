@@ -35,6 +35,12 @@ interface DiceContextType {
 
 const DiceContext = createContext<DiceContextType | null>(null);
 
+const DiceFace = ({ className }: { className: string }) => (
+  <div className={`dice-face ${className}`}>
+    {/* Dots are handled by CSS. */}
+  </div>
+);
+
 export const DiceProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -167,12 +173,6 @@ export const useDiceContext = () => {
 
 export const DicesOnly: React.FC = () => {
   const { isRolling, isThrowAnimation, dice1Ref, dice2Ref } = useDiceContext();
-
-  const DiceFace = ({ className }: { className: string }) => (
-    <div className={`dice-face ${className}`}>
-      {/* Dots are now handled by CSS */}
-    </div>
-  );
 
   return (
     <div className="flex justify-center">

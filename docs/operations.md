@@ -85,9 +85,7 @@ for every image, scans with digest-pinned Trivy, writes a sanitized result under
 the plan reports directory, and fails on any HIGH or CRITICAL finding. Retain
 the full SBOMs in the hosting artifact store when publishing images.
 
-The current Next.js 15 dependency tree still reports three high and two
-moderate production advisories through Next.js, Sharp, and PostCSS. No patched
-Next.js 15 release resolves the full set. Repository delivery may proceed, but
-publishing these images to production remains blocked until a tested Next.js 16
-upgrade (or an upstream patched 15.x release) clears the high advisories and the
-image scanner is green. Do not use an unverified 0.x override for Sharp.
+The web runtime uses Next.js 16.3.0 and React 19.2.8. The verified production
+dependency audit and digest-pinned image scan report zero known vulnerabilities
+and zero HIGH or CRITICAL image findings. Re-run both gates for every release;
+do not publish when either gate is red.
