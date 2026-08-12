@@ -134,4 +134,30 @@ describe("email authentication", { timeout: 120_000 }, () => {
       (error: unknown) => apiCode(error) === "AUTH_SESSION_INVALID",
     );
   });
+
+  it("rejects an older replay after a newer refresh without moving the session clock backward", async () => {
+    const registered = await auth.register(
+      {
+        contractVersion: CONTRACT_VERSION,
+        email: "out-of-order-refresh@example.test",
+        password: "correct-horse-42",
+      },
+      new Date("2026-08-12T05:00:00.000Z"),
+    );
+
+    await auth.refresh(registered.refreshToken, new Date("2026-08-12T05:00:02.000Z"));
+    await assert.rejects(
+      auth.refresh(registered.refreshToken, new Date("2026-08-12T05:00:01.000Z")),
+      (error: unknown) => apiCode(error) === "AUTH_SESSION_INVALID",
+    );
+
+    const stored = await pool.query<{ revoked_at: Date; updated_at: Date }>(
+      `SELECT revoked_at, updated_at
+       FROM identity.auth_sessions
+       WHERE user_id = $1`,
+      [registered.response.user.userId],
+    );
+    assert.equal(stored.rows[0]?.updated_at.toISOString(), "2026-08-12T05:00:02.000Z");
+    assert.equal(stored.rows[0]?.revoked_at.toISOString(), "2026-08-12T05:00:02.000Z");
+  });
 });

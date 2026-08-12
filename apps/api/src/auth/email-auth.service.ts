@@ -121,7 +121,10 @@ export class EmailAuthService {
       const presentedHash = tokenHash(refreshToken);
       if (!timingSafeEqual(session.refresh_token_hash, presentedHash)) {
         await client.query(
-          "UPDATE identity.auth_sessions SET revoked_at = $2, updated_at = $2 WHERE id = $1",
+          `UPDATE identity.auth_sessions
+           SET revoked_at = GREATEST(updated_at, $2),
+               updated_at = GREATEST(updated_at, $2)
+           WHERE id = $1`,
           [session.id, now],
         );
         return null;
@@ -133,7 +136,9 @@ export class EmailAuthService {
       );
       const issued = await this.issueTokens(user, session.id, now, session.expires_at);
       await client.query(
-        "UPDATE identity.auth_sessions SET refresh_token_hash = $2, updated_at = $3 WHERE id = $1",
+        `UPDATE identity.auth_sessions
+         SET refresh_token_hash = $2, updated_at = GREATEST(updated_at, $3)
+         WHERE id = $1`,
         [session.id, tokenHash(issued.refreshToken), now],
       );
       return issued;
@@ -147,7 +152,9 @@ export class EmailAuthService {
       const claims = await this.verifyRefreshToken(refreshToken, now).catch(() => null);
       if (claims !== null) {
         await this.pool.query(
-          `UPDATE identity.auth_sessions SET revoked_at = $3, updated_at = $3
+          `UPDATE identity.auth_sessions
+           SET revoked_at = GREATEST(updated_at, $3),
+               updated_at = GREATEST(updated_at, $3)
            WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL`,
           [claims.sessionId, claims.userId, now],
         );
