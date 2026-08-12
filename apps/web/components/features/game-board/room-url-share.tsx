@@ -4,20 +4,26 @@ import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckIcon, CopyIcon, Share2, ArrowLeft, ShieldCheck } from "lucide-react";
+import {
+  CheckIcon,
+  CopyIcon,
+  Share2,
+  ArrowLeft,
+  ShieldCheck,
+} from "lucide-react";
 import { formatAddress } from "@/lib/utils";
 import { toast } from "sonner";
 import { useParams, useRouter } from "next/navigation";
 
 export function RoomUrlShare() {
-  const { address: gameAddress } = useParams<{ address: string }>();
+  const { address: gameId } = useParams<{ address: string }>();
   const [copyToClipboard, isCopied] = useCopyToClipboard();
   const router = useRouter();
 
   const handleCopyRoomUrl = () => {
-    if (!gameAddress) return;
+    if (!gameId) return;
 
-    const roomUrl = `${window.location.origin}/game/${gameAddress}`;
+    const roomUrl = `${window.location.origin}/game/${gameId}`;
     copyToClipboard(roomUrl);
     toast.success("Room URL copied to clipboard!");
   };
@@ -26,7 +32,7 @@ export function RoomUrlShare() {
     router.push("/lobby");
   };
 
-  if (!gameAddress) return null;
+  if (!gameId) return null;
 
   //   const currentPlayers = gameState?.currentPlayers || 0;
   //   const maxPlayers = gameState?.maxPlayers || 0;
@@ -56,7 +62,7 @@ export function RoomUrlShare() {
         <div className="bg-secondary-background flex items-center gap-2 rounded-base border-2 border-border p-3">
           <div className="text-xs text-foreground/70 font-base">Room ID</div>
           <div className="text-sm font-mono text-foreground">
-            {formatAddress(gameAddress, 6)}
+            {formatAddress(gameId, 6)}
           </div>
         </div>
 
@@ -77,7 +83,10 @@ export function RoomUrlShare() {
               <ShieldCheck className="h-4 w-4 text-foreground/70" />
               <span className="text-sm font-base">Room state</span>
             </div>
-            <Badge variant="neutral" className="text-xs bg-blue-100 text-blue-800 border-blue-200">
+            <Badge
+              variant="neutral"
+              className="text-xs bg-blue-100 text-blue-800 border-blue-200"
+            >
               Server verified
             </Badge>
           </div>

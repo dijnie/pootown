@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
 import AnimatedGridBackground from "./animated-grid-background";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import Link from "next/link";
@@ -44,8 +43,8 @@ export default function HeroSection() {
         <div className="bg-[#ffed00] text-black border-4 lg:border-5 border-black shadow-[9px_9px_0_#000] lg:shadow-[12px_12px_0_#000] px-6 lg:px-7 py-6 lg:py-7 mb-9 lg:mb-11 hover:shadow-[13px_13px_0_#000] lg:hover:shadow-[18px_18px_0_#000] hover:-translate-y-3 hover:rotate-1 transition-all duration-500 animate-[slide-in-right_0.8s_ease-out_0.3s] animate-fill-both group cursor-pointer relative overflow-hidden">
           <div className="absolute inset-0 bg-[#ff0080] translate-x-full group-hover:translate-x-0 transition-transform duration-700" />
           <p className="text-lg md:text-xl lg:text-2xl font-black uppercase leading-tight relative z-10 group-hover:text-black transition-colors duration-700">
-            Classic property strategy meets fast authoritative rooms—buy,
-            trade, collect rent, and outlast your opponents! 🎲
+            Classic property strategy meets fast authoritative rooms—buy, trade,
+            collect rent, and outlast your opponents! 🎲
           </p>
         </div>
 
@@ -74,9 +73,9 @@ export default function HeroSection() {
                 ROLL THE DICE
               </span>
               <Avatar className="w-12 h-12 md:w-16 md:h-16 border-4 border-black shadow-[4px_4px_0_#000] mx-8 shrink-0">
-                <AvatarImage walletAddress="RollDice111111111111111111111111111111" />
+                <AvatarImage playerId="RollDice111111111111111111111111111111" />
                 <AvatarFallback
-                  walletAddress="RollDice111111111111111111111111111111"
+                  playerId="RollDice111111111111111111111111111111"
                   className="bg-[#ff0080] text-black text-xl font-black"
                 >
                   RD
@@ -86,9 +85,9 @@ export default function HeroSection() {
                 BUY PROPERTIES
               </span>
               <Avatar className="w-12 h-12 md:w-16 md:h-16 border-4 border-black shadow-[4px_4px_0_#000] mx-8 shrink-0">
-                <AvatarImage walletAddress="BuyProperty11111111111111111111111111" />
+                <AvatarImage playerId="BuyProperty11111111111111111111111111" />
                 <AvatarFallback
-                  walletAddress="BuyProperty11111111111111111111111111"
+                  playerId="BuyProperty11111111111111111111111111"
                   className="bg-[#9945ff] text-black text-xl font-black"
                 >
                   BP
@@ -98,9 +97,9 @@ export default function HeroSection() {
                 COLLECT RENT
               </span>
               <Avatar className="w-12 h-12 md:w-16 md:h-16 border-4 border-black shadow-[4px_4px_0_#000] mx-8 shrink-0">
-                <AvatarImage walletAddress="CollectRent1111111111111111111111111111" />
+                <AvatarImage playerId="CollectRent1111111111111111111111111111" />
                 <AvatarFallback
-                  walletAddress="CollectRent1111111111111111111111111111"
+                  playerId="CollectRent1111111111111111111111111111"
                   className="bg-[#ffed00] text-black text-xl font-black"
                 >
                   CR
@@ -110,9 +109,9 @@ export default function HeroSection() {
                 WIN THE MATCH
               </span>
               <Avatar className="w-12 h-12 md:w-16 md:h-16 border-4 border-black shadow-[4px_4px_0_#000] mx-8 shrink-0">
-                <AvatarImage walletAddress="WinMatch11111111111111111111111111111111" />
+                <AvatarImage playerId="WinMatch11111111111111111111111111111111" />
                 <AvatarFallback
-                  walletAddress="WinMatch11111111111111111111111111111111"
+                  playerId="WinMatch11111111111111111111111111111111"
                   className="bg-[#ff0080] text-black text-xl font-black"
                 >
                   WM

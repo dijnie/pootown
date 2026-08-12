@@ -15,6 +15,7 @@ import type { AuthSessionResponse, AuthUser } from "@pootown/game-contracts";
 import { AuthDialog } from "@/components/auth-dialog";
 import envConfig from "@/configs/env";
 import { createAuthApi } from "@/services/auth-api";
+import { AuthMutationQueue } from "@/services/auth-mutation-queue";
 
 type Credentials = { readonly email: string; readonly password: string };
 
@@ -37,6 +38,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
   const authApi = useMemo(() => createAuthApi(envConfig.NEXT_PUBLIC_API_URL), []);
   const accessToken = useRef<string | null>(null);
   const refreshInFlight = useRef<Promise<string | null> | null>(null);
+  const authMutationQueue = useRef(new AuthMutationQueue());
   const generation = useRef(0);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [ready, setReady] = useState(false);
@@ -56,7 +58,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
   const refreshAccessToken = useCallback((): Promise<string | null> => {
     if (refreshInFlight.current !== null) return refreshInFlight.current;
     const current = generation.current;
-    const pending = authApi.refresh()
+    const pending = authMutationQueue.current.run(() => authApi.refresh())
       .then((session) => current === generation.current ? applySession(session) : null)
       .catch(() => {
         if (current === generation.current) clearSession();
@@ -80,7 +82,10 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
 
   const login = useCallback(async (credentials: Credentials) => {
     const current = ++generation.current;
-    const session = await authApi.login({ ...credentials, email: credentials.email.trim().toLowerCase() });
+    const session = await authMutationQueue.current.run(() => authApi.login({
+      ...credentials,
+      email: credentials.email.trim().toLowerCase(),
+    }));
     if (current !== generation.current) return;
     applySession(session);
     setDialogMode(null);
@@ -88,7 +93,10 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
 
   const register = useCallback(async (credentials: Credentials) => {
     const current = ++generation.current;
-    const session = await authApi.register({ ...credentials, email: credentials.email.trim().toLowerCase() });
+    const session = await authMutationQueue.current.run(() => authApi.register({
+      ...credentials,
+      email: credentials.email.trim().toLowerCase(),
+    }));
     if (current !== generation.current) return;
     applySession(session);
     setDialogMode(null);
@@ -97,7 +105,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
   const logout = useCallback(async () => {
     generation.current += 1;
     clearSession();
-    await authApi.logout();
+    await authMutationQueue.current.run(() => authApi.logout());
   }, [authApi, clearSession]);
 
   const value = useMemo<AuthContextValue>(() => ({
@@ -105,8 +113,8 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     getAccessToken: async () => accessToken.current,
     login,
     logout,
-    openLogin: () => setDialogMode("login"),
-    openRegister: () => setDialogMode("register"),
+    openLogin: () => ready && setDialogMode("login"),
+    openRegister: () => ready && setDialogMode("register"),
     ready,
     refreshAccessToken,
     register,

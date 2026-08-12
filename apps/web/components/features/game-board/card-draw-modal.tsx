@@ -8,6 +8,8 @@ import { CardData } from "@/types/space-types";
 import { surpriseCards, treasureCards } from "@/configs/board-data";
 import Image from "next/image";
 import { useGameEventsContext } from "@/components/providers/game-events-provider";
+import { commandErrorMessage } from "@/services/command-error-message";
+import { toast } from "sonner";
 
 interface CardDrawModalProps {
   isOpen: boolean;
@@ -63,7 +65,12 @@ export const CardDrawModal: React.FC<CardDrawModalProps> = ({
     const unsubscribeCard = registerEventHandler(
       "cardDrawn",
       (latestCardDraw) => {
-        if (!isDrawing || latestCardDraw.deck !== (cardType === "chance" ? "chance" : "communityChest")) return;
+        if (
+          !isDrawing ||
+          latestCardDraw.deck !==
+            (cardType === "chance" ? "chance" : "communityChest")
+        )
+          return;
 
         const card = cardDeck[latestCardDraw.cardId - 1];
 
@@ -83,7 +90,7 @@ export const CardDrawModal: React.FC<CardDrawModalProps> = ({
             setIsFlipped(true);
           }, 500);
         }
-      },
+      }
     );
 
     return () => {
@@ -116,7 +123,7 @@ export const CardDrawModal: React.FC<CardDrawModalProps> = ({
         await drawCommunityChestCard();
       }
     } catch (error) {
-      console.error("Error drawing card:", error);
+      toast.error(commandErrorMessage(error));
       if (rollingTimerRef.current) {
         window.clearInterval(rollingTimerRef.current);
         rollingTimerRef.current = null;

@@ -82,7 +82,10 @@ function PlayerItem({
   useEffect(() => {
     if (previousBalance !== null && previousBalance !== currentBalance) {
       const change = BigInt(currentBalance) - BigInt(previousBalance);
-      if (change <= BigInt(Number.MAX_SAFE_INTEGER) && change >= BigInt(Number.MIN_SAFE_INTEGER)) {
+      if (
+        change <= BigInt(Number.MAX_SAFE_INTEGER) &&
+        change >= BigInt(Number.MIN_SAFE_INTEGER)
+      ) {
         setBalanceChange(Number(change));
         setAnimationKey((prev) => prev + 1);
       }
@@ -108,13 +111,13 @@ function PlayerItem({
       <CardContent className="px-3">
         <div className="flex items-center gap-3 justify-stretch">
           <div className="relative">
-            <UserAvatar walletAddress={player.wallet} />
+            <UserAvatar playerId={player.playerId} />
           </div>
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center space-x-2">
               <p className="text-sm font-medium truncate">
-                {formatAddress(player.wallet)}
+                {formatAddress(player.playerId)}
                 {isYou && <span className="text-xs text-main"> (You)</span>}
               </p>
             </div>
@@ -185,7 +188,8 @@ function PlayerLoadingItem() {
 }
 
 export function PlayerList() {
-  const { currentPlayerAddress, gameState, ownPlayerId, players, gameLoading } = useGameContext();
+  const { currentPlayerId, gameState, ownPlayerId, players, gameLoading } =
+    useGameContext();
 
   if (gameLoading) {
     return (
@@ -216,15 +220,15 @@ export function PlayerList() {
       </CardHeader>
       <CardContent className="space-y-3">
         {players.map((player, index) => {
-          const isCurrentTurn = player.wallet === currentPlayerAddress;
+          const isCurrentTurn = player.playerId === currentPlayerId;
           return (
             <PlayerItem
-              key={player.wallet}
+              key={player.playerId}
               player={player}
               index={index}
               isCurrentTurn={isCurrentTurn}
-              isYou={player.wallet === ownPlayerId}
-              isWinner={gameState.winner === player.wallet}
+              isYou={player.playerId === ownPlayerId}
+              isWinner={gameState.winner === player.playerId}
             />
           );
         })}

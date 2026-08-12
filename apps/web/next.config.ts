@@ -1,7 +1,6 @@
 import type { NextConfig } from "next";
 
 import { normalizeApiOrigin } from "./services/api-origin";
-import { createWebSecurityHeaders } from "./services/security-headers";
 
 type SvgFileRule = {
   exclude?: RegExp;
@@ -13,10 +12,12 @@ type SvgFileRule = {
 function isSvgFileRule(rule: unknown): rule is SvgFileRule {
   if (typeof rule !== "object" || rule === null) return false;
   const candidate = rule as Partial<SvgFileRule>;
-  return candidate.test instanceof RegExp &&
+  return (
+    candidate.test instanceof RegExp &&
     typeof candidate.resourceQuery === "object" &&
     candidate.resourceQuery !== null &&
-    Array.isArray(candidate.resourceQuery.not);
+    Array.isArray(candidate.resourceQuery.not)
+  );
 }
 
 const nextConfig: NextConfig = {
@@ -31,7 +32,8 @@ const nextConfig: NextConfig = {
 
     // Grab the existing rule that handles SVG imports
     const fileLoaderRule = config.module.rules.find(isSvgFileRule);
-    if (fileLoaderRule === undefined) throw new Error("Next.js SVG file-loader rule was not found");
+    if (fileLoaderRule === undefined)
+      throw new Error("Next.js SVG file-loader rule was not found");
 
     config.module.rules.push(
       // Reapply the existing rule, but only for svg imports ending in ?url
@@ -57,17 +59,10 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  async headers() {
-    return [{
-      source: "/:path*",
-      headers: createWebSecurityHeaders(
-        process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:8080",
-        process.env["NEXT_PUBLIC_GAME_SERVER_URL"] ?? "ws://localhost:2567",
-      ),
-    }];
-  },
   async rewrites() {
-    const origin = normalizeApiOrigin(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080");
+    const origin = normalizeApiOrigin(
+      process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
+    );
     return [
       {
         source: "/api/v1/leaderboard/:path*",

@@ -37,6 +37,8 @@ import { GameLogs } from "./game-logs";
 import { useRouter } from "next/navigation";
 import { GameStatus } from "@/types/schema";
 import { SettlementStatusCard } from "./settlement-status-card";
+import { commandErrorMessage } from "@/services/command-error-message";
+import { toast } from "sonner";
 
 interface MonopolyBoardProps {
   boardRotation: number;
@@ -67,7 +69,6 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
     payPriorityFeeTax,
     payJailFine,
     useGetOutOfJailCard: getOutOfJail,
-    endGame,
     cancelGame,
     leaveGame,
   } = useGameContext();
@@ -77,7 +78,7 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
       setIsLoading("startGame");
       await startGame();
     } catch (error) {
-      console.error("Failed to start game:", error);
+      toast.error(commandErrorMessage(error));
     } finally {
       setIsLoading(null);
     }
@@ -88,7 +89,7 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
     try {
       await buyProperty(position);
     } catch (error) {
-      console.error("Failed to buy property:", error);
+      toast.error(commandErrorMessage(error));
     } finally {
       setIsLoading(null);
     }
@@ -99,7 +100,7 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
     try {
       await skipProperty(position);
     } catch (error) {
-      console.error("Failed to skip property:", error);
+      toast.error(commandErrorMessage(error));
     } finally {
       setIsLoading(null);
     }
@@ -110,7 +111,7 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
     try {
       await endTurn();
     } catch (error) {
-      console.error("Failed to end turn:", error);
+      toast.error(commandErrorMessage(error));
     } finally {
       setIsLoading(null);
     }
@@ -121,7 +122,7 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
     try {
       await payMevTax();
     } catch (error) {
-      console.error("Failed to pay MEV tax:", error);
+      toast.error(commandErrorMessage(error));
     } finally {
       setIsLoading(null);
     }
@@ -132,7 +133,7 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
     try {
       await payPriorityFeeTax();
     } catch (error) {
-      console.error("Failed to pay priority fee tax:", error);
+      toast.error(commandErrorMessage(error));
     } finally {
       setIsLoading(null);
     }
@@ -143,7 +144,7 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
     try {
       await payJailFine();
     } catch (error) {
-      console.error("Failed to pay jail fine:", error);
+      toast.error(commandErrorMessage(error));
     } finally {
       setIsLoading(null);
     }
@@ -154,18 +155,7 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
     try {
       await getOutOfJail();
     } catch (error) {
-      console.error("Failed to get out of jail card:", error);
-    } finally {
-      setIsLoading(null);
-    }
-  };
-
-  const handleEndGame = async () => {
-    setIsLoading("endGame");
-    try {
-      await endGame();
-    } catch (error) {
-      console.error("Failed to end game:", error);
+      toast.error(commandErrorMessage(error));
     } finally {
       setIsLoading(null);
     }
@@ -177,7 +167,7 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
       await cancelGame();
       router.push("/lobby");
     } catch (error) {
-      console.error("Failed to cancel game:", error);
+      toast.error(commandErrorMessage(error));
     } finally {
       setIsLoading(null);
     }
@@ -189,7 +179,7 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
       await leaveGame();
       router.push("/lobby");
     } catch (error) {
-      console.error("Failed to leave game:", error);
+      toast.error(commandErrorMessage(error));
     } finally {
       setIsLoading(null);
     }
@@ -198,14 +188,14 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
   const renderSpace = (space: BoardSpace, properties: PropertyAccount[]) => {
     const position = space.position;
     const key = `${space.name}-${position}`;
-    const onChainProperty = properties?.find(
+    const propertyState = properties?.find(
       (property) => property.position === position
     );
 
     const baseProps = {
       // key,
       position,
-      onChainProperty,
+      propertyState: propertyState,
     };
 
     if (isPropertySpace(space)) {
@@ -225,7 +215,7 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
     return null;
   };
 
-  if (!gameState || !currentPlayerState) {
+  if (!gameState) {
     return (
       <Card>
         <CardContent className="p-6">
@@ -251,7 +241,7 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
             <PlayerTokensContainer
               players={players}
               boardRotation={boardRotation}
-              currentPlayer={currentPlayerState.wallet}
+              currentPlayer={currentPlayerState?.playerId ?? null}
             />
 
             {/* Center - Responsive */}
@@ -280,14 +270,15 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
                             handlePayPriorityFeeTax={handlePayPriorityFeeTax}
                             handlePayJailFine={handlePayJailFine}
                             handleGetOutOfJailCard={handleGetOutOfJailCard}
-                            handleEndGame={handleEndGame}
                             handleCancelGame={handleCancelGame}
                             handleLeaveGame={handleLeaveGame}
                             isLoading={isLoading}
                           />
                         </DiceProvider>
                       ) : (
-                        <p className="text-sm font-semibold text-muted-foreground">Player admission unavailable</p>
+                        <p className="text-sm font-semibold text-muted-foreground">
+                          Player admission unavailable
+                        </p>
                       )}
                     </div>
                     {/* game-logs */}

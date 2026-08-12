@@ -91,7 +91,7 @@ export const GameLogs: React.FC<GameLogsProps> = ({
                   log={log}
                   showTimestamp={showTimestamps}
                   showIcon={showIcons}
-                  currentPlayerAddress={ownPlayerId ?? undefined}
+                  currentPlayerId={ownPlayerId ?? undefined}
                 />
               </motion.div>
             ))}
@@ -106,39 +106,37 @@ interface GameLogItemProps {
   log: GameLogEntry;
   showTimestamp?: boolean;
   showIcon?: boolean;
-  currentPlayerAddress?: string;
+  currentPlayerId?: string;
 }
 
-function GameLogItem({ log, currentPlayerAddress }: GameLogItemProps) {
-  return (
-    <LogMessageRenderer log={log} currentPlayerAddress={currentPlayerAddress} />
-  );
+function GameLogItem({ log, currentPlayerId }: GameLogItemProps) {
+  return <LogMessageRenderer log={log} currentPlayerId={currentPlayerId} />;
 }
 
 interface LogMessageRendererProps {
   log: GameLogEntry;
-  currentPlayerAddress?: string;
+  currentPlayerId?: string;
 }
 
 interface PlayerDisplayProps {
   playerId: string;
-  currentPlayerAddress?: string;
+  currentPlayerId?: string;
   showAvatar?: boolean;
-  showWalletAddress?: boolean;
+  showPlayerId?: boolean;
 }
 
 const PlayerDisplay: React.FC<PlayerDisplayProps> = ({
   playerId,
-  currentPlayerAddress,
+  currentPlayerId,
   showAvatar = true,
-  showWalletAddress = false,
+  showPlayerId = false,
 }) => {
-  const isCurrentPlayer = currentPlayerAddress === playerId;
+  const isCurrentPlayer = currentPlayerId === playerId;
 
   if (isCurrentPlayer) {
     return (
       <span className="inline-flex items-center gap-1">
-        {showAvatar && <UserAvatar walletAddress={playerId} size="xs" />}
+        {showAvatar && <UserAvatar playerId={playerId} size="xs" />}
         <span className="font-semibold text-blue-600">You</span>
       </span>
     );
@@ -146,8 +144,8 @@ const PlayerDisplay: React.FC<PlayerDisplayProps> = ({
 
   return (
     <span className="inline-flex items-center gap-1">
-      {showAvatar && <UserAvatar walletAddress={playerId} size="xs" />}
-      {showWalletAddress && (
+      {showAvatar && <UserAvatar playerId={playerId} size="xs" />}
+      {showPlayerId && (
         <span className="font-medium">{formatAddress(playerId)}</span>
       )}
     </span>
@@ -156,7 +154,7 @@ const PlayerDisplay: React.FC<PlayerDisplayProps> = ({
 
 const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
   log,
-  currentPlayerAddress,
+  currentPlayerId,
 }) => {
   const { type, playerId, details = {} } = log;
 
@@ -167,7 +165,7 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> joined the game</span>
           </>
@@ -178,7 +176,7 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> left the game</span>
           </>
@@ -203,7 +201,7 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> passed </span>
             <span className="font-medium text-yellow-600">Solana Genesis</span>
@@ -221,7 +219,7 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> bought </span>
             <span className="font-medium text-blue-600">{propertyName}</span>
@@ -239,7 +237,7 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> declined to buy </span>
             <span className="font-medium text-gray-600">
@@ -255,7 +253,7 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> paid </span>
             <span className="font-semibold text-red-500">
@@ -264,7 +262,7 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
             <span> rent to </span>
             <PlayerDisplay
               playerId={details.owner || ""}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> for </span>
             <span className="font-medium text-blue-600">
@@ -279,7 +277,7 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> drew </span>
             <span className="font-medium text-purple-600">
@@ -303,7 +301,7 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> drew </span>
             <span className="font-medium text-orange-600">Airdrop Chest</span>
@@ -323,7 +321,7 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> built a </span>
             <span className="font-medium text-green-600">house</span>
@@ -341,7 +339,7 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> built a </span>
             <span className="font-medium text-purple-600">hotel</span>
@@ -359,7 +357,7 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> sold a </span>
             <span className="font-medium text-orange-600">
@@ -383,7 +381,7 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> mortgaged </span>
             <span className="font-medium text-blue-600">
@@ -403,7 +401,7 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> unmortgaged </span>
             <span className="font-medium text-blue-600">
@@ -419,7 +417,7 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span>paid</span>
             <span className="font-semibold text-red-500">
@@ -452,7 +450,7 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span>{specialMessage}</span>
           </>
@@ -463,12 +461,12 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> created a trade with </span>
             <PlayerDisplay
               playerId={details.targetPlayer || ""}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
           </>
         );
@@ -478,12 +476,12 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> accepted a trade from </span>
             <PlayerDisplay
               playerId={details.targetPlayer || ""}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
           </>
         );
@@ -493,12 +491,12 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> rejected a trade from </span>
             <PlayerDisplay
               playerId={details.targetPlayer || ""}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
           </>
         );
@@ -508,7 +506,7 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> cancelled their trade</span>
           </>
@@ -526,7 +524,7 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> declared </span>
             <span className="font-semibold text-red-600">bankruptcy</span>
@@ -541,9 +539,9 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
               🏆{" "}
               <PlayerDisplay
                 playerId={winner}
-                currentPlayerAddress={currentPlayerAddress}
+                currentPlayerId={currentPlayerId}
                 showAvatar={false}
-                showWalletAddress={true}
+                showPlayerId={true}
               />{" "}
               won the game! 🏆
             </div>
@@ -562,27 +560,13 @@ const LogMessageRenderer: React.FC<LogMessageRendererProps> = ({
           </div>
         );
 
-      case "PrizeClaimed":
-        return (
-          <>
-            <PlayerDisplay
-              playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
-            />
-            <span> claimed their prize of </span>
-            <span className="font-semibold text-green-500">
-              ${details.prizeAmount}
-            </span>
-          </>
-        );
-
       default:
         // Fallback for unknown event types
         return (
           <>
             <PlayerDisplay
               playerId={playerId}
-              currentPlayerAddress={currentPlayerAddress}
+              currentPlayerId={currentPlayerId}
             />
             <span> performed an action</span>
           </>

@@ -18,7 +18,6 @@ import {
 import { getBoardSide, getTypedSpaceData } from "@/lib/board-utils";
 import { BaseSpaceProps } from "@/types/space-types";
 import { CircleQuestionMarkIcon } from "lucide-react";
-import { TaxIcon } from "@/components/ui/icons";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 
@@ -29,7 +28,7 @@ export const PropertySpace: React.FC<PropertySpaceProps> = ({
   price,
   colorGroup,
   position,
-  onChainProperty,
+  propertyState,
   ...props
 }) => {
   const color = colorMap[colorGroup];
@@ -38,7 +37,7 @@ export const PropertySpace: React.FC<PropertySpaceProps> = ({
   const content = (
     <BaseSpace
       position={position}
-      onChainProperty={onChainProperty}
+      propertyState={propertyState}
       colorBarColor={color}
       showColorBar={true}
       {...props}
@@ -72,7 +71,7 @@ export const PropertySpace: React.FC<PropertySpaceProps> = ({
   if (!propertyData) return content;
 
   return (
-    <PropertyPopover propertyData={propertyData} property={onChainProperty}>
+    <PropertyPopover propertyData={propertyData} property={propertyState}>
       {content}
     </PropertyPopover>
   );
@@ -84,12 +83,12 @@ export const RailroadSpace: React.FC<RailroadSpaceProps> = ({
   name,
   price,
   position,
-  onChainProperty,
+  propertyState,
   ...props
 }) => {
   const side = getBoardSide(position);
   const content = (
-    <BaseSpace position={position} onChainProperty={onChainProperty} {...props}>
+    <BaseSpace position={position} propertyState={propertyState} {...props}>
       <div className="text-center flex flex-col items-center justify-center gap-1.5 w-full h-full">
         <div
           className={cn("relative aspect-square", {
@@ -119,7 +118,7 @@ export const RailroadSpace: React.FC<RailroadSpaceProps> = ({
   if (!propertyData) return content;
 
   return (
-    <RailroadPopover propertyData={propertyData} property={onChainProperty}>
+    <RailroadPopover propertyData={propertyData} property={propertyState}>
       {content}
     </RailroadPopover>
   );
@@ -131,13 +130,13 @@ export const UtilitySpace: React.FC<UtilitySpaceProps> = ({
   name,
   price,
   position,
-  onChainProperty,
+  propertyState,
   ...props
 }) => {
   const side = getBoardSide(position);
 
   const content = (
-    <BaseSpace position={position} onChainProperty={onChainProperty} {...props}>
+    <BaseSpace position={position} propertyState={propertyState} {...props}>
       <div className="text-center flex flex-col gap-1.5 items-center justify-center h-full">
         <div
           className={cn("relative aspect-square", {
@@ -167,7 +166,7 @@ export const UtilitySpace: React.FC<UtilitySpaceProps> = ({
   if (!propertyData) return content;
 
   return (
-    <UtilityPopover propertyData={propertyData} property={onChainProperty}>
+    <UtilityPopover propertyData={propertyData} property={propertyState}>
       {content}
     </UtilityPopover>
   );
@@ -177,13 +176,13 @@ export type ChanceSpaceProps = BaseSpaceProps & ChanceSpaceType;
 
 export const ChanceSpace: React.FC<ChanceSpaceProps> = ({
   position,
-  onChainProperty,
+  propertyState,
   ...props
 }) => {
   return (
     <BaseSpace
       position={position}
-      onChainProperty={onChainProperty}
+      propertyState={propertyState}
       contentContainerclassName="pt-1! pb-1!"
       {...props}
     >
@@ -201,13 +200,13 @@ export type CommunityChestSpaceProps = BaseSpaceProps & CommunityChestSpaceType;
 
 export const CommunityChestSpace: React.FC<CommunityChestSpaceProps> = ({
   position,
-  onChainProperty,
+  propertyState,
   ...props
 }) => {
   return (
     <BaseSpace
       position={position}
-      onChainProperty={onChainProperty}
+      propertyState={propertyState}
       contentContainerclassName="pt-1!"
       {...props}
     >
@@ -230,13 +229,13 @@ export type TaxSpaceProps = BaseSpaceProps & TaxSpaceType;
 export const TaxSpace: React.FC<TaxSpaceProps> = ({
   name,
   position,
-  onChainProperty,
+  propertyState,
   ...props
 }) => {
   const propertyData = getTypedSpaceData(position, "tax");
 
   return (
-    <BaseSpace position={position} onChainProperty={onChainProperty} {...props}>
+    <BaseSpace position={position} propertyState={propertyState} {...props}>
       <div className="text-center flex flex-col items-center justify-center h-full gap-1.5">
         <div className="text-[0.5vh] sm:text-[0.7vh] md:text-[0.9vh] lg:text-[1.1vh] xl:text-[1.3vh] font-bold leading-tight">
           {name}

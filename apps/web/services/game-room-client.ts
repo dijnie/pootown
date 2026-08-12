@@ -28,13 +28,18 @@ export type RoomTransport = {
   leave(consented?: boolean): Promise<unknown>;
   onError(handler: (code: number, message?: string) => void): unknown;
   onLeave(handler: (code: number) => void): unknown;
-  onMessage(type: "*", handler: (type: string | number, message: unknown) => void): unknown;
+  onMessage(
+    type: "*",
+    handler: (type: string | number, message: unknown) => void
+  ): unknown;
   onStateChange(handler: (state: RoomWireState) => void): unknown;
   send(type: string, message: unknown): void;
   state: RoomWireState;
 };
 
-export type RoomConnector = (options: RoomAdmissionOptions) => Promise<RoomTransport>;
+export type RoomConnector = (
+  options: RoomAdmissionOptions
+) => Promise<RoomTransport>;
 
 export type GameRoomClientHandlers = {
   onMessage?: (message: ServerMessage) => void;
@@ -45,6 +50,7 @@ export type GameRoomClientHandlers = {
 };
 
 type PendingCommand = {
+  command: RoomCommand;
   reject: (error: Error) => void;
   resolve: (acknowledgement: CommandAcknowledgement) => void;
 };
@@ -71,21 +77,50 @@ function parsePublicState(wire: RoomWireState): RoomPublicState {
     throw new Error("Room state is invalid");
   }
   const lifecycle = PublicGameStateSchema.safeParse(decoded);
-  const gameplay = lifecycle.success ? null : GameplayPublicStateSchema.safeParse(decoded);
-  const state = lifecycle.success ? lifecycle.data : gameplay?.success === true ? gameplay.data : null;
+  const gameplay = lifecycle.success
+    ? null
+    : GameplayPublicStateSchema.safeParse(decoded);
+  const state = lifecycle.success
+    ? lifecycle.data
+    : gameplay?.success === true
+    ? gameplay.data
+    : null;
   if (state === null || state.stateVersion !== wire.stateVersion) {
     throw new Error("Room state is invalid");
   }
   return state;
 }
 
+function wireStateAvailable(wire: RoomWireState): boolean {
+  const candidate = wire as unknown as Record<string, unknown>;
+  return (
+    typeof candidate.publicStateJson === "string" &&
+    Number.isSafeInteger(candidate.stateVersion) &&
+    Number(candidate.stateVersion) >= 0
+  );
+}
+
+async function waitForInitialPublicState(
+  room: RoomTransport
+): Promise<RoomPublicState> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (wireStateAvailable(room.state)) return parsePublicState(room.state);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("Room state is unavailable");
+}
+
 export function createColyseusRoomConnector(endpoint: string): RoomConnector {
   const normalizedEndpoint = normalizeGameServerEndpoint(endpoint);
-  const client = import("@colyseus/sdk").then(({ Client }) =>
-    new Client(normalizedEndpoint));
+  const client = import("@colyseus/sdk").then(
+    ({ Client }) => new Client(normalizedEndpoint)
+  );
   return async (rawOptions) => {
     const options = RoomAdmissionOptionsSchema.parse(rawOptions);
-    return (await client).joinOrCreate<RoomWireState>("game", options) as unknown as RoomTransport;
+    return (await client).joinOrCreate<RoomWireState>(
+      "game",
+      options
+    ) as unknown as RoomTransport;
   };
 }
 
@@ -97,10 +132,12 @@ export class GameRoomClient {
 
   public constructor(
     private readonly connector: RoomConnector,
-    private readonly handlers: GameRoomClientHandlers = {},
+    private readonly handlers: GameRoomClientHandlers = {}
   ) {}
 
-  public async connect(rawOptions: RoomAdmissionOptions): Promise<RoomPublicState> {
+  public async connect(
+    rawOptions: RoomAdmissionOptions
+  ): Promise<RoomPublicState> {
     if (this.room !== null || this.connectingGeneration !== null) {
       throw new Error("Room client is already connected");
     }
@@ -111,7 +148,8 @@ export class GameRoomClient {
     try {
       room = await this.connector(options);
     } finally {
-      if (this.connectingGeneration === generation) this.connectingGeneration = null;
+      if (this.connectingGeneration === generation)
+        this.connectingGeneration = null;
     }
     if (generation !== this.generation) {
       await room.leave(true).catch(() => undefined);
@@ -119,7 +157,7 @@ export class GameRoomClient {
     }
     let state: RoomPublicState;
     try {
-      state = parsePublicState(room.state);
+      state = await waitForInitialPublicState(room);
     } catch (error) {
       await room.leave(true).catch(() => undefined);
       throw error;
@@ -156,13 +194,10 @@ export class GameRoomClient {
       if (!this.isActive(room, generation)) return;
       this.room = null;
       this.generation += 1;
-      this.rejectPending(new Error("Room disconnected before command result"));
-      if (code !== 1000) {
-        try {
-          this.handlers.onUnexpectedDisconnect?.(code);
-        } catch {
-          // Operational UI callbacks cannot alter room ownership.
-        }
+      try {
+        this.handlers.onUnexpectedDisconnect?.(code);
+      } catch {
+        // Operational UI callbacks cannot alter room ownership.
       }
     });
     try {
@@ -170,23 +205,31 @@ export class GameRoomClient {
     } catch {
       // Consumer rendering errors do not change the verified room protocol state.
     }
-    if (!this.isActive(room, generation)) throw new Error("Room connection was cancelled");
+    if (!this.isActive(room, generation))
+      throw new Error("Room connection was cancelled");
     room.send("player.private.sync", {});
+    for (const pending of this.pending.values()) {
+      room.send("command", pending.command);
+    }
     return state;
   }
 
   public send(rawCommand: RoomCommand): Promise<CommandAcknowledgement> {
-    if (this.room === null) return Promise.reject(new Error("Room client is not connected"));
+    if (this.room === null)
+      return Promise.reject(new Error("Room client is not connected"));
     const command = RoomCommandSchema.parse(rawCommand);
     if (this.pending.has(command.requestId)) {
       return Promise.reject(new Error("Command request is already pending"));
     }
-    const pending = new Promise<CommandAcknowledgement>((resolve, rejectError) => {
-      this.pending.set(command.requestId, {
-        resolve,
-        reject: rejectError,
-      });
-    });
+    const pending = new Promise<CommandAcknowledgement>(
+      (resolve, rejectError) => {
+        this.pending.set(command.requestId, {
+          command,
+          resolve,
+          reject: rejectError,
+        });
+      }
+    );
     this.room.send("command", command);
     return pending;
   }
@@ -200,7 +243,11 @@ export class GameRoomClient {
     if (room !== null) await room.leave(true);
   }
 
-  private handleMessage(rawMessage: unknown, room: RoomTransport, generation: number): void {
+  private handleMessage(
+    rawMessage: unknown,
+    room: RoomTransport,
+    generation: number
+  ): void {
     const parsed = ServerMessageSchema.safeParse(rawMessage);
     if (!parsed.success) {
       this.terminateProtocol(room, generation);

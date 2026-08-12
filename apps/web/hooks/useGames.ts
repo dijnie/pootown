@@ -26,12 +26,12 @@ export function useGames(config: UseGamesConfig = {}): UseGamesResult {
     enabled ? ["game-sessions", 100] : null,
     async () => (await sessions.list({ limit: 100 })).items,
     {
-      onError: config.onError,
+      ...(config.onError === undefined ? {} : { onError: config.onError }),
       onSuccess: (games) => config.onSuccess?.(games.length),
       revalidateOnFocus: false,
       revalidateOnReconnect: true,
       shouldRetryOnError: false,
-    },
+    }
   );
 
   return {

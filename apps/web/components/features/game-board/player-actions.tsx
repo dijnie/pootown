@@ -72,9 +72,12 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
     const propertyData = getBoardSpaceData(position);
     const propertyAccount = getPropertyByPosition(position);
 
-    const price = propertyData !== null && propertyData !== undefined && "price" in propertyData
-      ? propertyData.price
-      : null;
+    const price =
+      propertyData !== null &&
+      propertyData !== undefined &&
+      "price" in propertyData
+        ? propertyData.price
+        : null;
     return { propertyData, price, isOwned: !!propertyAccount?.owner };
   }, [getPropertyByPosition, position]);
 
@@ -82,51 +85,50 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
     return <Button>Pay tax</Button>;
   }
 
-  const hasInsufficientFunds = pendingPropertyInfo.price !== null &&
+  const hasInsufficientFunds =
+    pendingPropertyInfo.price !== null &&
     !canAffordMatchCash(player.cashBalance, pendingPropertyInfo.price);
 
   return (
     <>
-      {!pendingPropertyInfo.isOwned &&
-        pendingPropertyInfo.price !== null && (
-          <div className="space-y-2">
-            <div className="flex gap-2">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <Button
-                      size="sm"
-                      onClick={() => handleBuyProperty(position)}
-                      disabled={hasInsufficientFunds}
-                      loading={isLoading === "buyProperty"}
-                      className="flex-1"
-                    >
-                      {isLoading === "buyProperty"
-                        ? "Buying..."
-                        : `Buy for ${formatPrice(
-                            pendingPropertyInfo.price
-                          )}`}
-                    </Button>
-                  </TooltipTrigger>
-                  {hasInsufficientFunds && (
-                    <TooltipContent>
-                      <p>Insufficient funds</p>
-                    </TooltipContent>
-                  )}
-                </Tooltip>
-              </TooltipProvider>
-              <Button
-                size="sm"
-                onClick={() => handleSkipProperty(position)}
-                loading={isLoading === "skipProperty"}
-                className="flex-1"
-                variant="neutral"
-              >
-                Skip
-              </Button>
-            </div>
+      {!pendingPropertyInfo.isOwned && pendingPropertyInfo.price !== null && (
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger>
+                  <Button
+                    size="sm"
+                    onClick={() => handleBuyProperty(position)}
+                    disabled={hasInsufficientFunds || isLoading !== null}
+                    loading={isLoading === "buyProperty"}
+                    className="flex-1"
+                  >
+                    {isLoading === "buyProperty"
+                      ? "Buying..."
+                      : `Buy for ${formatPrice(pendingPropertyInfo.price)}`}
+                  </Button>
+                </TooltipTrigger>
+                {hasInsufficientFunds && (
+                  <TooltipContent>
+                    <p>Insufficient funds</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+            <Button
+              size="sm"
+              onClick={() => handleSkipProperty(position)}
+              loading={isLoading === "skipProperty"}
+              disabled={isLoading !== null}
+              className="flex-1"
+              variant="neutral"
+            >
+              Skip
+            </Button>
           </div>
-        )}
+        </div>
+      )}
     </>
   );
 };
@@ -141,13 +143,12 @@ export const PlayerActions = ({
   handlePayPriorityFeeTax,
   handlePayJailFine,
   handleGetOutOfJailCard,
-  handleEndGame,
   handleCancelGame,
   handleLeaveGame,
   isLoading,
 }: {
   playerId: string;
-  handleStartGame: (gameAddress: string) => void;
+  handleStartGame: (gameId: string) => void;
   handleBuyProperty: (position: number) => void;
   handleSkipProperty: (position: number) => void;
   handlePayMevTax: () => void;
@@ -155,7 +156,6 @@ export const PlayerActions = ({
   handleEndTurn: () => void;
   handlePayJailFine: () => void;
   handleGetOutOfJailCard: () => void;
-  handleEndGame: () => void;
   handleCancelGame: () => void;
   handleLeaveGame: () => void;
   isLoading: string | null;
@@ -164,6 +164,7 @@ export const PlayerActions = ({
     demoDices,
     gameState: game,
     currentPlayerState,
+    ownPlayerState,
     showRollDice,
     isCurrentTurn,
     showEndTurn,
@@ -175,13 +176,12 @@ export const PlayerActions = ({
 
   const { canRoll, isRolling, handleRollDice } = useDiceContext();
 
-  if (!currentPlayerState || !game) {
+  if (!ownPlayerState || !game) {
     return null;
   }
 
   const isStarted = game.gameStatus === GameStatus.InProgress;
   const isEnded = game?.gameStatus === GameStatus.Finished;
-  const endConditionMet = game?.endConditionMet;
   const isCreator = game.creator === playerId;
   const isInGame = game.players.includes(playerId);
 
@@ -189,21 +189,6 @@ export const PlayerActions = ({
     return (
       <div className="flex flex-col items-center gap-2">
         <Badge variant="default">Game ended</Badge>
-      </div>
-    );
-  }
-
-  if (endConditionMet) {
-    return (
-      <div className="flex flex-col items-center gap-4">
-        <Button
-          onClick={handleEndGame}
-          size="sm"
-          loading={isLoading === "endGame"}
-        >
-          End game
-        </Button>
-        <Badge variant="neutral">The game can end now.</Badge>
       </div>
     );
   }
@@ -220,14 +205,15 @@ export const PlayerActions = ({
                 <Button
                   onClick={() => handleCancelGame()}
                   loading={isLoading === "cancelGame"}
+                  disabled={isLoading !== null}
                   variant="neutral"
                 >
                   Cancel game
                 </Button>
                 <Button
-                  onClick={() => handleStartGame(game.address)}
+                  onClick={() => handleStartGame(String(game.gameId))}
                   loading={isLoading === "startGame"}
-                  disabled={game.currentPlayers < 2}
+                  disabled={game.currentPlayers < 2 || isLoading !== null}
                 >
                   Start game
                 </Button>
@@ -245,6 +231,7 @@ export const PlayerActions = ({
               <Button
                 onClick={() => handleLeaveGame()}
                 loading={isLoading === "leaveGame"}
+                disabled={isLoading !== null}
               >
                 Leave game
               </Button>
@@ -254,12 +241,12 @@ export const PlayerActions = ({
         </div>
       )}
 
-      {isStarted && isCurrentTurn && (
+      {isStarted && isCurrentTurn && currentPlayerState !== null && (
         <>
           <div className="flex items-center gap-2 mt-8 mb-4">
             {showRollDice && (
               <Button
-                disabled={!canRoll || isRolling}
+                disabled={!canRoll || isRolling || isLoading !== null}
                 onClick={handleRollDice}
                 size="sm"
                 loading={isRolling}
@@ -270,7 +257,12 @@ export const PlayerActions = ({
 
             {showPayJailFine && (
               <Button
-                disabled={!canAffordMatchCash(currentPlayerState.cashBalance, JAIL_FINE)}
+                disabled={
+                  !canAffordMatchCash(
+                    currentPlayerState.cashBalance,
+                    JAIL_FINE
+                  ) || isLoading !== null
+                }
                 onClick={handlePayJailFine}
                 size="sm"
                 loading={isLoading === "payJailFine"}
@@ -284,14 +276,13 @@ export const PlayerActions = ({
                 onClick={handleGetOutOfJailCard}
                 size="sm"
                 loading={isLoading === "getOutOfJailCard"}
+                disabled={isLoading !== null}
               >
                 Use Get Out of Jail Card
               </Button>
             )}
 
-            {currentPlayerState?.needsBankruptcyCheck && (
-              <BankruptcyAction />
-            )}
+            {currentPlayerState?.needsBankruptcyCheck && <BankruptcyAction />}
 
             {/* Property Actions */}
             {currentPlayerState.needsPropertyAction &&
@@ -312,6 +303,7 @@ export const PlayerActions = ({
                 <Button
                   onClick={() => handlePayMevTax()}
                   loading={isLoading === "tax"}
+                  disabled={isLoading !== null}
                 >
                   Pay {getTypedSpaceData(MEV_TAX_POSITION, "tax")?.name} ($
                   {getTypedSpaceData(MEV_TAX_POSITION, "tax")?.taxAmount})
@@ -324,6 +316,7 @@ export const PlayerActions = ({
                 <Button
                   onClick={() => handlePayPriorityFeeTax()}
                   loading={isLoading === "tax"}
+                  disabled={isLoading !== null}
                 >
                   Pay Priority Fee Tax
                 </Button>
@@ -337,6 +330,7 @@ export const PlayerActions = ({
                   setIsCardDrawModalOpen(true);
                 }}
                 loading={isLoading === "chanceCard"}
+                disabled={isLoading !== null}
               >
                 {isLoading === "chanceCard" ? "Drawing..." : "Draw Chance Card"}
               </Button>
@@ -350,6 +344,7 @@ export const PlayerActions = ({
                     setCardDrawType("community-chest");
                     setIsCardDrawModalOpen(true);
                   }}
+                  disabled={isLoading !== null}
                 >
                   Draw card
                 </Button>
@@ -361,13 +356,17 @@ export const PlayerActions = ({
               !isDouble) ||
               (currentPlayerState.hasRolledDice &&
                 currentPlayerState.inJail)) && (
-              <Button onClick={handleEndTurn} loading={isLoading === "endTurn"}>
+              <Button onClick={handleEndTurn} loading={isLoading === "endTurn"} disabled={isLoading !== null}>
                 {isLoading === "endTurn" ? "Ending Turn..." : "End Turn"}
               </Button>
             )} */}
 
             {showEndTurn && (
-              <Button onClick={handleEndTurn} loading={isLoading === "endTurn"}>
+              <Button
+                onClick={handleEndTurn}
+                loading={isLoading === "endTurn"}
+                disabled={isLoading !== null}
+              >
                 {isLoading === "endTurn" ? "Ending Turn..." : "End Turn"}
               </Button>
             )}
@@ -375,8 +374,12 @@ export const PlayerActions = ({
         </>
       )}
       {isStarted && (
-        <Badge className={isCurrentTurn ? "" : "mt-8"} variant="neutral">
-          {formatAddress(currentPlayerState.wallet)} is playing
+        <Badge
+          className={`${isCurrentTurn ? "" : "mt-8"} w-40`}
+          variant="neutral"
+        >
+          {formatAddress(currentPlayerState?.playerId ?? "Current player")} is
+          playing
         </Badge>
       )}
     </div>

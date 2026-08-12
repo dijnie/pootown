@@ -23,46 +23,44 @@ export const PlayerToken: React.FC<PlayerTokenProps> = ({
   const [animatedPosition, setAnimatedPosition] = useState(position);
   const [isAnimating, setIsAnimating] = useState(false);
   const previousPositionRef = useRef(position);
-  
+
   // Animate player movement step by step
   useEffect(() => {
     const oldPos = previousPositionRef.current;
     const newPos = position;
-    
+
     if (oldPos === newPos) return;
-    
+
     // Calculate the number of steps to move
-    const steps = newPos > oldPos 
-      ? newPos - oldPos 
-      : (40 - oldPos) + newPos; // Handle wrapping around the board
-    
+    const steps = newPos > oldPos ? newPos - oldPos : 40 - oldPos + newPos; // Handle wrapping around the board
+
     if (steps === 0 || steps > 12) {
       // If too many steps or no movement, jump directly
       setAnimatedPosition(newPos);
       previousPositionRef.current = newPos;
       return;
     }
-    
+
     // Animate step by step
     setIsAnimating(true);
     let currentStep = 0;
     const stepDelay = 300; // ms per step - slower for smoother movement
-    
+
     const animationInterval = setInterval(() => {
       currentStep++;
       const intermediatePos = (oldPos + currentStep) % 40;
       setAnimatedPosition(intermediatePos);
-      
+
       if (currentStep >= steps) {
         clearInterval(animationInterval);
         setIsAnimating(false);
         previousPositionRef.current = newPos;
       }
     }, stepDelay);
-    
+
     return () => clearInterval(animationInterval);
   }, [position]);
-  
+
   // Position token based on board position (40 spaces total)
   const getTokenPosition = (pos: number) => {
     // 14x14 grid with 2x2 corner spaces and 2x2 side spaces
@@ -119,7 +117,7 @@ export const PlayerToken: React.FC<PlayerTokenProps> = ({
     }
 
     const tokenIndex = playersOnSameSpace.findIndex(
-      (p) => p.wallet === player.wallet
+      (p) => p.playerId === player.playerId
     );
     const offsetDistance = 1.5; // Distance between tokens in percentage (reduced for better centering)
 
@@ -159,13 +157,15 @@ export const PlayerToken: React.FC<PlayerTokenProps> = ({
   return (
     <div
       className={`absolute w-10 h-10 flex items-center justify-center transition-all ease-in-out ${
-        isAnimating ? 'duration-300' : 'duration-500'
+        isAnimating ? "duration-300" : "duration-500"
       }`}
       style={{
         left: tokenPos.left,
         top: tokenPos.top,
-        transform: `translate(-50%, -50%) rotate(${-boardRotation}deg) ${isAnimating ? 'scale(1.15)' : 'scale(1)'}`,
-        zIndex: isAnimating ? 2000 : 1000 + player.wallet, // Elevate during animation
+        transform: `translate(-50%, -50%) rotate(${-boardRotation}deg) ${
+          isAnimating ? "scale(1.15)" : "scale(1)"
+        }`,
+        zIndex: isAnimating ? 2000 : 1000 + player.playerId, // Elevate during animation
       }}
     >
       {/* Location-like shape with avatar */}
@@ -181,15 +181,15 @@ export const PlayerToken: React.FC<PlayerTokenProps> = ({
         <div className="absolute inset-1 rounded-full overflow-hidden bg-white shadow-md">
           <Avatar className="w-full h-full">
             <AvatarImage
-              walletAddress={player.wallet}
-              alt={`${player.wallet} token`}
+              playerId={player.playerId}
+              alt={`${player.playerId} token`}
               className="w-full h-full object-cover"
             />
             <AvatarFallback
-              walletAddress={player.wallet}
+              playerId={player.playerId}
               className="w-full h-full text-xs font-bold bg-gradient-to-br from-blue-400 to-purple-500 text-white"
             >
-              {player.wallet.slice(0, 2).toUpperCase()}
+              {player.playerId.slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
         </div>
@@ -204,7 +204,7 @@ export const PlayerToken: React.FC<PlayerTokenProps> = ({
 interface PlayerTokensContainerProps {
   players: PlayerAccount[];
   boardRotation: number;
-  currentPlayer: string;
+  currentPlayer: string | null;
 }
 
 export const PlayerTokensContainer: React.FC<PlayerTokensContainerProps> = ({
@@ -224,12 +224,12 @@ export const PlayerTokensContainer: React.FC<PlayerTokensContainerProps> = ({
 
         return (
           <PlayerToken
-            key={player.address}
+            key={player.playerId}
             player={player}
             position={player.position}
             boardRotation={boardRotation}
             playersOnSameSpace={playersOnSameSpace}
-            isPlaying={player.wallet === currentPlayer}
+            isPlaying={player.playerId === currentPlayer}
           />
         );
       })}

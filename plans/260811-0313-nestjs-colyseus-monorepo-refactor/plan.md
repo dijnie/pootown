@@ -43,8 +43,8 @@ Authority precedence: accepted CEO decisions and this implementation plan overri
 | 3 | [Complete executed rules port](./phase-03-complete-game-rules-port.md) | 2 | Complete |
 | 4 | [NestJS identity, economy, and sessions](./phase-04-nestjs-identity-economy-and-sessions.md) | 2 | Complete |
 | 5 | [Colyseus rooms and recovery](./phase-05-colyseus-rooms-and-recovery.md) | 3, 4 | Complete |
-| 6 | [Frontend runtime cutover](./phase-06-frontend-runtime-cutover.md) | 4, 5 | In progress |
-| 7 | [Reliability, security, and load gates](./phase-07-reliability-security-and-load-gates.md) | 6 | Pending |
+| 6 | [Frontend runtime cutover](./phase-06-frontend-runtime-cutover.md) | 4, 5 | Complete |
+| 7 | [Reliability, security, and load gates](./phase-07-reliability-security-and-load-gates.md) | 6 | In progress |
 | 8 | [Clean removal, deployment, and docs](./phase-08-clean-removal-deployment-and-docs.md) | 7 | Pending |
 
 Critical path: `1 -> 2 -> 3/4 -> 5 -> 6 -> 7 -> 8`. Phases 3 and 4 may proceed concurrently after Phase 2 if file ownership remains separate.
@@ -70,6 +70,8 @@ None.
 - Rejected as non-findings: the approved one-replica topology, no Redis/queue, full checkpoint-per-command pending measurement, secure server RNG without VRF, no production dual engine, and fail-closed corrupt-checkpoint handling.
 
 ## Validation Log
+
+- 2026-08-12 — Phase 6 frontend cutover completed. Web unit tests passed 38/38; API unit tests passed 28/28; web/API lint, typecheck, and production builds passed; public desktop/mobile visual checks passed 6/6; and the isolated PostgreSQL/API/Colyseus/production-web vertical passed create, join, start, and canonical reload on desktop and mobile. Six additional fresh desktop environments passed consecutively. Automatic reconnect preserves and replays pending request IDs, while explicit disconnect remains destructive. Full play-to-finish, outage/fault injection, browser error-state, restore, and load evidence remains owned by Phase 7; the prior isolated join 500 is not currently reproducible and remains a Phase 7 observability target.
 
 - 2026-08-12 — CEO replaced Privy with minimal first-party email/password auth: register, login, rotating refresh, and logout only. No email verification, password recovery, social provider, or compatibility alias. Source behavior comes from `dijnie/nest-next-tuborepo` auth at commit `9321cd1`, adapted to Pootown SQL/Zod/jose patterns.
 

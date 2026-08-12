@@ -759,8 +759,7 @@ export const surpriseCards = [
   {
     id: 1,
     title: "Memecoin Pump! 🚀",
-    description:
-      "Advance to the nearest memecoin property (BONK or WIF). If unowned, you may buy it. If owned, pay double rent – the pump is real!",
+    description: "Move to the nearest memecoin property.",
     action: "advance-to-nearest-memecoin",
     value: 0,
   },
@@ -791,8 +790,7 @@ export const surpriseCards = [
   {
     id: 5,
     title: "Dev Unlock 🔓",
-    description:
-      "Team tokens vest early. Get out of Validator Jail free – keep this card or sell it to another player.",
+    description: "Keep this Get Out of Jail Free card.",
     action: "get-out-of-jail",
     value: 0,
   },
@@ -803,8 +801,7 @@ export const treasureCards = [
   {
     id: 1,
     title: "Retroactive Airdrop! 🪂",
-    description:
-      "You farmed early. Collect $50 from every player – points paid off.",
+    description: "Collect $50 match cash for each other player.",
     action: "collect-from-players",
     value: 50,
   },
@@ -819,22 +816,20 @@ export const treasureCards = [
   {
     id: 3,
     title: "NFT Floor Sweep 🖼️",
-    description:
-      "Community bids up your jpegs. Advance to Free Airdrop Parking and collect the pot.",
+    description: "Move to Free Airdrop Parking at position 20.",
     action: "advance-to-free-parking",
     value: 0,
   },
   {
     id: 4,
     title: "DAO Vote Win 🗳️",
-    description:
-      "Proposal passes in your favor. Repair all your properties for free – grants approved.",
+    description: "The proposal passes. No match state changes.",
     action: "repair-free",
     value: 0,
   },
   {
     id: 5,
-    title: "Wallet Drain Fee 🔒",
+    title: "Account Security Fee 🔒",
     description:
       "Phishing attempt succeeds. Pay $50 to the bank – always check your seeds!",
     action: "pay-money",

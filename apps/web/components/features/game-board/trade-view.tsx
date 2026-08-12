@@ -15,6 +15,8 @@ import { GameStatus, TradeStatus } from "@/types/schema";
 import { getTypedSpaceData } from "@/lib/board-utils";
 import { colorMap, ColorGroup } from "@/configs/board-data";
 import type { TradeInfo } from "@/types/schema";
+import { commandErrorMessage } from "@/services/command-error-message";
+import { toast } from "sonner";
 
 const getTradeStatusText = (status: TradeStatus): string => {
   switch (status) {
@@ -68,36 +70,50 @@ const getOfferDisplay = (money: number | string, property: number | null) => {
 };
 
 export function TradeView() {
-  const { gameState, ownPlayerId, acceptTrade, rejectTrade, cancelTrade } = useGameContext();
+  const { gameState, ownPlayerId, acceptTrade, rejectTrade, cancelTrade } =
+    useGameContext();
   const activeTrades = gameState?.activeTrades || [];
 
   const [isCreateTradeOpen, setIsCreateTradeOpen] = useState(false);
+  const [pendingTradeId, setPendingTradeId] = useState<string | null>(null);
 
   const handleCreateTrade = () => {
     setIsCreateTradeOpen(true);
   };
 
   const handleAccept = async (tradeId: number | string, proposer: string) => {
+    if (pendingTradeId !== null) return;
+    setPendingTradeId(tradeId.toString());
     try {
       await acceptTrade(tradeId.toString(), proposer);
     } catch (error) {
-      console.error("Error accepting trade:", error);
+      toast.error(commandErrorMessage(error));
+    } finally {
+      setPendingTradeId(null);
     }
   };
 
   const handleReject = async (tradeId: number | string) => {
+    if (pendingTradeId !== null) return;
+    setPendingTradeId(tradeId.toString());
     try {
       await rejectTrade(tradeId.toString());
     } catch (error) {
-      console.error("Error rejecting trade:", error);
+      toast.error(commandErrorMessage(error));
+    } finally {
+      setPendingTradeId(null);
     }
   };
 
   const handleCancel = async (tradeId: number | string) => {
+    if (pendingTradeId !== null) return;
+    setPendingTradeId(tradeId.toString());
     try {
       await cancelTrade(tradeId.toString());
     } catch (error) {
-      console.error("Error canceling trade:", error);
+      toast.error(commandErrorMessage(error));
+    } finally {
+      setPendingTradeId(null);
     }
   };
 
@@ -109,7 +125,10 @@ export function TradeView() {
           size="sm"
           className="h-8 px-3"
           onClick={handleCreateTrade}
-          disabled={gameState?.gameStatus !== GameStatus.InProgress}
+          disabled={
+            gameState?.gameStatus !== GameStatus.InProgress ||
+            pendingTradeId !== null
+          }
         >
           <Plus className="w-4 h-4 mr-1" />
           Create
@@ -132,6 +151,7 @@ export function TradeView() {
                   onAccept={handleAccept}
                   onReject={handleReject}
                   onCancel={handleCancel}
+                  disabled={pendingTradeId !== null}
                 />
               ))}
             </div>
@@ -153,12 +173,14 @@ function TradeItem({
   onAccept,
   onReject,
   onCancel,
+  disabled,
 }: {
   trade: TradeInfo;
   currentPlayer?: string;
   onAccept: (tradeId: number | string, proposer: string) => void;
   onReject: (tradeId: number | string) => void;
   onCancel: (tradeId: number | string) => void;
+  disabled: boolean;
 }) {
   const [isAccepting, setIsAccepting] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
@@ -204,11 +226,11 @@ function TradeItem({
             <div className="flex items-center gap-2">
               <Avatar className="size-4 rounded-full overflow-hidden">
                 <AvatarImage
-                  walletAddress={trade.proposer}
+                  playerId={trade.proposer}
                   alt={`Player ${formatAddress(trade.proposer)}`}
                 />
                 <AvatarFallback
-                  walletAddress={trade.proposer}
+                  playerId={trade.proposer}
                   className="text-white font-semibold"
                 >
                   {formatAddress(trade.proposer).substring(0, 2)}
@@ -220,11 +242,11 @@ function TradeItem({
               <ArrowRight className="h-4 w-4 text-muted-foreground" />
               <Avatar className="size-4 rounded-full overflow-hidden">
                 <AvatarImage
-                  walletAddress={trade.receiver}
+                  playerId={trade.receiver}
                   alt={`Player ${formatAddress(trade.receiver)}`}
                 />
                 <AvatarFallback
-                  walletAddress={trade.receiver}
+                  playerId={trade.receiver}
                   className="text-white font-semibold"
                 >
                   {formatAddress(trade.receiver).substring(0, 2)}
@@ -291,7 +313,7 @@ function TradeItem({
                     className="flex-1 gap-2"
                     variant="neutral"
                     onClick={handleAccept}
-                    disabled={isAccepting || isRejecting}
+                    disabled={disabled || isAccepting || isRejecting}
                     loading={isAccepting}
                   >
                     <Check className="h-4 w-4" />
@@ -301,7 +323,7 @@ function TradeItem({
                     size="sm"
                     className="flex-1 gap-2"
                     onClick={handleReject}
-                    disabled={isAccepting || isRejecting}
+                    disabled={disabled || isAccepting || isRejecting}
                     loading={isRejecting}
                   >
                     <X className="h-4 w-4" />
@@ -313,7 +335,7 @@ function TradeItem({
                   size="sm"
                   className="w-full gap-2 bg-transparent"
                   onClick={handleCancel}
-                  disabled={isCanceling}
+                  disabled={disabled || isCanceling}
                   loading={isCanceling}
                 >
                   <X className="h-4 w-4" />

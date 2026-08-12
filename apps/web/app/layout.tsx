@@ -3,7 +3,6 @@ import { Space_Grotesk } from "next/font/google";
 import "@/styles/globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { AppProviders } from "@/components/providers/app-provider";
-import { Analytics } from "@vercel/analytics/next";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -11,6 +10,8 @@ const spaceGrotesk = Space_Grotesk({
   preload: true,
   variable: "--font-space-grotesk",
 });
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: {
@@ -42,14 +43,16 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     title: "Poo Town - Multiplayer Property Tycoon",
-    description: "A fast multiplayer property tycoon game with authoritative real-time rooms.",
+    description:
+      "A fast multiplayer property tycoon game with authoritative real-time rooms.",
     url: "https://pootown.vercel.app",
     siteName: "Poo Town",
   },
   twitter: {
     card: "summary_large_image",
     title: "Poo Town - Multiplayer Property Tycoon",
-    description: "A fast multiplayer property tycoon game with authoritative real-time rooms.",
+    description:
+      "A fast multiplayer property tycoon game with authoritative real-time rooms.",
     images: ["https://pootown.vercel.app/preview.png"],
     creator: "@poo_town_",
   },
@@ -72,7 +75,6 @@ export default function RootLayout({
       <body className={spaceGrotesk.className}>
         <AppProviders>{children}</AppProviders>
         <Toaster />
-        <Analytics />
       </body>
     </html>
   );

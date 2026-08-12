@@ -9,6 +9,8 @@ import React, {
 } from "react";
 import { playDiceRollSequence, stopDiceRollSequence } from "@/lib/soundUtil";
 import { useGameContext } from "@/components/providers/game-provider";
+import { commandErrorMessage } from "@/services/command-error-message";
+import { toast } from "sonner";
 import "../../../styles/dice.css";
 
 const diceRotations = {
@@ -41,7 +43,6 @@ export const DiceProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isRolling, setIsRolling] = useState(false);
   const [isThrowAnimation, setIsThrowAnimation] = useState(false);
 
-  const animationFrameRef = useRef<number | null>(null);
   const isWaitingForResult = useRef(false);
   const dice1Ref = useRef<HTMLDivElement>(null);
   const dice2Ref = useRef<HTMLDivElement>(null);
@@ -53,7 +54,6 @@ export const DiceProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const handleRollDice = async () => {
     if (!canRoll || isRolling) return;
-    console.log("DICE start rolling");
     playDiceRollSequence();
     setIsRolling(true);
     setIsThrowAnimation(true);
@@ -72,7 +72,7 @@ export const DiceProvider: React.FC<{ children: React.ReactNode }> = ({
       await rollDice(demoDices ? demoDices : undefined);
       await new Promise((resolve) => setTimeout(resolve, 6000));
     } catch (error) {
-      console.error("Error rolling dice:", error);
+      toast.error(commandErrorMessage(error));
       stopDiceRollSequence();
       setIsRolling(false);
       setIsThrowAnimation(false);
@@ -129,15 +129,6 @@ export const DiceProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [currentPlayerState?.lastDiceRoll]);
 
-  // Cleanup animation on unmount
-  useEffect(() => {
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, []);
-
   useEffect(() => {
     if (
       !isRolling &&
@@ -175,16 +166,9 @@ export const useDiceContext = () => {
 };
 
 export const DicesOnly: React.FC = () => {
-  const { dice1, dice2, isRolling, isThrowAnimation, dice1Ref, dice2Ref } =
-    useDiceContext();
+  const { isRolling, isThrowAnimation, dice1Ref, dice2Ref } = useDiceContext();
 
-  const DiceFace = ({
-    value,
-    className,
-  }: {
-    value: number;
-    className: string;
-  }) => (
+  const DiceFace = ({ className }: { className: string }) => (
     <div className={`dice-face ${className}`}>
       {/* Dots are now handled by CSS */}
     </div>
@@ -201,12 +185,12 @@ export const DicesOnly: React.FC = () => {
               isThrowAnimation ? "dice-throw" : ""
             }`}
           >
-            <DiceFace value={dice1} className="dice-front" />
-            <DiceFace value={7 - dice1} className="dice-back" />
-            <DiceFace value={((dice1 + 1) % 6) + 1} className="dice-right" />
-            <DiceFace value={((dice1 + 2) % 6) + 1} className="dice-left" />
-            <DiceFace value={((dice1 + 3) % 6) + 1} className="dice-top" />
-            <DiceFace value={((dice1 + 4) % 6) + 1} className="dice-bottom" />
+            <DiceFace className="dice-front" />
+            <DiceFace className="dice-back" />
+            <DiceFace className="dice-right" />
+            <DiceFace className="dice-left" />
+            <DiceFace className="dice-top" />
+            <DiceFace className="dice-bottom" />
           </div>
         </div>
         {/* Dice 2 - 3D with different animation */}
@@ -217,12 +201,12 @@ export const DicesOnly: React.FC = () => {
               isThrowAnimation ? "dice-throw" : ""
             }`}
           >
-            <DiceFace value={dice2} className="dice-front" />
-            <DiceFace value={7 - dice2} className="dice-back" />
-            <DiceFace value={((dice2 + 1) % 6) + 1} className="dice-right" />
-            <DiceFace value={((dice2 + 2) % 6) + 1} className="dice-left" />
-            <DiceFace value={((dice2 + 3) % 6) + 1} className="dice-top" />
-            <DiceFace value={((dice2 + 4) % 6) + 1} className="dice-bottom" />
+            <DiceFace className="dice-front" />
+            <DiceFace className="dice-back" />
+            <DiceFace className="dice-right" />
+            <DiceFace className="dice-left" />
+            <DiceFace className="dice-top" />
+            <DiceFace className="dice-bottom" />
           </div>
         </div>
       </div>

@@ -14,7 +14,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { PropertyAccount } from "@/types/schema";
-import { canAffordMatchCash, cn, formatAddress, formatPrice } from "@/lib/utils";
+import {
+  canAffordMatchCash,
+  cn,
+  formatAddress,
+  formatPrice,
+} from "@/lib/utils";
 import {
   Building2,
   ChevronDown,
@@ -35,6 +40,7 @@ import { useGameContext } from "@/components/providers/game-provider";
 import { Button } from "@/components/ui/button";
 import { BuildingType } from "@/types/schema";
 import { toast } from "sonner";
+import { commandErrorMessage } from "@/services/command-error-message";
 
 interface BasePopoverProps {
   children: React.ReactNode;
@@ -87,9 +93,11 @@ export const PropertyPopover: React.FC<PropertyPopoverProps> = ({
   const houseCost = propertyData.houseCost || 0;
   const hotelCost = propertyData.hotelCost || propertyData.houseCost || 0;
 
-  const hasEnoughForHouse = currentPlayerState !== null &&
+  const hasEnoughForHouse =
+    currentPlayerState !== null &&
     canAffordMatchCash(currentPlayerState.cashBalance, houseCost);
-  const hasEnoughForHotel = currentPlayerState !== null &&
+  const hasEnoughForHotel =
+    currentPlayerState !== null &&
     canAffordMatchCash(currentPlayerState.cashBalance, hotelCost);
 
   const canBuildHouse =
@@ -115,9 +123,8 @@ export const PropertyPopover: React.FC<PropertyPopoverProps> = ({
         )}`,
       });
     } catch (error) {
-      console.error("Error building house:", error);
       toast("Failed to build house", {
-        description: "Please try again later",
+        description: commandErrorMessage(error),
       });
     } finally {
       setIsLoading(null);
@@ -136,9 +143,8 @@ export const PropertyPopover: React.FC<PropertyPopoverProps> = ({
         )}`,
       });
     } catch (error) {
-      console.error("Error building hotel:", error);
       toast("Failed to build hotel", {
-        description: "Please try again later",
+        description: commandErrorMessage(error),
       });
     } finally {
       setIsLoading(null);
@@ -150,9 +156,6 @@ export const PropertyPopover: React.FC<PropertyPopoverProps> = ({
 
     setIsLoading(`sell${buildingType}`);
     try {
-      console.log(
-        `Selling ${buildingType} at position ${propertyData.position}`
-      );
       await sellBuilding(propertyData.position, buildingType);
 
       const buildingName =
@@ -173,11 +176,10 @@ export const PropertyPopover: React.FC<PropertyPopoverProps> = ({
         }
       );
     } catch (error) {
-      console.error(`Error selling ${buildingType}:`, error);
       const buildingName =
         buildingType === BuildingType.House ? "house" : "hotel";
       toast(`Failed to sell ${buildingName}`, {
-        description: "Please try again later",
+        description: commandErrorMessage(error),
       });
     } finally {
       setIsLoading(null);

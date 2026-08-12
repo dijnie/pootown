@@ -15,7 +15,6 @@ type GameLogType =
   | "PlayerJoined"
   | "PlayerLeft"
   | "PlayerPassedGo"
-  | "PrizeClaimed"
   | "PropertyDeclined"
   | "PropertyMortgaged"
   | "PropertyPurchased"
@@ -33,7 +32,7 @@ export interface BaseSpaceProps {
   position: number;
   rotate?: "left" | "top" | "right";
   onClick?: (position: number) => void;
-  onChainProperty?: PropertyAccount | null;
+  propertyState?: PropertyAccount | null;
 }
 
 export type TaxSpaceProps = BaseSpaceProps & TaxSpace;
@@ -133,9 +132,6 @@ export interface GameLogEntry {
     // end game
     winner?: string | null;
     winnerNetWorth?: number | string;
-
-    // claim prize
-    prizeAmount?: number;
 
     // other
     error?: string;

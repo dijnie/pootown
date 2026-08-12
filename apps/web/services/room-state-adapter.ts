@@ -21,7 +21,11 @@ import {
 } from "../types/schema.js";
 
 const PLAYER_COLORS = ["#00c8f0", "#ff4d50", "#ffbf00", "#00d696"] as const;
-const GAME_STATUS = { waiting: GameStatus.WaitingForPlayers, inProgress: GameStatus.InProgress, finished: GameStatus.Finished };
+const GAME_STATUS = {
+  waiting: GameStatus.WaitingForPlayers,
+  inProgress: GameStatus.InProgress,
+  finished: GameStatus.Finished,
+};
 const TRADE_STATUS_PENDING = TradeStatus.Pending;
 const TRADE_TYPES = {
   moneyOnly: TradeType.MoneyOnly,
@@ -29,7 +33,10 @@ const TRADE_TYPES = {
   moneyForProperty: TradeType.MoneyForProperty,
   propertyForMoney: TradeType.PropertyForMoney,
 };
-const GAME_END_REASONS = { bankruptcy: GameEndReason.BankruptcyVictory, timeLimit: GameEndReason.TimeLimit };
+const GAME_END_REASONS = {
+  bankruptcy: GameEndReason.BankruptcyVictory,
+  timeLimit: GameEndReason.TimeLimit,
+};
 
 export interface RoomUiState {
   readonly gameState: GameAccount;
@@ -38,7 +45,9 @@ export interface RoomUiState {
 }
 
 function activeTurnSeat(turn: GameplayTurnState): number {
-  return turn.phase === "notStarted" || turn.phase === "finished" ? 0 : turn.currentSeatIndex;
+  return turn.phase === "notStarted" || turn.phase === "finished"
+    ? 0
+    : turn.currentSeatIndex;
 }
 
 function gameplayPlayers(state: GameplayPublicState): PlayerAccount[] {
@@ -46,73 +55,93 @@ function gameplayPlayers(state: GameplayPublicState): PlayerAccount[] {
   return state.seats.flatMap((seat) => {
     if (seat === null) return [];
     const isCurrent = seat.seatIndex === currentSeat;
-    const propertyPosition = "propertyPosition" in state.turn ? state.turn.propertyPosition : null;
-    return [{
-      address: seat.playerId,
-      wallet: seat.playerId,
-      playerColor: PLAYER_COLORS[seat.seatIndex] ?? PLAYER_COLORS[0],
-      game: state.gameId,
-      cashBalance: seat.cash,
-      position: seat.position,
-      inJail: seat.inJail,
-      jailTurns: seat.jailTurns,
-      doublesCount: seat.consecutiveDoubles,
-      isBankrupt: seat.status === "eliminated",
-      propertiesOwned: [...seat.ownedPropertyPositions],
-      getOutOfJailCards: seat.getOutOfJailCards,
-      netWorth: seat.cash,
-      lastRentCollected: "0",
-      festivalBoostTurns: 0,
-      hasRolledDice: isCurrent && state.turn.phase !== "awaitingRoll",
-      lastDiceRoll: state.lastDice === null ? [] : [state.lastDice.dieOne, state.lastDice.dieTwo],
-      needsPropertyAction: isCurrent && state.turn.phase === "awaitingPropertyDecision",
-      pendingPropertyPosition: isCurrent ? propertyPosition : null,
-      needsChanceCard: isCurrent && state.turn.phase === "awaitingCardDraw" && state.turn.deck === "chance",
-      needsCommunityChestCard: isCurrent && state.turn.phase === "awaitingCardDraw" && state.turn.deck === "communityChest",
-      needsBankruptcyCheck: isCurrent && state.turn.phase === "awaitingBankruptcy",
-      needsSpecialSpaceAction: isCurrent && state.turn.phase === "awaitingTaxPayment",
-      pendingSpecialSpacePosition: isCurrent && state.turn.phase === "awaitingTaxPayment"
-        ? state.turn.taxKind === "mev" ? 4 : 38
-        : null,
-      cardDrawnAt: null,
-    }];
+    const propertyPosition =
+      "propertyPosition" in state.turn ? state.turn.propertyPosition : null;
+    return [
+      {
+        playerId: seat.playerId,
+        playerColor: PLAYER_COLORS[seat.seatIndex] ?? PLAYER_COLORS[0],
+        gameId: state.gameId,
+        cashBalance: seat.cash,
+        position: seat.position,
+        inJail: seat.inJail,
+        jailTurns: seat.jailTurns,
+        doublesCount: seat.consecutiveDoubles,
+        isBankrupt: seat.status === "eliminated",
+        propertiesOwned: [...seat.ownedPropertyPositions],
+        getOutOfJailCards: seat.getOutOfJailCards,
+        netWorth: seat.cash,
+        lastRentCollected: "0",
+        festivalBoostTurns: 0,
+        hasRolledDice: isCurrent && state.turn.phase !== "awaitingRoll",
+        lastDiceRoll:
+          state.lastDice === null
+            ? []
+            : [state.lastDice.dieOne, state.lastDice.dieTwo],
+        needsPropertyAction:
+          isCurrent && state.turn.phase === "awaitingPropertyDecision",
+        pendingPropertyPosition: isCurrent ? propertyPosition : null,
+        needsChanceCard:
+          isCurrent &&
+          state.turn.phase === "awaitingCardDraw" &&
+          state.turn.deck === "chance",
+        needsCommunityChestCard:
+          isCurrent &&
+          state.turn.phase === "awaitingCardDraw" &&
+          state.turn.deck === "communityChest",
+        needsBankruptcyCheck:
+          isCurrent && state.turn.phase === "awaitingBankruptcy",
+        needsSpecialSpaceAction:
+          isCurrent && state.turn.phase === "awaitingTaxPayment",
+        pendingSpecialSpacePosition:
+          isCurrent && state.turn.phase === "awaitingTaxPayment"
+            ? state.turn.taxKind === "mev"
+              ? 4
+              : 38
+            : null,
+        cardDrawnAt: null,
+      },
+    ];
   });
 }
 
 function waitingPlayers(state: PublicGameState): PlayerAccount[] {
   return state.seats.flatMap((seat) => {
     if (seat === null) return [];
-    return [{
-      address: seat.playerId,
-      wallet: seat.playerId,
-      playerColor: PLAYER_COLORS[seat.seatIndex] ?? PLAYER_COLORS[0],
-      game: state.gameId,
-      cashBalance: seat.cash,
-      position: seat.position,
-      inJail: seat.inJail,
-      jailTurns: 0,
-      doublesCount: 0,
-      isBankrupt: seat.status === "eliminated",
-      propertiesOwned: [],
-      getOutOfJailCards: 0,
-      netWorth: seat.cash,
-      lastRentCollected: "0",
-      festivalBoostTurns: 0,
-      hasRolledDice: false,
-      lastDiceRoll: [],
-      needsPropertyAction: false,
-      pendingPropertyPosition: null,
-      needsChanceCard: false,
-      needsCommunityChestCard: false,
-      needsBankruptcyCheck: false,
-      needsSpecialSpaceAction: false,
-      pendingSpecialSpacePosition: null,
-      cardDrawnAt: null,
-    }];
+    return [
+      {
+        playerId: seat.playerId,
+        playerColor: PLAYER_COLORS[seat.seatIndex] ?? PLAYER_COLORS[0],
+        gameId: state.gameId,
+        cashBalance: seat.cash,
+        position: seat.position,
+        inJail: seat.inJail,
+        jailTurns: 0,
+        doublesCount: 0,
+        isBankrupt: seat.status === "eliminated",
+        propertiesOwned: [],
+        getOutOfJailCards: 0,
+        netWorth: seat.cash,
+        lastRentCollected: "0",
+        festivalBoostTurns: 0,
+        hasRolledDice: false,
+        lastDiceRoll: [],
+        needsPropertyAction: false,
+        pendingPropertyPosition: null,
+        needsChanceCard: false,
+        needsCommunityChestCard: false,
+        needsBankruptcyCheck: false,
+        needsSpecialSpaceAction: false,
+        pendingSpecialSpacePosition: null,
+        cardDrawnAt: null,
+      },
+    ];
   });
 }
 
-function tradeType(type: GameplayPublicState["activeTrades"][number]["tradeType"]): TradeType {
+function tradeType(
+  type: GameplayPublicState["activeTrades"][number]["tradeType"]
+): TradeType {
   return TRADE_TYPES[type];
 }
 
@@ -133,20 +162,33 @@ function trades(state: GameplayPublicState): TradeInfo[] {
 }
 
 function properties(state: RoomPublicState): PropertyAccount[] {
-  const ownership = "rulesetId" in state
-    ? state.board.map((space) => ({
-        owner: "ownerId" in space ? space.ownerId : null,
-        houses: "houses" in space ? space.houses : 0,
-        hasHotel: "hasHotel" in space ? space.hasHotel : false,
-        isMortgaged: "mortgaged" in space ? space.mortgaged : false,
-      }))
-    : Array.from({ length: 40 }, () => ({ owner: null, houses: 0, hasHotel: false, isMortgaged: false }));
-  return ownership.map((property, position) => mapProperty(property, position, state.gameId));
+  const ownership =
+    "rulesetId" in state
+      ? state.board.map((space) => ({
+          owner: "ownerId" in space ? space.ownerId : null,
+          houses: "houses" in space ? space.houses : 0,
+          hasHotel: "hasHotel" in space ? space.hasHotel : false,
+          isMortgaged: "mortgaged" in space ? space.mortgaged : false,
+        }))
+      : Array.from({ length: 40 }, () => ({
+          owner: null,
+          houses: 0,
+          hasHotel: false,
+          isMortgaged: false,
+        }));
+  return ownership.map((property, position) =>
+    mapProperty(property, position, state.gameId)
+  );
 }
 
-function mapProperty(property: PropertyInfo, position: number, gameId: string): PropertyAccount {
+function mapProperty(
+  property: PropertyInfo,
+  position: number,
+  gameId: string
+): PropertyAccount {
   const space = boardData[position];
-  if (space === undefined || space.position !== position) throw new Error("Canonical board data is invalid");
+  if (space === undefined || space.position !== position)
+    throw new Error("Canonical board data is invalid");
   let propertyType = 3;
   let colorGroup: ColorGroup = "brown";
   let price = 0;
@@ -162,7 +204,12 @@ function mapProperty(property: PropertyInfo, position: number, gameId: string): 
     price = space.price;
     rentBase = space.baseRent;
     rentWithColorGroup = space.rentWithColorGroup;
-    rentWithHouses = [space.rentWith1House, space.rentWith2Houses, space.rentWith3Houses, space.rentWith4Houses];
+    rentWithHouses = [
+      space.rentWith1House,
+      space.rentWith2Houses,
+      space.rentWith3Houses,
+      space.rentWith4Houses,
+    ];
     rentWithHotel = space.rentWithHotel;
     houseCost = space.houseCost;
     mortgageValue = space.mortgageValue;
@@ -180,7 +227,7 @@ function mapProperty(property: PropertyInfo, position: number, gameId: string): 
   else if (space.type === "community-chest") propertyType = 5;
   else if (space.type === "tax") propertyType = 6;
   return {
-    address: `${gameId}_property_${position}`,
+    propertyId: `${gameId}_property_${position}`,
     position,
     owner: property.owner,
     price,
@@ -200,7 +247,10 @@ function mapProperty(property: PropertyInfo, position: number, gameId: string): 
 }
 
 function gameStatus(state: RoomPublicState): GameStatus {
-  if ("rulesetId" in state) return state.terminal === null ? GAME_STATUS.inProgress : GAME_STATUS.finished;
+  if ("rulesetId" in state)
+    return state.terminal === null
+      ? GAME_STATUS.inProgress
+      : GAME_STATUS.finished;
   if (state.lifecycle === "waitingForPlayers") return GAME_STATUS.waiting;
   if (state.lifecycle === "inProgress") return GAME_STATUS.inProgress;
   return GAME_STATUS.finished;
@@ -208,28 +258,33 @@ function gameStatus(state: RoomPublicState): GameStatus {
 
 function endReason(state: RoomPublicState): GameEndReason | null {
   if (!("rulesetId" in state) || state.terminal === null) return null;
-  return state.terminal.reason === "timeLimit" ? GAME_END_REASONS.timeLimit : GAME_END_REASONS.bankruptcy;
+  return state.terminal.reason === "timeLimit"
+    ? GAME_END_REASONS.timeLimit
+    : GAME_END_REASONS.bankruptcy;
 }
 
 export function adaptRoomState(state: RoomPublicState): RoomUiState {
   const gameplay = "rulesetId" in state ? state : null;
-  const lifecycle = gameplay === null ? state as PublicGameState : null;
-  const players = lifecycle === null ? gameplayPlayers(gameplay!) : waitingPlayers(lifecycle);
-  const occupiedIds = players.map((player) => player.wallet);
-  const currentTurn = lifecycle !== null
-    ? lifecycle.turn.phase === "awaitingRoll" ? lifecycle.turn.currentSeatIndex : 0
-    : activeTurnSeat((gameplay as GameplayPublicState).turn);
+  const lifecycle = gameplay === null ? (state as PublicGameState) : null;
+  const players =
+    lifecycle === null ? gameplayPlayers(gameplay!) : waitingPlayers(lifecycle);
+  const occupiedIds = players.map((player) => player.playerId);
+  const currentTurn =
+    lifecycle !== null
+      ? lifecycle.turn.phase === "awaitingRoll"
+        ? lifecycle.turn.currentSeatIndex
+        : 0
+      : activeTurnSeat((gameplay as GameplayPublicState).turn);
   const terminal = gameplay?.terminal ?? null;
   const adaptedProperties = properties(state);
   return {
     players,
     properties: adaptedProperties,
     gameState: {
-      address: state.gameId,
       gameId: state.gameId,
-      configId: gameplay?.rulesetId ?? "server-policy",
-      creator: "creatorId" in state ? state.creatorId : occupiedIds[0] ?? "unknown",
-      bump: 0,
+      rulesetId: gameplay?.rulesetId ?? "server-policy",
+      creator:
+        "creatorId" in state ? state.creatorId : occupiedIds[0] ?? "unknown",
       maxPlayers: "maximumPlayers" in state ? state.maximumPlayers : 4,
       currentPlayers: players.length,
       currentTurn,
@@ -243,12 +298,7 @@ export function adaptRoomState(state: RoomPublicState): RoomUiState {
       housesRemaining: "housesRemaining" in state ? state.housesRemaining : 0,
       hotelsRemaining: "hotelsRemaining" in state ? state.hotelsRemaining : 0,
       winner: terminal?.winnerId ?? null,
-      entryFee: 0,
-      tokenMint: null,
-      tokenVault: null,
-      totalPrizePool: 0,
-      endConditionMet: terminal !== null,
-      prizeClaimed: terminal?.settlementEntitlement.status === "settled",
+      settlementCompleted: terminal?.settlementEntitlement.status === "settled",
       endReason: endReason(state),
       activeTrades: gameplay === null ? [] : trades(gameplay),
       nextTradeId: gameplay?.activeTrades.length ?? 0,
@@ -260,12 +310,15 @@ export function adaptRoomState(state: RoomPublicState): RoomUiState {
       })),
       createdAt: "createdAtMs" in state ? state.createdAtMs : 0,
       startedAt: "startedAtMs" in state ? state.startedAtMs : null,
-      endedAt: terminal?.endedAtMs ?? ("cancelledAtMs" in state ? state.cancelledAtMs : null),
+      endedAt:
+        terminal?.endedAtMs ??
+        ("cancelledAtMs" in state ? state.cancelledAtMs : null),
       gameEndTime: "gameEndAtMs" in state ? state.gameEndAtMs : null,
       timeLimit: null,
-      turnStartedAt: state.turn.phase === "notStarted" || state.turn.phase === "finished"
-        ? 0
-        : state.turn.startedAtMs,
+      turnStartedAt:
+        state.turn.phase === "notStarted" || state.turn.phase === "finished"
+          ? 0
+          : state.turn.startedAtMs,
     },
   };
 }

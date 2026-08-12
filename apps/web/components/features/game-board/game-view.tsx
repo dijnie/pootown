@@ -15,15 +15,22 @@ import { useRoom } from "@/components/providers/room-provider";
 import { GameIdSchema } from "@pootown/game-contracts";
 
 export function GameView() {
-  const { address: gameAddress } = useParams<{ address: string }>();
+  const { address: gameId } = useParams<{ address: string }>();
   const { authenticated, openLogin, ready } = useAuth();
   const { sessions } = useApi();
   const room = useRoom();
-  const { connect, disconnect, state: roomState, status: roomStatus } = room;
-  const { setGameAddress, gameState, gameLoading, gameError } =
-    useGameContext();
+  const { disconnect, reconnect, state: roomState, status: roomStatus } = room;
+  const { setGameId, gameState, gameLoading, gameError } = useGameContext();
   const [reconnectError, setReconnectError] = useState<Error | null>(null);
-  const reconnectKey = useRef(crypto.randomUUID());
+  const [reconnecting, setReconnecting] = useState(false);
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const reconnectRequest = useRef<{
+    gameId: string | null;
+    idempotencyKey: string;
+  }>({
+    gameId: null,
+    idempotencyKey: crypto.randomUUID(),
+  });
 
   // Board rotation state lifted here
   const [boardRotation, setBoardRotation] = useState<number>(0);
@@ -37,32 +44,66 @@ export function GameView() {
   };
 
   useEffect(() => {
-    if (gameAddress) {
-      setGameAddress(gameAddress);
+    if (gameId) {
+      setGameId(gameId);
     }
-  }, [gameAddress, setGameAddress]);
+  }, [gameId, setGameId]);
 
   useEffect(() => {
-    const parsedGameId = GameIdSchema.safeParse(gameAddress);
-    if (!parsedGameId.success || !ready || !authenticated || roomStatus === "connecting") return;
+    const parsedGameId = GameIdSchema.safeParse(gameId);
+    if (
+      !parsedGameId.success ||
+      !ready ||
+      !authenticated ||
+      roomStatus === "connecting"
+    )
+      return;
     if (roomState?.gameId === parsedGameId.data) return;
+    if (reconnectRequest.current.gameId !== parsedGameId.data) {
+      reconnectRequest.current = {
+        gameId: parsedGameId.data,
+        idempotencyKey: crypto.randomUUID(),
+      };
+    }
     let active = true;
-    void sessions.reconnect(parsedGameId.data, { idempotencyKey: reconnectKey.current })
-      .then((admission) => connect(admission))
+    setReconnectError(null);
+    setReconnecting(true);
+    void sessions
+      .reconnect(parsedGameId.data, {
+        idempotencyKey: reconnectRequest.current.idempotencyKey,
+      })
+      .then((admission) => reconnect(admission))
       .then(() => active && setReconnectError(null))
-      .catch((error: unknown) => {
-        if (active) setReconnectError(error instanceof Error ? error : new Error("Unable to reconnect"));
+      .catch(() => {
+        if (active) {
+          setReconnectError(new Error("Unable to reconnect to this game."));
+        }
+      })
+      .finally(() => {
+        if (active) setReconnecting(false);
       });
     return () => {
       active = false;
     };
-  }, [authenticated, connect, gameAddress, ready, roomState?.gameId, roomStatus, sessions]);
+  }, [
+    authenticated,
+    gameId,
+    ready,
+    reconnectAttempt,
+    reconnect,
+    roomState?.gameId,
+    roomStatus,
+    sessions,
+  ]);
 
-  useEffect(() => () => {
-    void disconnect();
-  }, [disconnect]);
+  useEffect(
+    () => () => {
+      void disconnect();
+    },
+    [disconnect]
+  );
 
-  const parsedGameId = GameIdSchema.safeParse(gameAddress);
+  const parsedGameId = GameIdSchema.safeParse(gameId);
 
   if (!parsedGameId.success) {
     return (
@@ -72,7 +113,7 @@ export function GameView() {
     );
   }
 
-  if (!ready || (authenticated && (gameLoading || !gameState))) {
+  if (!ready) {
     return (
       <div className="h-screen w-full flex items-center justify-center">
         <Spinner variant="bars" />
@@ -88,12 +129,34 @@ export function GameView() {
     );
   }
 
+  if (reconnecting) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center">
+        <Spinner variant="bars" />
+      </div>
+    );
+  }
+
   if (gameError || reconnectError) {
     return (
       <div className="h-screen w-full flex items-center justify-center">
-        <div id="error">
+        <div
+          id="error"
+          className="flex max-w-md flex-col items-center gap-4 text-center"
+        >
           <p>ERROR: {(gameError ?? reconnectError)?.message}</p>
+          <Button onClick={() => setReconnectAttempt((attempt) => attempt + 1)}>
+            Try reconnecting
+          </Button>
         </div>
+      </div>
+    );
+  }
+
+  if (gameLoading || !gameState) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center">
+        <Spinner variant="bars" />
       </div>
     );
   }

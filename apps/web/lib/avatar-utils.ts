@@ -1,47 +1,46 @@
 /**
- * Avatar utilities for generating consistent avatar paths based on wallet addresses
+ * Avatar utilities for generating stable avatar paths from opaque player IDs.
  */
 
 // List of available panda avatars
 const AVATARS = [
   "panda_bluehoodie_wink.png",
-  "panda_browncap.png", 
+  "panda_browncap.png",
   "panda_cowboy_hat.png",
   "panda_headphones_smile.png",
   "panda_red_cap.png",
   "panda_redbow_wink.png",
   "panda_roundglasses.png",
   "panda_scarf_glasses.png",
-  "panda_sunglasses_bluehoodie.png"
+  "panda_sunglasses_bluehoodie.png",
 ] as const;
 
 /**
- * Generate a random avatar path based on wallet address
- * This ensures the same wallet always gets the same avatar
- * @param walletAddress - The wallet address to generate avatar for
+ * Generate a stable avatar path for an opaque player ID.
+ * @param playerId - The player ID to generate an avatar for
  * @returns Full path to the avatar image
  */
-export function getRandomAvatarByAddress(walletAddress: string): string {
-  if (!walletAddress) {
+export function getAvatarForPlayer(playerId: string): string {
+  if (!playerId) {
     return getRandomAvatar();
   }
 
-  // Convert wallet address to a number for consistent selection
+  // Convert the opaque ID to a number for consistent selection.
   let hash = 0;
-  for (let i = 0; i < walletAddress.length; i++) {
-    const char = walletAddress.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+  for (let i = 0; i < playerId.length; i++) {
+    const char = playerId.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
     hash = hash & hash; // Convert to 32-bit integer
   }
 
   // Use absolute value and modulo to get index
   const index = Math.abs(hash) % AVATARS.length;
-  
+
   return `/avatars/${AVATARS[index]}`;
 }
 
 /**
- * Get a random avatar path (for cases where you don't have a wallet address)
+ * Get a random avatar path when no player ID is available.
  * @returns Full path to a randomly selected avatar image
  */
 export function getRandomAvatar(): string {
@@ -54,7 +53,7 @@ export function getRandomAvatar(): string {
  * @returns Array of all avatar paths
  */
 export function getAllAvatars(): string[] {
-  return AVATARS.map(avatar => `/avatars/${avatar}`);
+  return AVATARS.map((avatar) => `/avatars/${avatar}`);
 }
 
 /**

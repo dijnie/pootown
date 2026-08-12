@@ -9,10 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  RoomCommandSchema,
-  type RoomCommand,
-} from "@pootown/game-contracts";
+import { RoomCommandSchema, type RoomCommand } from "@pootown/game-contracts";
 
 import { useRoom } from "@/components/providers/room-provider";
 import { BuildingType, GameStatus } from "@/types/schema";
@@ -25,21 +22,18 @@ import type {
 } from "@/types/schema";
 
 interface GameContextType {
-  gameAddress: string | null;
-  setGameAddress: (address: string | null) => void;
-  currentPlayerAddress: string | null;
+  gameId: string | null;
+  setGameId: (gameId: string | null) => void;
+  currentPlayerId: string | null;
   currentPlayerState: PlayerAccount | null;
+  ownPlayerState: PlayerAccount | null;
   ownPlayerId: string | null;
   gameState: GameAccount | null;
   players: PlayerAccount[];
   properties: PropertyAccount[];
   gameLoading: boolean;
   gameError: Error | null;
-  refetch: () => Promise<void>;
   startGame: () => Promise<void>;
-  resetGame: () => Promise<void>;
-  closeGame: () => Promise<void>;
-  joinGame: () => Promise<void>;
   leaveGame: () => Promise<void>;
   cancelGame: () => Promise<void>;
   rollDice: (diceRoll?: number[]) => Promise<void>;
@@ -57,8 +51,11 @@ interface GameContextType {
   payMevTax: () => Promise<void>;
   payPriorityFeeTax: () => Promise<void>;
   declareBankruptcy: () => Promise<void>;
-  endGame: () => Promise<void>;
-  createTrade: (receiver: string, initiatorOffer: TradeOffer, targetOffer: TradeOffer) => Promise<void>;
+  createTrade: (
+    receiver: string,
+    initiatorOffer: TradeOffer,
+    targetOffer: TradeOffer
+  ) => Promise<void>;
   acceptTrade: (tradeId: string, proposer: string) => Promise<void>;
   rejectTrade: (tradeId: string) => Promise<void>;
   cancelTrade: (tradeId: string) => Promise<void>;
@@ -76,7 +73,6 @@ interface GameContextType {
   showPayJailFine: boolean;
   showGetOutOfJailCard: boolean;
   getPropertyByPosition: (position: number) => PropertyAccount | null;
-  getPlayerByAddress: (address: string) => PlayerAccount | null;
   isCurrentPlayerTurn: () => boolean;
   canRollDice: () => boolean;
   canPlayerAct: () => boolean;
@@ -88,53 +84,72 @@ const GameContext = createContext<GameContextType | undefined>(undefined);
 
 export function useGameContext(): GameContextType {
   const context = useContext(GameContext);
-  if (context === undefined) throw new Error("useGameContext must be used within GameProvider");
+  if (context === undefined)
+    throw new Error("useGameContext must be used within GameProvider");
   return context;
-}
-
-function unsupported(action: string): Promise<never> {
-  return Promise.reject(new Error(`${action} is not available in authoritative rooms`));
 }
 
 export function GameProvider({ children }: { readonly children: ReactNode }) {
   const room = useRoom();
-  const [gameAddress, setGameAddress] = useState<string | null>(null);
+  const [gameId, setGameId] = useState<string | null>(null);
   const [selectedProperty, setSelectedProperty] = useState<number | null>(null);
   const [isPropertyDialogOpen, setIsPropertyDialogOpen] = useState(false);
   const [isCardDrawModalOpen, setIsCardDrawModalOpen] = useState(false);
-  const [cardDrawType, setCardDrawType] = useState<"chance" | "community-chest" | null>(null);
+  const [cardDrawType, setCardDrawType] = useState<
+    "chance" | "community-chest" | null
+  >(null);
   const [demoDices, setDemoDices] = useState<number[] | null>(null);
 
-  const adapted = useMemo(() => room.state === null ? null : adaptRoomState(room.state), [room.state]);
+  const adapted = useMemo(
+    () => (room.state === null ? null : adaptRoomState(room.state)),
+    [room.state]
+  );
   const gameState = adapted?.gameState ?? null;
   const players = useMemo(() => adapted?.players ?? [], [adapted]);
   const properties = useMemo(() => adapted?.properties ?? [], [adapted]);
-  const currentPlayerAddress = useMemo(() => {
-    if (room.state === null || room.state.turn.phase === "notStarted" || room.state.turn.phase === "finished") {
+  const currentPlayerId = useMemo(() => {
+    if (
+      room.state === null ||
+      room.state.turn.phase === "notStarted" ||
+      room.state.turn.phase === "finished"
+    ) {
       return null;
     }
     return room.state.seats[room.state.turn.currentSeatIndex]?.playerId ?? null;
   }, [room.state]);
-  const currentPlayerState = players.find((player) => player.wallet === currentPlayerAddress) ?? null;
-  const ownPlayerState = players.find((player) => player.wallet === room.playerId) ?? null;
-  const isCurrentTurn = room.playerId !== null && currentPlayerAddress === room.playerId &&
+  const currentPlayerState =
+    players.find((player) => player.playerId === currentPlayerId) ?? null;
+  const ownPlayerState =
+    players.find((player) => player.playerId === room.playerId) ?? null;
+  const isCurrentTurn =
+    room.playerId !== null &&
+    currentPlayerId === room.playerId &&
     gameState?.gameStatus === GameStatus.InProgress;
 
-  const sendIntent = useCallback(async (type: RoomCommand["type"], payload: unknown = {}) => {
-    if (room.state === null) throw new Error("Room state is unavailable");
-    const command = RoomCommandSchema.parse({
-      requestId: crypto.randomUUID(),
-      expectedStateVersion: room.state.stateVersion,
-      type,
-      payload,
-    });
-    await room.send(command);
-  }, [room]);
+  const sendIntent = useCallback(
+    async (type: RoomCommand["type"], payload: unknown = {}) => {
+      if (room.state === null) throw new Error("Room state is unavailable");
+      const command = RoomCommandSchema.parse({
+        requestId: crypto.randomUUID(),
+        expectedStateVersion: room.state.stateVersion,
+        type,
+        payload,
+      });
+      await room.send(command);
+    },
+    [room]
+  );
 
   useEffect(() => {
     if (room.state === null || !("rulesetId" in room.state)) return;
-    if (room.state.turn.phase !== "awaitingCardDraw") return;
-    setCardDrawType(room.state.turn.deck === "chance" ? "chance" : "community-chest");
+    if (room.state.turn.phase !== "awaitingCardDraw") {
+      setIsCardDrawModalOpen(false);
+      setCardDrawType(null);
+      return;
+    }
+    setCardDrawType(
+      room.state.turn.deck === "chance" ? "chance" : "community-chest"
+    );
     setIsCardDrawModalOpen(true);
   }, [room.state]);
 
@@ -148,153 +163,244 @@ export function GameProvider({ children }: { readonly children: ReactNode }) {
     await room.disconnect();
   }, [room, sendIntent]);
   const rollDice = useCallback(() => sendIntent("rollDice"), [sendIntent]);
-  const buyProperty = useCallback((position: number) => sendIntent("buyProperty", { position }), [sendIntent]);
-  const skipProperty = useCallback((position: number) => sendIntent("declineProperty", { position }), [sendIntent]);
-  const payRent = useCallback((position: number) => sendIntent("payRent", { position }), [sendIntent]);
+  const buyProperty = useCallback(
+    (position: number) => sendIntent("buyProperty", { position }),
+    [sendIntent]
+  );
+  const skipProperty = useCallback(
+    (position: number) => sendIntent("declineProperty", { position }),
+    [sendIntent]
+  );
+  const payRent = useCallback(
+    (position: number) => sendIntent("payRent", { position }),
+    [sendIntent]
+  );
   const endTurn = useCallback(() => sendIntent("endTurn"), [sendIntent]);
-  const drawChanceCard = useCallback(() => sendIntent("drawChanceCard"), [sendIntent]);
-  const drawCommunityChestCard = useCallback(() => sendIntent("drawCommunityChestCard"), [sendIntent]);
-  const payJailFine = useCallback(() => sendIntent("payJailFine"), [sendIntent]);
-  const useGetOutOfJailCard = useCallback(() => sendIntent("useJailCard"), [sendIntent]);
-  const buildHouse = useCallback((position: number) => sendIntent("buildHouse", { position }), [sendIntent]);
-  const buildHotel = useCallback((position: number) => sendIntent("buildHotel", { position }), [sendIntent]);
-  const sellBuilding = useCallback((position: number, buildingType: BuildingType) => sendIntent("sellBuilding", {
-    position,
-    buildingType: buildingType === BuildingType.Hotel ? "hotel" : "house",
-  }), [sendIntent]);
+  const drawChanceCard = useCallback(
+    () => sendIntent("drawChanceCard"),
+    [sendIntent]
+  );
+  const drawCommunityChestCard = useCallback(
+    () => sendIntent("drawCommunityChestCard"),
+    [sendIntent]
+  );
+  const payJailFine = useCallback(
+    () => sendIntent("payJailFine"),
+    [sendIntent]
+  );
+  const useGetOutOfJailCard = useCallback(
+    () => sendIntent("useJailCard"),
+    [sendIntent]
+  );
+  const buildHouse = useCallback(
+    (position: number) => sendIntent("buildHouse", { position }),
+    [sendIntent]
+  );
+  const buildHotel = useCallback(
+    (position: number) => sendIntent("buildHotel", { position }),
+    [sendIntent]
+  );
+  const sellBuilding = useCallback(
+    (position: number, buildingType: BuildingType) =>
+      sendIntent("sellBuilding", {
+        position,
+        buildingType: buildingType === BuildingType.Hotel ? "hotel" : "house",
+      }),
+    [sendIntent]
+  );
   const payMevTax = useCallback(() => sendIntent("payMevTax"), [sendIntent]);
-  const payPriorityFeeTax = useCallback(() => sendIntent("payPriorityFeeTax"), [sendIntent]);
-  const declareBankruptcy = useCallback(() => sendIntent("declareBankruptcy"), [sendIntent]);
+  const payPriorityFeeTax = useCallback(
+    () => sendIntent("payPriorityFeeTax"),
+    [sendIntent]
+  );
+  const declareBankruptcy = useCallback(
+    () => sendIntent("declareBankruptcy"),
+    [sendIntent]
+  );
 
-  const createTrade = useCallback(async (
-    receiverId: string,
-    initiatorOffer: TradeOffer,
-    targetOffer: TradeOffer,
-  ) => {
-    const offeredCash = initiatorOffer.money;
-    const requestedCash = targetOffer.money;
-    if (initiatorOffer.property !== null && requestedCash !== "0") {
-      await sendIntent("createTrade", {
-        tradeType: "propertyForMoney",
-        receiverId,
-        offeredPropertyPosition: initiatorOffer.property,
-        requestedCash,
-      });
-    } else if (targetOffer.property !== null && offeredCash !== "0") {
-      await sendIntent("createTrade", {
-        tradeType: "moneyForProperty",
-        receiverId,
-        offeredCash,
-        requestedPropertyPosition: targetOffer.property,
-      });
-    } else if (initiatorOffer.property !== null || targetOffer.property !== null) {
-      await sendIntent("createTrade", {
-        tradeType: "propertyOnly",
-        receiverId,
-        offeredPropertyPosition: initiatorOffer.property,
-        requestedPropertyPosition: targetOffer.property,
-      });
-    } else {
-      await sendIntent("createTrade", {
-        tradeType: "moneyOnly",
-        receiverId,
-        offeredCash,
-        requestedCash,
-      });
-    }
-  }, [sendIntent]);
-  const acceptTrade = useCallback((tradeId: string) => sendIntent("acceptTrade", { tradeId }), [sendIntent]);
-  const rejectTrade = useCallback((tradeId: string) => sendIntent("rejectTrade", { tradeId }), [sendIntent]);
-  const cancelTrade = useCallback((tradeId: string) => sendIntent("cancelTrade", { tradeId }), [sendIntent]);
+  const createTrade = useCallback(
+    async (
+      receiverId: string,
+      initiatorOffer: TradeOffer,
+      targetOffer: TradeOffer
+    ) => {
+      const offeredCash = initiatorOffer.money;
+      const requestedCash = targetOffer.money;
+      if (initiatorOffer.property !== null && requestedCash !== "0") {
+        await sendIntent("createTrade", {
+          tradeType: "propertyForMoney",
+          receiverId,
+          offeredPropertyPosition: initiatorOffer.property,
+          requestedCash,
+        });
+      } else if (targetOffer.property !== null && offeredCash !== "0") {
+        await sendIntent("createTrade", {
+          tradeType: "moneyForProperty",
+          receiverId,
+          offeredCash,
+          requestedPropertyPosition: targetOffer.property,
+        });
+      } else if (
+        initiatorOffer.property !== null ||
+        targetOffer.property !== null
+      ) {
+        await sendIntent("createTrade", {
+          tradeType: "propertyOnly",
+          receiverId,
+          offeredPropertyPosition: initiatorOffer.property,
+          requestedPropertyPosition: targetOffer.property,
+        });
+      } else {
+        await sendIntent("createTrade", {
+          tradeType: "moneyOnly",
+          receiverId,
+          offeredCash,
+          requestedCash,
+        });
+      }
+    },
+    [sendIntent]
+  );
+  const acceptTrade = useCallback(
+    (tradeId: string) => sendIntent("acceptTrade", { tradeId }),
+    [sendIntent]
+  );
+  const rejectTrade = useCallback(
+    (tradeId: string) => sendIntent("rejectTrade", { tradeId }),
+    [sendIntent]
+  );
+  const cancelTrade = useCallback(
+    (tradeId: string) => sendIntent("cancelTrade", { tradeId }),
+    [sendIntent]
+  );
 
-  const showRollDice = isCurrentTurn && room.state !== null && "rulesetId" in room.state &&
+  const showRollDice =
+    isCurrentTurn &&
+    room.state !== null &&
+    "rulesetId" in room.state &&
     room.state.turn.phase === "awaitingRoll";
-  const showEndTurn = isCurrentTurn && room.state !== null && "rulesetId" in room.state &&
+  const showEndTurn =
+    isCurrentTurn &&
+    room.state !== null &&
+    "rulesetId" in room.state &&
     room.state.turn.phase === "awaitingEndTurn";
   const showPayJailFine = isCurrentTurn && ownPlayerState?.inJail === true;
-  const showGetOutOfJailCard = showPayJailFine && (ownPlayerState?.getOutOfJailCards ?? 0) > 0;
+  const showGetOutOfJailCard =
+    showPayJailFine && (ownPlayerState?.getOutOfJailCards ?? 0) > 0;
 
   const getPropertyByPosition = useCallback(
-    (position: number) => properties.find((property) => property.position === position) ?? null,
-    [properties],
-  );
-  const getPlayerByAddress = useCallback(
-    (address: string) => players.find((player) => player.wallet === address) ?? null,
-    [players],
+    (position: number) =>
+      properties.find((property) => property.position === position) ?? null,
+    [properties]
   );
   const isCurrentPlayerTurn = useCallback(() => isCurrentTurn, [isCurrentTurn]);
   const canRollDice = useCallback(() => showRollDice, [showRollDice]);
   const canPlayerAct = useCallback(() => isCurrentTurn, [isCurrentTurn]);
-  const refetch = useCallback(async () => undefined, []);
-
-  const value = useMemo<GameContextType>(() => ({
-    gameAddress,
-    setGameAddress,
-    currentPlayerAddress,
-    currentPlayerState,
-    ownPlayerId: room.playerId,
-    gameState,
-    players,
-    properties,
-    gameLoading: room.status === "connecting" || room.state === null,
-    gameError: room.error,
-    refetch,
-    startGame,
-    resetGame: () => unsupported("Reset game"),
-    closeGame: () => unsupported("Close game"),
-    joinGame: () => unsupported("Join game"),
-    leaveGame,
-    cancelGame,
-    rollDice,
-    buyProperty,
-    skipProperty,
-    payRent,
-    endTurn,
-    drawChanceCard,
-    drawCommunityChestCard,
-    payJailFine,
-    useGetOutOfJailCard,
-    buildHouse,
-    buildHotel,
-    sellBuilding,
-    payMevTax,
-    payPriorityFeeTax,
-    declareBankruptcy,
-    endGame: () => unsupported("Manual end game"),
-    createTrade,
-    acceptTrade,
-    rejectTrade,
-    cancelTrade,
-    selectedProperty,
-    setSelectedProperty,
-    isPropertyDialogOpen,
-    setIsPropertyDialogOpen,
-    isCardDrawModalOpen,
-    setIsCardDrawModalOpen,
-    cardDrawType,
-    setCardDrawType,
-    isCurrentTurn,
-    showRollDice,
-    showEndTurn,
-    showPayJailFine,
-    showGetOutOfJailCard,
-    getPropertyByPosition,
-    getPlayerByAddress,
-    isCurrentPlayerTurn,
-    canRollDice,
-    canPlayerAct,
-    demoDices,
-    setDemoDices,
-  }), [
-    acceptTrade, buildHotel, buildHouse, buyProperty, cancelGame, cancelTrade, canPlayerAct,
-    canRollDice, cardDrawType, createTrade, currentPlayerAddress, currentPlayerState,
-    declareBankruptcy, demoDices, drawChanceCard, drawCommunityChestCard, endTurn, gameAddress,
-    gameState, getPlayerByAddress, getPropertyByPosition, isCardDrawModalOpen, isCurrentPlayerTurn,
-    isCurrentTurn, isPropertyDialogOpen, leaveGame, payJailFine, payMevTax, payPriorityFeeTax,
-    payRent, players, properties, refetch, rejectTrade, rollDice, room.error, room.playerId,
-    room.state, room.status, selectedProperty, sellBuilding, showEndTurn, showGetOutOfJailCard,
-    showPayJailFine, showRollDice, skipProperty, startGame, useGetOutOfJailCard,
-  ]);
+  const value = useMemo<GameContextType>(
+    () => ({
+      gameId,
+      setGameId,
+      currentPlayerId,
+      currentPlayerState,
+      ownPlayerState,
+      ownPlayerId: room.playerId,
+      gameState,
+      players,
+      properties,
+      gameLoading: room.status === "connecting" || room.state === null,
+      gameError: room.error,
+      startGame,
+      leaveGame,
+      cancelGame,
+      rollDice,
+      buyProperty,
+      skipProperty,
+      payRent,
+      endTurn,
+      drawChanceCard,
+      drawCommunityChestCard,
+      payJailFine,
+      useGetOutOfJailCard,
+      buildHouse,
+      buildHotel,
+      sellBuilding,
+      payMevTax,
+      payPriorityFeeTax,
+      declareBankruptcy,
+      createTrade,
+      acceptTrade,
+      rejectTrade,
+      cancelTrade,
+      selectedProperty,
+      setSelectedProperty,
+      isPropertyDialogOpen,
+      setIsPropertyDialogOpen,
+      isCardDrawModalOpen,
+      setIsCardDrawModalOpen,
+      cardDrawType,
+      setCardDrawType,
+      isCurrentTurn,
+      showRollDice,
+      showEndTurn,
+      showPayJailFine,
+      showGetOutOfJailCard,
+      getPropertyByPosition,
+      isCurrentPlayerTurn,
+      canRollDice,
+      canPlayerAct,
+      demoDices,
+      setDemoDices,
+    }),
+    [
+      acceptTrade,
+      buildHotel,
+      buildHouse,
+      buyProperty,
+      cancelGame,
+      cancelTrade,
+      canPlayerAct,
+      canRollDice,
+      cardDrawType,
+      createTrade,
+      currentPlayerId,
+      currentPlayerState,
+      ownPlayerState,
+      declareBankruptcy,
+      demoDices,
+      drawChanceCard,
+      drawCommunityChestCard,
+      endTurn,
+      gameId,
+      gameState,
+      getPropertyByPosition,
+      isCardDrawModalOpen,
+      isCurrentPlayerTurn,
+      isCurrentTurn,
+      isPropertyDialogOpen,
+      leaveGame,
+      payJailFine,
+      payMevTax,
+      payPriorityFeeTax,
+      payRent,
+      players,
+      properties,
+      rejectTrade,
+      rollDice,
+      room.error,
+      room.playerId,
+      room.state,
+      room.status,
+      selectedProperty,
+      sellBuilding,
+      showEndTurn,
+      showGetOutOfJailCard,
+      showPayJailFine,
+      showRollDice,
+      skipProperty,
+      startGame,
+      useGetOutOfJailCard,
+    ]
+  );
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 }

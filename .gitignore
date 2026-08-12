@@ -12,6 +12,8 @@ tests/visual-baseline/actual/
 .next
 dist
 .test-dist
+playwright-report
+test-results
 # env files
 .env
 .env

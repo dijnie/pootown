@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { GameplayPublicStateSchema, PublicGameStateSchema } from "@pootown/game-contracts";
+import {
+  GameplayPublicStateSchema,
+  PublicGameStateSchema,
+} from "@pootown/game-contracts";
 
 import { adaptRoomState } from "../services/room-state-adapter.js";
 
 function createBoard() {
-  const streets = new Set([1, 3, 6, 8, 9, 11, 13, 14, 16, 18, 19, 21, 23, 24, 26, 27, 29, 31, 32, 34, 37, 39]);
+  const streets = new Set([
+    1, 3, 6, 8, 9, 11, 13, 14, 16, 18, 19, 21, 23, 24, 26, 27, 29, 31, 32, 34,
+    37, 39,
+  ]);
   const railroads = new Set([5, 15, 25, 35]);
   const utilities = new Set([12, 28]);
   const taxes = new Set([4, 38]);
@@ -15,18 +21,25 @@ function createBoard() {
     const kind = streets.has(position)
       ? "street"
       : railroads.has(position)
-        ? "railroad"
-        : utilities.has(position)
-          ? "utility"
-          : taxes.has(position)
-            ? "tax"
-            : chances.has(position)
-              ? "chance"
-              : communities.has(position)
-                ? "communityChest"
-                : "corner";
+      ? "railroad"
+      : utilities.has(position)
+      ? "utility"
+      : taxes.has(position)
+      ? "tax"
+      : chances.has(position)
+      ? "chance"
+      : communities.has(position)
+      ? "communityChest"
+      : "corner";
     return kind === "street" || kind === "railroad" || kind === "utility"
-      ? { position, kind, ownerId: position === 1 ? "player_1" : null, mortgaged: false, houses: 0, hasHotel: false }
+      ? {
+          position,
+          kind,
+          ownerId: position === 1 ? "player_1" : null,
+          mortgaged: false,
+          houses: 0,
+          hasHotel: false,
+        }
       : { position, kind };
   });
 }
@@ -42,7 +55,14 @@ describe("room state adapter", () => {
       minimumPlayers: 2,
       maximumPlayers: 4,
       seats: [
-        { seatIndex: 0, playerId: "player_1", status: "active", cash: "9".repeat(78), position: 0, inJail: false },
+        {
+          seatIndex: 0,
+          playerId: "player_1",
+          status: "active",
+          cash: "9".repeat(78),
+          position: 0,
+          inJail: false,
+        },
         null,
         null,
         null,
@@ -108,29 +128,34 @@ describe("room state adapter", () => {
         startedAtMs: 100,
         deadlineAtMs: 90_100,
       },
-      activeTrades: [{
-        tradeId: "trade_1",
-        tradeType: "moneyOnly",
-        proposerId: "player_1",
-        receiverId: "player_3",
-        offeredCash: "100",
-        requestedCash: "0",
-        offeredPropertyPosition: null,
-        requestedPropertyPosition: null,
-        status: "pending",
-        createdAtMs: 100,
-        expiresAtMs: 3_600_100,
-      }],
+      activeTrades: [
+        {
+          tradeId: "trade_1",
+          tradeType: "moneyOnly",
+          proposerId: "player_1",
+          receiverId: "player_3",
+          offeredCash: "100",
+          requestedCash: "0",
+          offeredPropertyPosition: null,
+          requestedPropertyPosition: null,
+          status: "pending",
+          createdAtMs: 100,
+          expiresAtMs: 3_600_100,
+        },
+      ],
       lastDice: null,
       terminal: null,
     });
     const adapted = adaptRoomState(state);
     assert.equal(adapted.gameState.currentTurn, 2);
     assert.deepEqual(adapted.gameState.players, ["player_1", "player_3"]);
-    assert.equal(adapted.players.find((player) => player.wallet === "player_3")?.pendingSpecialSpacePosition, 4);
+    assert.equal(
+      adapted.players.find((player) => player.playerId === "player_3")
+        ?.pendingSpecialSpacePosition,
+      4
+    );
     assert.equal(adapted.properties[1]?.owner, "player_1");
     assert.equal(adapted.gameState.activeTrades[0]?.id, "trade_1");
-    assert.equal(adapted.gameState.entryFee, 0);
-    assert.equal(adapted.gameState.totalPrizePool, 0);
+    assert.equal(adapted.gameState.settlementCompleted, false);
   });
 });

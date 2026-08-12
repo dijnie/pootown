@@ -22,15 +22,14 @@ interface BaseSpaceComponentProps extends BaseSpaceProps {
 export const BaseSpace: React.FC<BaseSpaceComponentProps> = ({
   position,
   onClick,
-  onChainProperty,
+  propertyState,
   children,
   colorBarColor,
   showColorBar = false,
   className = "",
   contentContainerclassName = "",
-  ...rest
 }) => {
-  const { ownerAddress } = useSpaceOwner(onChainProperty);
+  const { ownerId } = useSpaceOwner(propertyState);
   const side = getBoardSide(position);
   const hasColorBar = showColorBar && !!colorBarColor;
 
@@ -46,7 +45,6 @@ export const BaseSpace: React.FC<BaseSpaceComponentProps> = ({
         borderClasses,
         className
       )}
-      {...rest}
       onClick={() => onClick?.(position)}
     >
       {hasColorBar && (
@@ -68,7 +66,7 @@ export const BaseSpace: React.FC<BaseSpaceComponentProps> = ({
       )}
 
       {/* Owner indicator */}
-      {ownerAddress && (
+      {ownerId && (
         <div
           className={cn(
             "flex items-center justify-center",
@@ -79,7 +77,7 @@ export const BaseSpace: React.FC<BaseSpaceComponentProps> = ({
             classNames={{
               avatar: "owner-avatar",
             }}
-            walletAddress={ownerAddress}
+            playerId={ownerId}
           />
         </div>
       )}

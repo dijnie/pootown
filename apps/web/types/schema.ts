@@ -42,11 +42,9 @@ export enum PropertyType {
 }
 
 export interface GameAccount {
-  address: string;
   gameId: number | string;
-  configId: string;
+  rulesetId: string;
   creator: string;
-  bump: number;
   maxPlayers: number;
   currentPlayers: number;
   currentTurn: number;
@@ -60,12 +58,7 @@ export interface GameAccount {
   housesRemaining: number;
   hotelsRemaining: number;
   winner: string | null;
-  entryFee: number;
-  tokenMint: string | null;
-  tokenVault: string | null;
-  totalPrizePool: number;
-  endConditionMet: boolean;
-  prizeClaimed: boolean;
+  settlementCompleted: boolean;
   endReason: GameEndReason | null;
   activeTrades: TradeInfo[];
   nextTradeId: number;
@@ -79,10 +72,9 @@ export interface GameAccount {
 }
 
 export interface PlayerAccount {
-  address: string;
-  wallet: string;
+  playerId: string;
   playerColor: string;
-  game: string;
+  gameId: string;
   cashBalance: string;
   position: number;
   inJail: boolean;
@@ -107,7 +99,7 @@ export interface PlayerAccount {
 }
 
 export interface PropertyAccount {
-  address: string;
+  propertyId: string;
   position: number;
   owner: string | null;
   price: number;

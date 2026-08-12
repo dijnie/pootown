@@ -3,10 +3,10 @@
 import React from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { getRandomAvatarByAddress } from "@/lib/avatar-utils";
+import { getAvatarForPlayer } from "@/lib/avatar-utils";
 
 interface UserAvatarProps {
-  walletAddress: string;
+  playerId: string;
   alt?: string;
   fallback?: string | React.ReactNode;
   size?: "xs" | "sm" | "md" | "lg";
@@ -18,13 +18,13 @@ interface UserAvatarProps {
 }
 
 export const UserAvatar: React.FC<UserAvatarProps> = ({
-  walletAddress,
+  playerId,
   alt,
   fallback,
   size = "md",
   classNames,
 }) => {
-  const avatarSrc = getRandomAvatarByAddress(walletAddress);
+  const avatarSrc = getAvatarForPlayer(playerId);
 
   return (
     <Avatar
@@ -40,14 +40,14 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
     >
       <AvatarImage
         src={avatarSrc}
-        alt={alt || `Player ${walletAddress}`}
+        alt={alt || `Player ${playerId}`}
         className={classNames?.image}
       />
       <AvatarFallback
-        walletAddress={walletAddress}
+        playerId={playerId}
         className={cn("text-white font-semibold", classNames?.fallback)}
       >
-        {fallback || walletAddress.slice(0, 2).toUpperCase()}
+        {fallback || playerId.slice(0, 2).toUpperCase()}
       </AvatarFallback>
     </Avatar>
   );

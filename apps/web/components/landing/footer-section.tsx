@@ -1,20 +1,9 @@
-"use client";
-
-import { useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import AnimatedGridBackground from "./animated-grid-background";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 export default function FooterSection() {
-  const [gameCode, setGameCode] = useState("");
-
-  const handleJoinGame = () => {
-    if (gameCode.trim()) {
-      alert(`Joining game with code: ${gameCode}`);
-    }
-  };
-
   return (
     <footer className="relative bg-white/90 border-t-8 border-black py-20 md:py-28 pb-20 md:pb-24">
       <AnimatedGridBackground />
@@ -26,9 +15,9 @@ export default function FooterSection() {
           <div className="bg-[#14f195] border-6 border-black shadow-[14px_14px_0_#000] p-8 md:p-10 hover:shadow-[20px_20px_0_#000] hover:-translate-y-2 transition-all duration-500 group">
             <div className="flex items-center gap-4 mb-6">
               <Avatar className="w-16 h-16 border-4 border-black shadow-[4px_4px_0_#000] group-hover:scale-110 transition-transform duration-300">
-                <AvatarImage walletAddress="JoinGame1111111111111111111111111111111" />
+                <AvatarImage playerId="JoinGame1111111111111111111111111111111" />
                 <AvatarFallback
-                  walletAddress="JoinGame1111111111111111111111111111111"
+                  playerId="JoinGame1111111111111111111111111111111"
                   className="bg-white text-black text-xl font-black"
                 >
                   JG
@@ -39,34 +28,23 @@ export default function FooterSection() {
               </h3>
             </div>
             <p className="text-black text-lg font-bold mb-6">
-              Enter game code to join an existing match
+              Browse authoritative waiting rooms and join an open match
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Input
-                type="text"
-                value={gameCode}
-                onChange={(e) => setGameCode(e.target.value)}
-                placeholder="ENTER CODE..."
-                className="flex-1 bg-white text-black border-4 border-black shadow-[6px_6px_0_#000] px-6 py-6 text-xl font-bold uppercase placeholder:text-gray-400 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:shadow-[10px_10px_0_#000] focus-visible:-translate-y-1 transition-all duration-300"
-                onKeyDown={(e) => e.key === "Enter" && handleJoinGame()}
-              />
-              <Button
-                onClick={handleJoinGame}
+            <Button asChild
                 className="bg-[#9945ff] text-white border-4 border-black shadow-[8px_8px_0_#000] px-8 py-6 text-xl font-black uppercase hover:bg-[#ffed00] hover:text-black hover:shadow-[12px_12px_0_#000] hover:-translate-y-1 active:scale-95 transition-all duration-300"
               >
-                JOIN
-              </Button>
-            </div>
+              <Link href="/lobby">BROWSE GAMES</Link>
+            </Button>
           </div>
 
           {/* Create Game Card */}
           <div className="bg-[#ff0080] border-6 border-black shadow-[14px_14px_0_#000] p-8 md:p-10 hover:shadow-[20px_20px_0_#000] hover:-translate-y-2 transition-all duration-500 group">
             <div className="flex items-center gap-4 mb-6">
               <Avatar className="w-16 h-16 border-4 border-black shadow-[4px_4px_0_#000] group-hover:scale-110 transition-transform duration-300">
-                <AvatarImage walletAddress="StartGame111111111111111111111111111111" />
+                <AvatarImage playerId="StartGame111111111111111111111111111111" />
                 <AvatarFallback
-                  walletAddress="StartGame111111111111111111111111111111"
+                  playerId="StartGame111111111111111111111111111111"
                   className="bg-white text-black text-xl font-black"
                 >
                   SG
@@ -80,8 +58,8 @@ export default function FooterSection() {
               Create a new game and invite your friends
             </p>
 
-            <Button className="w-full bg-[#ffed00] text-black border-4 border-black shadow-[8px_8px_0_#000] px-8 py-6 text-xl font-black uppercase hover:bg-white hover:shadow-[12px_12px_0_#000] hover:-translate-y-1 active:scale-95 transition-all duration-300">
-              CREATE GAME
+            <Button asChild className="w-full bg-[#ffed00] text-black border-4 border-black shadow-[8px_8px_0_#000] px-8 py-6 text-xl font-black uppercase hover:bg-white hover:shadow-[12px_12px_0_#000] hover:-translate-y-1 active:scale-95 transition-all duration-300">
+              <Link href="/lobby">CREATE GAME</Link>
             </Button>
           </div>
         </div>
@@ -90,9 +68,9 @@ export default function FooterSection() {
         <div className="bg-[#9945ff] text-white border-6 border-black shadow-[12px_12px_0_#000] px-8 py-6 mb-16 hover:shadow-[18px_18px_0_#000] hover:-translate-y-2 transition-all duration-500 cursor-pointer group">
           <div className="flex items-center justify-center gap-4">
             <Avatar className="w-12 h-12 border-4 border-black shadow-[4px_4px_0_#000] group-hover:scale-110 transition-transform duration-300">
-              <AvatarImage walletAddress="Realtime111111111111111111111111111111" />
+              <AvatarImage playerId="Realtime111111111111111111111111111111" />
               <AvatarFallback
-                walletAddress="Realtime111111111111111111111111111111"
+                playerId="Realtime111111111111111111111111111111"
                 className="bg-[#ffed00] text-black text-lg font-black"
               >
                 RT
@@ -112,8 +90,9 @@ export default function FooterSection() {
               About
             </h4>
             <p className="text-black text-base font-bold leading-relaxed">
-              Poo Town is a real-time multiplayer property game with server-authoritative
-              rules, durable recovery, and in-app account coin.
+              Poo Town is a real-time multiplayer property game with
+              server-authoritative rules, durable recovery, and in-app account
+              coin.
             </p>
           </div>
 

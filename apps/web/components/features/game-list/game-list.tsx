@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type {
   AdmissionResponse,
   GameDefinitionId,
@@ -24,6 +24,7 @@ import {
 import { useGameDefinitions } from "@/hooks/use-game-definitions";
 import { useGames } from "@/hooks/useGames";
 import { ApiError } from "@/services/api-client";
+import { IntentKeyStore } from "@/services/intent-key-store";
 
 import { GameItem } from "./game-item";
 import { GameListLoading } from "./game-list-loading";
@@ -37,17 +38,14 @@ const FILTER_OPTIONS: ReadonlyArray<{ readonly value: GameStatusFilter; readonly
   { value: "settled", label: "Finished" },
 ];
 
-function requestId(): string {
-  return crypto.randomUUID();
-}
-
 export function GameList() {
   const router = useRouter();
-  const { authenticated, openLogin } = useAuth();
+  const { authenticated, openLogin, ready } = useAuth();
   const { sessions } = useApi();
   const { connect } = useRoom();
   const [statusFilter, setStatusFilter] = useState<GameStatusFilter>("all");
   const [joiningGameId, setJoiningGameId] = useState<string | null>(null);
+  const joinIntentKeys = useRef(new IntentKeyStore());
   const { data: games, isError, isLoading, refetch } = useGames();
 
   const filteredGames = useMemo(() => {
@@ -61,20 +59,28 @@ export function GameList() {
   };
 
   const handleJoinGame = async (game: SessionView) => {
+    if (!ready) return;
     if (!authenticated) {
       openLogin();
       return;
     }
     setJoiningGameId(game.gameId);
+    const intent = `join:${game.gameId}`;
     try {
       let admission: AdmissionResponse;
       try {
-        admission = await sessions.join(game.gameId, { idempotencyKey: requestId() });
+        admission = await sessions.join(game.gameId, {
+          idempotencyKey: joinIntentKeys.current.get(intent),
+        });
       } catch (error) {
         if (!(error instanceof ApiError) || error.code !== "ALREADY_SEATED") throw error;
-        admission = await sessions.reconnect(game.gameId, { idempotencyKey: requestId() });
+        admission = await sessions.reconnect(game.gameId, {
+          idempotencyKey: joinIntentKeys.current.get(`reconnect:${game.gameId}`),
+        });
       }
       await enterRoom(admission);
+      joinIntentKeys.current.complete(intent);
+      joinIntentKeys.current.complete(`reconnect:${game.gameId}`);
       toast.success("Game joined successfully");
     } catch {
       toast.error("Unable to join this game. Please try again.");
@@ -141,7 +147,7 @@ export function GameList() {
               key={game.gameId}
               game={game}
               onJoinGame={handleJoinGame}
-              joining={joiningGameId !== null}
+              joining={!ready || joiningGameId !== null}
             />
           ))}
         </div>
@@ -152,14 +158,16 @@ export function GameList() {
 
 function CreateGameButton() {
   const router = useRouter();
-  const { authenticated, openLogin } = useAuth();
+  const { authenticated, openLogin, ready } = useAuth();
   const { sessions } = useApi();
   const { connect } = useRoom();
   const definitions = useGameDefinitions();
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const createIntentKeys = useRef(new IntentKeyStore());
 
   const openDialog = () => {
+    if (!ready) return;
     if (!authenticated) {
       openLogin();
       return;
@@ -177,9 +185,13 @@ function CreateGameButton() {
 
   const createGame = async (gameDefinitionId: GameDefinitionId) => {
     setLoading(true);
+    const intent = `create:${gameDefinitionId}`;
     try {
-      const admission = await sessions.create(gameDefinitionId, { idempotencyKey: requestId() });
+      const admission = await sessions.create(gameDefinitionId, {
+        idempotencyKey: createIntentKeys.current.get(intent),
+      });
       await connect(admission);
+      createIntentKeys.current.complete(intent);
       setDialogOpen(false);
       toast.success("Game created successfully");
       router.push(`/game/${admission.session.gameId}`);
@@ -195,7 +207,7 @@ function CreateGameButton() {
       <Button
         onClick={openDialog}
         className="w-full gap-2 sm:w-auto"
-        disabled={authenticated && definitions.isLoading}
+        disabled={!ready || (authenticated && definitions.isLoading)}
       >
         <Plus className="h-4 w-4" />
         <span className="hidden xs:inline">Create Game</span>
@@ -205,7 +217,11 @@ function CreateGameButton() {
         definitions={definitions.data ?? []}
         isOpen={dialogOpen}
         loading={loading}
-        onClose={() => setDialogOpen(false)}
+        onClose={() => {
+          if (loading) return;
+          createIntentKeys.current.clear();
+          setDialogOpen(false);
+        }}
         onConfirm={createGame}
       />
     </>

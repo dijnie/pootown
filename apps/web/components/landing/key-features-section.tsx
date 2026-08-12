@@ -6,21 +6,21 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 export default function KeyFeaturesSection() {
   const features = [
     {
-      walletAddress: "RealtimeRooms1111111111111111111111111111",
+      playerId: "RealtimeRooms1111111111111111111111111111",
       title: "REALTIME ROOMS",
       desc: "Fast authoritative multiplayer rooms keep every player on the same verified turn state",
       color: "#9945ff",
     },
     {
-      walletAddress: "Recovery1111111111111111111111111111111",
+      playerId: "Recovery1111111111111111111111111111111",
       title: "SAFE RECOVERY",
       desc: "Durable checkpoints let active games reconnect without trusting stale browser state",
       color: "#14f195",
     },
     {
-      walletAddress: "AccountCoin11111111111111111111111111111",
+      playerId: "AccountCoin11111111111111111111111111111",
       title: "ACCOUNT COIN",
-      desc: "Simple in-app account coin powers game admission without wallet signatures or transaction fees",
+      desc: "Simple in-app account coin powers game admission without playerId signatures or transaction fees",
       color: "#ffed00",
     },
   ];
@@ -48,12 +48,12 @@ export default function KeyFeaturesSection() {
               <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-10 transition-opacity duration-500" />
               <div className="mb-8 group-hover:scale-125 group-hover:rotate-12 transition-all duration-700 relative z-10 flex justify-center">
                 <Avatar className="w-24 h-24 sm:w-32 sm:h-32 border-6 border-black shadow-[8px_8px_0_#000] group-hover:shadow-[12px_12px_0_#000] transition-all duration-700">
-                  <AvatarImage walletAddress={feature.walletAddress} />
+                  <AvatarImage playerId={feature.playerId} />
                   <AvatarFallback
-                    walletAddress={feature.walletAddress}
+                    playerId={feature.playerId}
                     className="bg-white text-black text-2xl font-black"
                   >
-                    {feature.walletAddress.slice(0, 2).toUpperCase()}
+                    {feature.playerId.slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
               </div>

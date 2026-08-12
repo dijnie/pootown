@@ -12,9 +12,9 @@ export default function MarqueeBar() {
               ROLL THE DICE
             </span>
             <Avatar className="w-12 h-12 md:w-16 md:h-16 border-4 border-black shadow-[4px_4px_0_#000] mx-8 shrink-0">
-              <AvatarImage walletAddress="RollDice111111111111111111111111111111" />
+              <AvatarImage playerId="RollDice111111111111111111111111111111" />
               <AvatarFallback
-                walletAddress="RollDice111111111111111111111111111111"
+                playerId="RollDice111111111111111111111111111111"
                 className="bg-[#ff0080] text-black text-xl font-black"
               >
                 RD
@@ -24,9 +24,9 @@ export default function MarqueeBar() {
               BUY PROPERTIES
             </span>
             <Avatar className="w-12 h-12 md:w-16 md:h-16 border-4 border-black shadow-[4px_4px_0_#000] mx-8 shrink-0">
-              <AvatarImage walletAddress="BuyProperty11111111111111111111111111" />
+              <AvatarImage playerId="BuyProperty11111111111111111111111111" />
               <AvatarFallback
-                walletAddress="BuyProperty11111111111111111111111111"
+                playerId="BuyProperty11111111111111111111111111"
                 className="bg-[#9945ff] text-black text-xl font-black"
               >
                 BP
@@ -36,9 +36,9 @@ export default function MarqueeBar() {
               COLLECT RENT
             </span>
             <Avatar className="w-12 h-12 md:w-16 md:h-16 border-4 border-black shadow-[4px_4px_0_#000] mx-8 shrink-0">
-              <AvatarImage walletAddress="CollectRent1111111111111111111111111111" />
+              <AvatarImage playerId="CollectRent1111111111111111111111111111" />
               <AvatarFallback
-                walletAddress="CollectRent1111111111111111111111111111"
+                playerId="CollectRent1111111111111111111111111111"
                 className="bg-[#ffed00] text-black text-xl font-black"
               >
                 CR
@@ -48,9 +48,9 @@ export default function MarqueeBar() {
               WIN THE MATCH
             </span>
             <Avatar className="w-12 h-12 md:w-16 md:h-16 border-4 border-black shadow-[4px_4px_0_#000] mx-8 shrink-0">
-              <AvatarImage walletAddress="WinMatch11111111111111111111111111111111" />
+              <AvatarImage playerId="WinMatch11111111111111111111111111111111" />
               <AvatarFallback
-                walletAddress="WinMatch11111111111111111111111111111111"
+                playerId="WinMatch11111111111111111111111111111111"
                 className="bg-[#ff0080] text-black text-xl font-black"
               >
                 WM

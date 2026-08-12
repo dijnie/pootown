@@ -25,6 +25,8 @@ import { formatAddress, toSafeMatchCashNumber } from "@/lib/utils";
 import { getTypedSpaceData } from "@/lib/board-utils";
 import { colorMap, ColorGroup } from "@/configs/board-data";
 import { PropertyAccount, TradeOffer } from "@/types/schema";
+import { commandErrorMessage } from "@/services/command-error-message";
+import { toast } from "sonner";
 
 type TradeType =
   | "money-money"
@@ -57,7 +59,9 @@ function MoneySelection({
   if (maxValue <= 0) {
     return (
       <div className="space-y-3 p-4 border-2 border-red-500 bg-red-50 dark:bg-red-950">
-        <Label className="text-sm font-black text-red-700 dark:text-red-300 uppercase">{label}</Label>
+        <Label className="text-sm font-black text-red-700 dark:text-red-300 uppercase">
+          {label}
+        </Label>
         <p className="text-sm font-bold text-red-600 dark:text-red-400">
           ✗ NO CASH AVAILABLE (${maxValue})
         </p>
@@ -73,7 +77,9 @@ function MoneySelection({
         <Label htmlFor={id} className="text-base font-black uppercase">
           {label}
         </Label>
-        <span className="text-3xl font-black text-black dark:text-white">${value}</span>
+        <span className="text-3xl font-black text-black dark:text-white">
+          ${value}
+        </span>
       </div>
       <div className="px-2">
         <input
@@ -179,7 +185,7 @@ function PropertySelection({
             const color = colorMap[space?.colorGroup as ColorGroup] || "";
             return (
               <SelectItem
-                key={property.address}
+                key={property.propertyId}
                 value={property.position.toString()}
               >
                 <div className="flex items-center gap-2 overflow-hidden">
@@ -205,8 +211,7 @@ export function CreateTradeDialog({
   const { ownPlayerId, players, properties, createTrade } = useGameContext();
 
   const [isRequesting, setIsRequesting] = useState(false);
-  const [selectedPlayerAddress, setSelectedPlayerAddress] =
-    useState<string>("");
+  const [selectedPlayerId, setSelectedPlayerAddress] = useState<string>("");
   const [tradeType, setTradeType] = useState<TradeType>("money-money");
   const [offerMoney, setOfferMoney] = useState(0);
   const [offerProperty, setOfferProperty] = useState("");
@@ -215,11 +220,11 @@ export function CreateTradeDialog({
 
   // Filter out current player from available players
   const currentPlayerState = players.find(
-    (player) => player.wallet === ownPlayerId
+    (player) => player.playerId === ownPlayerId
   );
 
   const availablePlayers = players.filter(
-    (player) => player.wallet !== ownPlayerId
+    (player) => player.playerId !== ownPlayerId
   );
 
   const currentPlayerProperties = properties.filter(
@@ -227,15 +232,19 @@ export function CreateTradeDialog({
   );
 
   const selectedPlayer = availablePlayers.find(
-    (player) => player.wallet === selectedPlayerAddress
+    (player) => player.playerId === selectedPlayerId
   );
 
   const selectedPlayerProperties = properties.filter(
-    (property) => property.owner === selectedPlayerAddress
+    (property) => property.owner === selectedPlayerId
   );
 
-  const currentPlayerMoney = toSafeMatchCashNumber(currentPlayerState?.cashBalance ?? "0");
-  const selectedPlayerMoney = toSafeMatchCashNumber(selectedPlayer?.cashBalance ?? "0");
+  const currentPlayerMoney = toSafeMatchCashNumber(
+    currentPlayerState?.cashBalance ?? "0"
+  );
+  const selectedPlayerMoney = toSafeMatchCashNumber(
+    selectedPlayer?.cashBalance ?? "0"
+  );
 
   const availableTradeTypes = useMemo(() => {
     const types = [];
@@ -272,8 +281,8 @@ export function CreateTradeDialog({
   ]);
 
   // Auto-select first available trade type when player is selected
-  const handlePlayerSelection = (playerAddress: string) => {
-    setSelectedPlayerAddress(playerAddress);
+  const handlePlayerSelection = (playerId: string) => {
+    setSelectedPlayerAddress(playerId);
     setOfferMoney(0);
     setOfferProperty("");
     setRequestMoney(0);
@@ -286,7 +295,7 @@ export function CreateTradeDialog({
   };
 
   const handleCreateTrade = async () => {
-    if (!selectedPlayerAddress || !currentPlayerState) return;
+    if (!selectedPlayerId || !currentPlayerState) return;
 
     // Create trade offers based on trade type
     const initiatorOffer: TradeOffer = {
@@ -315,7 +324,7 @@ export function CreateTradeDialog({
 
     try {
       setIsRequesting(true);
-      await createTrade(selectedPlayerAddress, initiatorOffer, targetOffer);
+      await createTrade(selectedPlayerId, initiatorOffer, targetOffer);
       onOpenChange(false);
       // Reset form
       setSelectedPlayerAddress("");
@@ -325,15 +334,14 @@ export function CreateTradeDialog({
       setRequestMoney(0);
       setRequestProperty("");
     } catch (error) {
-      console.error("Failed to create trade:", error);
+      toast.error(commandErrorMessage(error));
     } finally {
       setIsRequesting(false);
     }
   };
 
   const isFormValid = () => {
-    if (!selectedPlayerAddress || availableTradeTypes.length === 0)
-      return false;
+    if (!selectedPlayerId || availableTradeTypes.length === 0) return false;
 
     switch (tradeType) {
       case "money-money":
@@ -380,7 +388,9 @@ export function CreateTradeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] sm:w-[90vw] md:max-w-2xl lg:max-w-3xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-950 border-4 border-black dark:border-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] sm:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]">
         <DialogHeader className="pb-3 sm:pb-4 border-b-4 border-black dark:border-white">
-          <DialogTitle className="text-2xl sm:text-3xl font-black tracking-tighter">TRADE</DialogTitle>
+          <DialogTitle className="text-2xl sm:text-3xl font-black tracking-tighter">
+            TRADE
+          </DialogTitle>
           <DialogDescription className="text-sm sm:text-base font-semibold text-black dark:text-white">
             Select opponent and negotiate your terms
           </DialogDescription>
@@ -389,33 +399,49 @@ export function CreateTradeDialog({
         <div className="space-y-4 sm:space-y-6 md:space-y-8 py-3 sm:py-4 md:py-6">
           {/* Player Selection */}
           <div className="space-y-2 sm:space-y-3">
-            <Label htmlFor="player" className="text-base sm:text-lg md:text-xl font-black uppercase tracking-wider">Who Trade With?</Label>
+            <Label
+              htmlFor="player"
+              className="text-base sm:text-lg md:text-xl font-black uppercase tracking-wider"
+            >
+              Who Trade With?
+            </Label>
             <Select
-              value={selectedPlayerAddress}
+              value={selectedPlayerId}
               onValueChange={handlePlayerSelection}
             >
-              <SelectTrigger id="player" className="h-12 bg-white dark:bg-slate-900 border-3 border-black dark:border-white text-base font-bold">
+              <SelectTrigger
+                id="player"
+                className="h-12 bg-white dark:bg-slate-900 border-3 border-black dark:border-white text-base font-bold"
+              >
                 <SelectValue placeholder="SELECT PLAYER" />
               </SelectTrigger>
               <SelectContent className="border-4 border-black dark:border-white bg-white dark:bg-slate-900">
                 {availablePlayers.map((player) => (
-                  <SelectItem key={player.address} value={player.wallet} className="text-base font-bold">
+                  <SelectItem
+                    key={player.playerId}
+                    value={player.playerId}
+                    className="text-base font-bold"
+                  >
                     <div className="flex items-center gap-2">
                       <Avatar className="size-6 rounded-full overflow-hidden border-2 border-black dark:border-white">
                         <AvatarImage
-                          walletAddress={player.wallet}
-                          alt={`Player ${player.address}`}
+                          playerId={player.playerId}
+                          alt={`Player ${player.playerId}`}
                         />
                         <AvatarFallback
-                          walletAddress={player.wallet}
+                          playerId={player.playerId}
                           className="text-white font-black bg-black dark:bg-white dark:text-black text-sm"
                         >
-                          {ownPlayerId === player.wallet
+                          {ownPlayerId === player.playerId
                             ? "YOU"
-                            : formatAddress(player.address).substring(0, 2).toUpperCase()}
+                            : formatAddress(player.playerId)
+                                .substring(0, 2)
+                                .toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="font-bold">{formatAddress(player.address)}</span>
+                      <span className="font-bold">
+                        {formatAddress(player.playerId)}
+                      </span>
                     </div>
                   </SelectItem>
                 ))}
@@ -425,7 +451,9 @@ export function CreateTradeDialog({
 
           {/* Trade Type Selection */}
           <div className="space-y-3 sm:space-y-4">
-            <Label className="text-base sm:text-lg md:text-xl font-black uppercase tracking-wider">Trade Type</Label>
+            <Label className="text-base sm:text-lg md:text-xl font-black uppercase tracking-wider">
+              Trade Type
+            </Label>
             <RadioGroup
               value={tradeType}
               onValueChange={(value) => setTradeType(value as TradeType)}
@@ -463,16 +491,18 @@ export function CreateTradeDialog({
                   return (
                     <Card
                       key={option.value}
-                      className={`border-3 transition-all cursor-pointer ${isDisabled
-                        ? "opacity-40 cursor-not-allowed bg-slate-200 dark:bg-slate-800 border-slate-400 dark:border-slate-600"
-                        : tradeType === option.value
+                      className={`border-3 transition-all cursor-pointer ${
+                        isDisabled
+                          ? "opacity-40 cursor-not-allowed bg-slate-200 dark:bg-slate-800 border-slate-400 dark:border-slate-600"
+                          : tradeType === option.value
                           ? "bg-black dark:bg-white border-black dark:border-white shadow-lg scale-105"
                           : "border-black dark:border-white bg-white dark:bg-slate-900 hover:shadow-lg hover:scale-105"
-                        }`}
+                      }`}
                     >
                       <label
-                        className={`flex items-center gap-3 p-4 ${isDisabled ? "cursor-not-allowed" : "cursor-pointer"
-                          }`}
+                        className={`flex items-center gap-3 p-4 ${
+                          isDisabled ? "cursor-not-allowed" : "cursor-pointer"
+                        }`}
                       >
                         <RadioGroupItem
                           value={option.value}
@@ -481,16 +511,22 @@ export function CreateTradeDialog({
                           className="w-6 h-6 border-2"
                         />
                         <div className="flex-1">
-                          <div className={`font-black text-base uppercase tracking-wide ${tradeType === option.value && !isDisabled
-                            ? "text-white dark:text-black"
-                            : "text-black dark:text-white"
-                            }`}>
+                          <div
+                            className={`font-black text-base uppercase tracking-wide ${
+                              tradeType === option.value && !isDisabled
+                                ? "text-white dark:text-black"
+                                : "text-black dark:text-white"
+                            }`}
+                          >
                             {option.title}
                           </div>
-                          <div className={`text-xs font-bold ${tradeType === option.value && !isDisabled
-                            ? "text-gray-200 dark:text-gray-800"
-                            : "text-slate-600 dark:text-slate-400"
-                            }`}>
+                          <div
+                            className={`text-xs font-bold ${
+                              tradeType === option.value && !isDisabled
+                                ? "text-gray-200 dark:text-gray-800"
+                                : "text-slate-600 dark:text-slate-400"
+                            }`}
+                          >
                             {isDisabled ? disabledReason : option.desc}
                           </div>
                         </div>
@@ -503,57 +539,61 @@ export function CreateTradeDialog({
           </div>
 
           {/* Trade Details */}
-          {selectedPlayerAddress && availableTradeTypes.includes(tradeType) && (
+          {selectedPlayerId && availableTradeTypes.includes(tradeType) && (
             <div className="border-4 border-black dark:border-white bg-slate-50 dark:bg-slate-900 p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 items-start">
                 {/* Your Offer */}
                 <div className="space-y-3 sm:space-y-4 sm:border-r-4 border-black dark:border-white sm:pr-4 md:pr-6 pb-4 sm:pb-0 border-b-4 sm:border-b-0">
-                  <Label className="text-lg sm:text-xl md:text-2xl font-black uppercase tracking-wider">YOU OFFER</Label>
+                  <Label className="text-lg sm:text-xl md:text-2xl font-black uppercase tracking-wider">
+                    YOU OFFER
+                  </Label>
                   {(tradeType === "money-money" ||
                     tradeType === "money-property") && (
-                      <MoneySelection
-                        label="Amount"
-                        value={offerMoney}
-                        maxValue={currentPlayerMoney}
-                        onChange={setOfferMoney}
-                        id="offer-money"
-                      />
-                    )}
+                    <MoneySelection
+                      label="Amount"
+                      value={offerMoney}
+                      maxValue={currentPlayerMoney}
+                      onChange={setOfferMoney}
+                      id="offer-money"
+                    />
+                  )}
                   {(tradeType === "property-money" ||
                     tradeType === "property-property") && (
-                      <PropertySelection
-                        label="Property"
-                        value={offerProperty}
-                        properties={currentPlayerProperties}
-                        onChange={setOfferProperty}
-                        id="offer-property"
-                      />
-                    )}
+                    <PropertySelection
+                      label="Property"
+                      value={offerProperty}
+                      properties={currentPlayerProperties}
+                      onChange={setOfferProperty}
+                      id="offer-property"
+                    />
+                  )}
                 </div>
 
                 {/* You Request */}
                 <div className="space-y-3 sm:space-y-4">
-                  <Label className="text-lg sm:text-xl md:text-2xl font-black uppercase tracking-wider">THEY GIVE</Label>
+                  <Label className="text-lg sm:text-xl md:text-2xl font-black uppercase tracking-wider">
+                    THEY GIVE
+                  </Label>
                   {(tradeType === "money-money" ||
                     tradeType === "property-money") && (
-                      <MoneySelection
-                        label="Amount"
-                        value={requestMoney}
-                        maxValue={selectedPlayerMoney}
-                        onChange={setRequestMoney}
-                        id="request-money"
-                      />
-                    )}
+                    <MoneySelection
+                      label="Amount"
+                      value={requestMoney}
+                      maxValue={selectedPlayerMoney}
+                      onChange={setRequestMoney}
+                      id="request-money"
+                    />
+                  )}
                   {(tradeType === "money-property" ||
                     tradeType === "property-property") && (
-                      <PropertySelection
-                        label="Property"
-                        value={requestProperty}
-                        properties={selectedPlayerProperties}
-                        onChange={setRequestProperty}
-                        id="request-property"
-                      />
-                    )}
+                    <PropertySelection
+                      label="Property"
+                      value={requestProperty}
+                      properties={selectedPlayerProperties}
+                      onChange={setRequestProperty}
+                      id="request-property"
+                    />
+                  )}
                 </div>
               </div>
             </div>

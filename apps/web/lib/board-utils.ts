@@ -297,7 +297,7 @@ export const hasColorGroupMonopoly = (
   );
 
   const ownedPropertiesInGroup = propertiesInGroup.filter(
-    (prop) => prop.owner === ownerState.wallet
+    (prop) => prop.owner === ownerState.playerId
   );
 
   return (
@@ -312,7 +312,7 @@ const countRailroadsOwned = (
 ): number => {
   return allProperties.filter(
     (prop) =>
-      prop.owner === ownerState.wallet &&
+      prop.owner === ownerState.playerId &&
       prop.propertyType === PropertyType.Railroad
   ).length;
 };
@@ -323,7 +323,7 @@ const countUtilitiesOwned = (
 ): number => {
   return allProperties.filter(
     (prop) =>
-      prop.owner === ownerState.wallet &&
+      prop.owner === ownerState.playerId &&
       prop.propertyType === PropertyType.Utility
   ).length;
 };

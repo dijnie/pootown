@@ -15,6 +15,7 @@ import { useGameContext } from "@/components/providers/game-provider";
 import { useState } from "react";
 import { toast } from "sonner";
 import { GameStatus } from "@/types/schema";
+import { commandErrorMessage } from "@/services/command-error-message";
 
 export function BankruptcyButton() {
   const { declareBankruptcy, gameState, currentPlayerState, isCurrentTurn } =
@@ -29,8 +30,7 @@ export function BankruptcyButton() {
       toast.success("Bankruptcy declared successfully");
       setIsDialogOpen(false);
     } catch (error) {
-      console.error("Failed to declare bankruptcy:", error);
-      toast.error("Failed to declare bankruptcy");
+      toast.error(commandErrorMessage(error));
     } finally {
       setIsLoading(false);
     }

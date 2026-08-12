@@ -1,7 +1,7 @@
 ---
 phase: 7
 title: "Reliability Security and Load Gates"
-status: pending
+status: in-progress
 priority: P1
 effort: "1-1.5 weeks"
 dependencies: [6]
@@ -17,6 +17,8 @@ dependencies: [6]
 ## Overview
 
 Prove release behavior under negative input, retries, concurrency, process/DB failures, restore, and the confirmed 200-client/~50-room baseline. This is evidence, not a production capacity claim.
+
+Phase 6 handoff: retain the previously observed but currently non-reproducible join-intent 500 as an observability/fault-test target. Complete the browser-level join-failure, duplicate-click, missed-event, play-to-finish, terminal, API-outage, and reconnect evidence here rather than treating the Phase 6 create/join/start/reload smoke as full release proof.
 
 ## Requirements
 

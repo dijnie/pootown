@@ -9,18 +9,18 @@ import Link from "next/link";
 
 interface RentPaymentToastProps {
   rentAmount: number;
-  ownerAddress: string;
+  ownerId: string;
   propertyName: string;
 }
 
 interface RentPaymentFallbackToastProps {
-  ownerAddress: string;
+  ownerId: string;
   propertyName: string;
 }
 
 interface TaxPaidToastProps {
   isCurrentPlayer: boolean;
-  playerAddress: string;
+  playerId: string;
   taxType: number;
   amount: bigint;
   position: number;
@@ -31,7 +31,7 @@ interface PlayerPassedGoToastProps {
 }
 
 interface PlayerJoinedToastProps {
-  playerAddress: string;
+  playerId: string;
   playerIndex: number;
   totalPlayers: number;
 }
@@ -42,25 +42,25 @@ interface GameStartedToastProps {
 }
 
 interface ChanceCardDrawnToastProps {
-  playerAddress: string;
+  playerId: string;
   cardIndex: number;
   isCurrentPlayer: boolean;
 }
 
 interface CommunityChestCardDrawnToastProps {
-  playerAddress: string;
+  playerId: string;
   cardIndex: number;
   isCurrentPlayer: boolean;
 }
 
 interface GoToJailToastProps {
-  playerAddress: string;
+  playerId: string;
   isCurrentPlayer: boolean;
 }
 
 export const showRentPaymentToast = ({
   rentAmount,
-  ownerAddress,
+  ownerId,
   propertyName,
 }: RentPaymentToastProps) => {
   toast.info(
@@ -78,7 +78,7 @@ export const showRentPaymentToast = ({
           className="font-bold px-2 py-0.5 rounded-md text-white"
           style={{ backgroundColor: "var(--chart-2)" }}
         >
-          {formatAddress(ownerAddress)}
+          {formatAddress(ownerId)}
         </span>
       </div>
       <div className="text-xs">
@@ -95,7 +95,7 @@ export const showRentPaymentToast = ({
 };
 
 export const showRentPaymentFallbackToast = ({
-  ownerAddress,
+  ownerId,
   propertyName,
 }: RentPaymentFallbackToastProps) => {
   toast.info(
@@ -106,7 +106,7 @@ export const showRentPaymentFallbackToast = ({
           className="font-bold px-2 py-0.5 rounded-md text-white"
           style={{ backgroundColor: "var(--chart-2)" }}
         >
-          {formatAddress(ownerAddress)}
+          {formatAddress(ownerId)}
         </span>
       </div>
       <div className="text-xs">
@@ -135,7 +135,7 @@ export const showRentPaymentErrorToast = () => {
 
 export const showTaxPaidToast = ({
   isCurrentPlayer,
-  playerAddress,
+  playerId,
   taxType,
   amount,
 }: TaxPaidToastProps) => {
@@ -145,7 +145,7 @@ export const showTaxPaidToast = ({
   toast.warning(
     <div className="flex flex-col">
       <div className="text-sm">
-        {isCurrentPlayer ? "You" : formatAddress(playerAddress)} paid{" "}
+        {isCurrentPlayer ? "You" : formatAddress(playerId)} paid{" "}
         <span
           className="font-bold px-2 py-0.5 rounded-md text-white"
           style={{ backgroundColor: "var(--chart-2)" }}
@@ -184,7 +184,7 @@ export const showPlayerPassedGoToast = ({
 };
 
 export const showPlayerJoinedToast = ({
-  playerAddress,
+  playerId,
 }: // playerIndex,
 // totalPlayers,
 PlayerJoinedToastProps) => {
@@ -195,7 +195,7 @@ PlayerJoinedToastProps) => {
           className="font-bold px-2 py-0.5 rounded-md text-white"
           style={{ backgroundColor: "var(--chart-2)" }}
         >
-          {formatAddress(playerAddress)}
+          {formatAddress(playerId)}
         </span>{" "}
         joined the game!
       </div>
@@ -217,12 +217,12 @@ export const showGameStartedToast = ({
 };
 
 export const showChanceCardDrawnToast = ({
-  playerAddress,
+  playerId,
   cardIndex,
   isCurrentPlayer,
 }: ChanceCardDrawnToastProps) => {
   const card = surpriseCards[cardIndex];
-  const playerName = isCurrentPlayer ? "You" : formatAddress(playerAddress);
+  const playerName = isCurrentPlayer ? "You" : formatAddress(playerId);
 
   if (!card) {
     toast.info(`${playerName} drew a Pump.fun Surprise card`);
@@ -243,12 +243,12 @@ export const showChanceCardDrawnToast = ({
 };
 
 export const showCommunityChestCardDrawnToast = ({
-  playerAddress,
+  playerId,
   cardIndex,
   isCurrentPlayer,
 }: CommunityChestCardDrawnToastProps) => {
   const card = treasureCards[cardIndex];
-  const playerName = isCurrentPlayer ? "You" : formatAddress(playerAddress);
+  const playerName = isCurrentPlayer ? "You" : formatAddress(playerId);
 
   if (!card) {
     toast.info(`${playerName} drew an Airdrop Chest card`);
@@ -269,10 +269,10 @@ export const showCommunityChestCardDrawnToast = ({
 };
 
 export const showGoToJailToast = ({
-  playerAddress,
+  playerId,
   isCurrentPlayer,
 }: GoToJailToastProps) => {
-  const playerName = isCurrentPlayer ? "You" : formatAddress(playerAddress);
+  const playerName = isCurrentPlayer ? "You" : formatAddress(playerId);
 
   toast.error(
     <div className="flex flex-col gap-1.5">
@@ -292,14 +292,14 @@ interface PropertyPurchasedToastProps {
   propertyName: string;
   price: bigint;
   isCurrentPlayer: boolean;
-  playerAddress?: string;
+  playerId?: string;
 }
 
 export const showPropertyPurchasedToast = ({
   propertyName,
   price,
   isCurrentPlayer,
-  playerAddress,
+  playerId,
 }: PropertyPurchasedToastProps) => {
   if (isCurrentPlayer) {
     // Show "You bought XXX" for current player
@@ -334,7 +334,7 @@ export const showPropertyPurchasedToast = ({
             className="font-bold px-2 py-0.5 rounded-md text-white"
             style={{ backgroundColor: "var(--chart-2)" }}
           >
-            {formatAddress(playerAddress || "")}
+            {formatAddress(playerId || "")}
           </span>{" "}
           just bought{" "}
           <span
@@ -362,14 +362,14 @@ interface GameEndedToastProps {
   winner: string | null;
   reason: GameEndReason;
   winnerNetWorth: number | string | null;
-  currentPlayerAddress: string | null;
+  currentPlayerId: string | null;
 }
 
 export const showGameEndedToast = ({
   winner,
   reason,
   winnerNetWorth,
-  currentPlayerAddress,
+  currentPlayerId,
 }: GameEndedToastProps) => {
   const getReasonText = (reason: GameEndReason): string => {
     switch (reason) {
@@ -382,8 +382,7 @@ export const showGameEndedToast = ({
     }
   };
 
-  const isWinner =
-    winner && currentPlayerAddress && winner === currentPlayerAddress;
+  const isWinner = winner && currentPlayerId && winner === currentPlayerId;
   const hasWinner = winner !== null;
 
   toast(
@@ -503,7 +502,7 @@ export const showGameEndedToast = ({
             className="bg-white border-6 border-black shadow-[10px_10px_0_#000] p-6 mb-6"
           >
             <div className="flex flex-col items-center gap-4">
-              {winner && <UserAvatar walletAddress={winner} size="lg" />}
+              {winner && <UserAvatar playerId={winner} size="lg" />}
               <p className="text-base font-bold">
                 {winner?.slice(0, 8)}...{winner?.slice(-6)}
               </p>

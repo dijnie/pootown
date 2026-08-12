@@ -12,8 +12,6 @@ export function OwnedProperties() {
     (property) => property.owner === ownPlayerId
   );
 
-  console.log("ownedProperties", ownedProperties);
-
   if (!ownedProperties.length) {
     return (
       <Card className="bg-white">

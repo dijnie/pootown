@@ -61,8 +61,9 @@ const NavBar = () => {
           {/* Mobile Menu Toggle */}
           <div className="md:hidden flex items-center gap-4">
             <button
+              aria-label="Open navigation"
               onClick={() => setIsOpen(!isOpen)}
-              className="p-2 bg-main dark:bg-main transform hover:-rotate-3 transition-transform"
+              className="relative z-10 p-2 bg-main dark:bg-main transform hover:-rotate-3 transition-transform"
               style={{
                 border: "2px solid black",
                 boxShadow: "4px 4px 0px 0px #000000",
@@ -87,11 +88,12 @@ const NavBar = () => {
             }}
           >
             <MobileNavLinks setIsOpen={setIsOpen} />
-            <div className="mt-4 p-2"></div>
+            <div className="mt-4 flex justify-center p-2">
+              <AccountMenuButton />
+            </div>
           </div>
         </div>
       )}
-
     </>
   );
 };

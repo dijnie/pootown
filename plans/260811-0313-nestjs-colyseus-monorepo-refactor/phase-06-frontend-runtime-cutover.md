@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Frontend Runtime Cutover"
-status: in-progress
+status: complete
 priority: P1
 effort: "1.5-2 weeks"
 dependencies: [4, 5]
@@ -69,13 +69,15 @@ rg -n "@solana|anchor|MagicBlock|NEXT_PUBLIC_.*RPC|AUTH_PRIVATE_KEY|signTransact
 - Test auth expiry, join failure, duplicate click, stale revision, rejection, disconnect/reconnect, missed event, terminal state, and API outage.
 - Compare Phase 1 screenshots at identical breakpoints; allow only approved identity/coin copy, spectator removal, all-offline result, and reward-settlement semantic deltas. Record each approved delta rather than weakening the baseline.
 
+Phase 6 closure evidence covers strict clients/adapters, stable idempotency keys, auth mutation ordering, command rejection mapping, pending-command reconnect replay, public desktop/mobile visuals, and a real create -> join -> start -> canonical reload vertical on both breakpoints. Phase 7 owns the remaining browser-level join-failure, duplicate-click, missed-event, play-to-finish, terminal, API-outage, and fault-injection matrix as part of its full vertical release gate.
+
 ## Success Criteria
 
-- [ ] Visual/interaction baseline passes with only approved semantic copy changes.
-- [ ] Every visible action uses typed server intent and handles ack/reject/reconnect.
-- [ ] Account coin and in-match cash are visibly/technically distinct.
-- [ ] Browser bundle/config/import graph has no chain/signing/private-key runtime.
-- [ ] Unsupported gameplay is not surfaced.
+- [x] Visual/interaction baseline passes with only approved semantic copy changes.
+- [x] Every visible action uses typed server intent and handles ack/reject/reconnect.
+- [x] Account coin and in-match cash are visibly/technically distinct.
+- [x] Browser bundle/config/import graph has no chain/signing/private-key runtime.
+- [x] Unsupported gameplay is not surfaced.
 
 ## Risk Assessment
 

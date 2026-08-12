@@ -1,11 +1,11 @@
-"use client"
+"use client";
 
-import * as AvatarPrimitive from "@radix-ui/react-avatar"
+import * as AvatarPrimitive from "@radix-ui/react-avatar";
 
-import * as React from "react"
+import * as React from "react";
 
-import { cn } from "@/lib/utils"
-import { getRandomAvatarByAddress } from "@/lib/avatar-utils"
+import { cn } from "@/lib/utils";
+import { getAvatarForPlayer } from "@/lib/avatar-utils";
 
 function Avatar({
   className,
@@ -16,22 +16,22 @@ function Avatar({
       data-slot="avatar"
       className={cn(
         "relative flex size-10 shrink-0 overflow-hidden rounded-full outline-2 outline-border",
-        className,
+        className
       )}
       {...props}
     />
-  )
+  );
 }
 
 function AvatarImage({
   className,
-  walletAddress,
+  playerId,
   ...props
 }: React.ComponentProps<typeof AvatarPrimitive.Image> & {
-  walletAddress?: string;
+  playerId?: string;
 }) {
-  const avatarSrc = walletAddress ? getRandomAvatarByAddress(walletAddress) : undefined;
-  
+  const avatarSrc = playerId ? getAvatarForPlayer(playerId) : undefined;
+
   return (
     <AvatarPrimitive.Image
       data-slot="avatar-image"
@@ -39,31 +39,31 @@ function AvatarImage({
       src={avatarSrc}
       {...props}
     />
-  )
+  );
 }
 
 function AvatarFallback({
   className,
-  walletAddress,
+  playerId,
   ...props
 }: React.ComponentProps<typeof AvatarPrimitive.Fallback> & {
-  walletAddress?: string;
+  playerId?: string;
 }) {
-  // Generate fallback text from wallet address (first 2 characters)
-  const fallbackText = walletAddress ? walletAddress.slice(0, 2).toUpperCase() : "??";
-  
+  // Generate fallback text from playerId address (first 2 characters)
+  const fallbackText = playerId ? playerId.slice(0, 2).toUpperCase() : "??";
+
   return (
     <AvatarPrimitive.Fallback
       data-slot="avatar-fallback"
       className={cn(
         "flex size-full items-center justify-center rounded-full bg-secondary-background text-foreground font-base",
-        className,
+        className
       )}
       {...props}
     >
       {fallbackText}
     </AvatarPrimitive.Fallback>
-  )
+  );
 }
 
-export { Avatar, AvatarImage, AvatarFallback }
+export { Avatar, AvatarImage, AvatarFallback };
