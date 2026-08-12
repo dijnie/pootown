@@ -7,7 +7,7 @@ effort: 10-13 weeks
 issue: null
 branch: main
 tags: [refactor, frontend, backend, database, api, auth, critical]
-blockedBy: []
+blockedBy: [260812-0303-email-auth-and-local-postgresql-cutover]
 blocks: []
 created: 2026-08-11
 ---
@@ -21,7 +21,7 @@ Create one root pnpm workspace with `apps/web`, independently deployable `apps/a
 ## Scope Boundary
 
 - Preserve current visuals, UX, and only currently executed five-card/simplified rules; max four players. Auction and missing effects stay unsupported.
-- Privy social identity is server-verified. No wallet signing, public private key, blockchain facade, withdrawal, spectators, admin product, queues, Redis, or event sourcing.
+- First-party email/password identity is server-verified. No social login, email verification/reset, wallet signing, public private key, blockchain facade, withdrawal, spectators, admin product, queues, Redis, or event sourcing.
 - API alone writes account coin/reservations/refunds/settlements. Game server alone owns live in-match cash, rules, rooms, leases, and full checkpoints.
 - Initial realtime topology: one Colyseus replica and one PostgreSQL cluster with isolated schemas/roles. Scale changes require measured evidence.
 
@@ -30,7 +30,7 @@ Create one root pnpm workspace with `apps/web`, independently deployable `apps/a
 - [Accepted brainstorm](../reports/brainstorm-260811-0246-nestjs-colyseus-monorepo.md)
 - [Rules migration research](./research/researcher-01-rules-migration.md)
 - [Service contracts research](./research/researcher-02-service-contracts.md)
-- Official: [NestJS authentication](https://docs.nestjs.com/security/authentication), [Colyseus rooms](https://docs.colyseus.io/room), [Privy token verification](https://docs.privy.io/authentication/user-authentication/tokens), [PostgreSQL transactions](https://www.postgresql.org/docs/current/transaction-iso.html)
+- Official: [NestJS authentication](https://docs.nestjs.com/security/authentication), [Colyseus rooms](https://docs.colyseus.io/room), [PostgreSQL transactions](https://www.postgresql.org/docs/current/transaction-iso.html); port source: [`dijnie/nest-next-tuborepo` email auth](https://github.com/dijnie/nest-next-tuborepo/tree/master/apps/backend/src/auth).
 
 Authority precedence: accepted CEO decisions and this implementation plan override exploratory research. Wallet binding, spectators, eight-player rooms, auction commands, production cohorts/dual reads, legacy drain, and legacy fallback proposed in research are superseded and must not be implemented.
 
@@ -51,13 +51,13 @@ Critical path: `1 -> 2 -> 3/4 -> 5 -> 6 -> 7 -> 8`. Phases 3 and 4 may proceed c
 
 ## Acceptance Criteria
 
-- [ ] Privy-only login; every API request/room command is authenticated, authorized, schema-validated, and server-authoritative.
+- [ ] Email/password login with rotating server sessions; every API request/room command is authenticated, authorized, schema-validated, and server-authoritative.
 - [ ] Create, discover, join, start, play, reconnect, finish, settle, review, and leaderboard flows preserve current visible UX with no new action.
 - [ ] Account coin and in-match cash are distinct; ledger, reservations, refunds, and settlements remain atomic and idempotent under retries/concurrency.
 - [ ] Every accepted command commits its full versioned checkpoint before ack/broadcast; lease fencing and restart/restore tests prevent split ownership or lost state.
 - [ ] Reachable Rust behavior has executable characterization evidence; the approved frozen-source authority covers runtime paths unreachable after the legacy start rollback. Unsupported auction and absent card effects are not invented.
 - [ ] API, game server, and web build/deploy/restart independently; database-role tests, backup/restore drill, visual regression, crash matrix, and confirmed 200-client/~50-room gate pass.
-- [ ] Browser and production backend contain no Solana, Anchor, Magic Block, indexer, generated SDK, wallet-signing, or public Privy private-key runtime surface.
+- [ ] Browser and production backend contain no Solana, Anchor, Magic Block, indexer, generated SDK, wallet-signing, or Privy runtime surface.
 
 ## Unresolved Questions
 
@@ -70,6 +70,8 @@ None.
 - Rejected as non-findings: the approved one-replica topology, no Redis/queue, full checkpoint-per-command pending measurement, secure server RNG without VRF, no production dual engine, and fail-closed corrupt-checkpoint handling.
 
 ## Validation Log
+
+- 2026-08-12 — CEO replaced Privy with minimal first-party email/password auth: register, login, rotating refresh, and logout only. No email verification, password recovery, social provider, or compatibility alias. Source behavior comes from `dijnie/nest-next-tuborepo` auth at commit `9321cd1`, adapted to Pootown SQL/Zod/jose patterns.
 
 - 2026-08-11 — Preserve executed credit-only `CollectFromPlayers`; model it as a defined bank inflow rather than debiting other players.
 - 2026-08-11 — If every player remains disconnected through the 120-second reconnect window, abort the game and refund reservations idempotently. Accepted trade-off: coordinated disconnect can be abused to avoid a losing result; instrument and rate-limit repeated abort patterns, but do not change this policy silently.

@@ -34,6 +34,18 @@ Account Coin is an in-app, non-withdrawable balance owned by the API. Match cash
 
 Rust, Anchor, and the local validator are needed only when rerunning legacy characterization or parity evidence.
 
+## Local PostgreSQL
+
+Pootown's Docker database uses PostgreSQL 17.6 on local port `5433`, leaving the usual `5432` port available for other projects. Data is stored in the named `pootown_pootown-postgres-data` volume and is preserved by the normal shutdown command.
+
+```bash
+pnpm db:up
+pnpm db:migrate
+pnpm db:down
+```
+
+The checked-in password is a local-development default only. Override the `POOTOWN_POSTGRES_*` Compose variables outside Git for shared or deployed environments. Never use `docker compose down --volumes` unless intentionally deleting the local database.
+
 ## Install and verify
 
 ```bash

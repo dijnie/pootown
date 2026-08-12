@@ -78,7 +78,7 @@ Every search match must be removed or documented as non-runtime historical text.
 ## Success Criteria
 
 - [ ] Clean checkout installs/tests/builds three deployables with one root lockfile and no legacy toolchain.
-- [ ] Production uses Privy/API/Colyseus/PostgreSQL only; no chain/indexer/generated SDK/signing runtime or public private key remains.
+- [ ] Production uses first-party email auth/API/Colyseus/PostgreSQL only; no Privy/chain/indexer/generated SDK/signing runtime or public private key remains.
 - [ ] No legacy record migration, production dual engine, compatibility alias, auction, Redis, queue, event sourcing, spectator, or admin scope was added.
 - [ ] Clean-cutover smoke, reconciliation, restart, restore, and confirmed load gates pass.
 - [ ] README/operations/architecture claims and commands match actual deployment.

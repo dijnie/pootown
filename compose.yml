@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    container_name: pootown-postgres
+    environment:
+      POSTGRES_DB: ${POOTOWN_POSTGRES_DB:-pootown}
+      POSTGRES_USER: ${POOTOWN_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POOTOWN_POSTGRES_PASSWORD:-pootown-local}
+    ports:
+      - "${POOTOWN_POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pootown-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  pootown-postgres-data:

@@ -9,6 +9,9 @@
   },
   "scripts": {
     "build": "pnpm -r --if-present build",
+    "db:up": "docker compose up -d --wait postgres",
+    "db:down": "docker compose down",
+    "db:migrate": "pnpm --filter @pootown/api build && pnpm --filter @pootown/api db:migrate",
     "lint": "pnpm -r --if-present lint",
     "test": "pnpm legacy:characterize && pnpm -r --if-present test",
     "quality": "pnpm lint && pnpm test && pnpm build",

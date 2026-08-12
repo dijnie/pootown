@@ -9,6 +9,8 @@ dependencies: [2]
 
 # Phase 4: NestJS Identity Economy and Sessions
 
+> Historical implementation record: this phase completed with Privy on 2026-08-11. The CEO superseded that identity choice on 2026-08-12; [`260812-0303-email-auth-and-local-postgresql-cutover`](../260812-0303-email-auth-and-local-postgresql-cutover/plan.md) owns the clean replacement while preserving the economy/session authority built here.
+
 ## Context Links
 
 - [Contracts](./phase-02-shared-contracts-and-core-lifecycle.md) · [Service contract research](./research/researcher-02-service-contracts.md)

@@ -40,7 +40,10 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
     await runMigrations(databaseUrl, migrationOptions);
     await runMigrations(databaseUrl, migrationOptions);
     pool = new Pool({ connectionString: databaseUrl });
-    await pool.query("INSERT INTO identity.users (id, privy_did) VALUES ('user_1', 'did:privy:user_1')");
+    await pool.query(`
+      INSERT INTO identity.users (id, email, password_hash)
+      VALUES ('user_1', 'user-1@example.test', '$2b$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+    `);
     await pool.query("INSERT INTO economy.coin_accounts (user_id) VALUES ('user_1')");
     await pool.query(`
       INSERT INTO economy.ledger_accounts (id, owner_user_id, kind) VALUES
@@ -78,6 +81,7 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       { name: "0007-reconciliation-recovery-status.sql", checksum_length: 64 },
       { name: "0008-room-offline-recovery.sql", checksum_length: 64 },
       { name: "0009-room-session-finalizations.sql", checksum_length: 64 },
+      { name: "0010-email-auth.sql", checksum_length: 64 },
     ]);
     const owners = await pool.query<{ tableowner: string }>(`
       SELECT DISTINCT tableowner
@@ -224,7 +228,10 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
   });
 
   it("binds admission records while allowing consume-time seat creation", async () => {
-    await pool.query("INSERT INTO identity.users (id, privy_did) VALUES ('user_2', 'did:privy:user_2')");
+    await pool.query(`
+      INSERT INTO identity.users (id, email, password_hash)
+      VALUES ('user_2', 'user-2@example.test', '$2b$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+    `);
     await pool.query(`
       INSERT INTO economy.coin_operations
         (id, actor_user_id, operation_scope, idempotency_key, request_hash)
@@ -371,7 +378,28 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
         await client.query("ROLLBACK");
         throw error;
       }
-      await denied(() => client.query("UPDATE identity.users SET privy_did = 'did:privy:other' WHERE id = 'user_1'"));
+      await client.query("BEGIN");
+      try {
+        await client.query(`
+          INSERT INTO identity.auth_sessions
+            (id, user_id, refresh_token_hash, expires_at)
+          VALUES ('auth_session_1', 'user_1', decode(repeat('70', 32), 'hex'), now() + interval '1 day')
+        `);
+        await client.query("SELECT id, user_id, refresh_token_hash FROM identity.auth_sessions WHERE id = 'auth_session_1'");
+        await client.query(`
+          UPDATE identity.auth_sessions
+          SET refresh_token_hash = decode(repeat('71', 32), 'hex'),
+              updated_at = clock_timestamp(), revoked_at = clock_timestamp()
+          WHERE id = 'auth_session_1'
+        `);
+        await assert.rejects(
+          client.query("UPDATE identity.auth_sessions SET updated_at = now() WHERE id = 'auth_session_1'"),
+          (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "55000",
+        );
+      } finally {
+        await client.query("ROLLBACK");
+      }
+      await denied(() => client.query("UPDATE identity.users SET email = 'other@example.test' WHERE id = 'user_1'"));
       await client.query("BEGIN");
       try {
         await client.query(`
@@ -431,7 +459,8 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
       await denied(() => client.query("DELETE FROM realtime.session_finalizations WHERE room_id = 'room_1'"));
       for (const statement of [
         "SELECT * FROM identity.users",
-        "INSERT INTO identity.users (id, privy_did) VALUES ('attack', 'did:privy:attack')",
+        "SELECT * FROM identity.auth_sessions",
+        "INSERT INTO identity.users (id, email, password_hash) VALUES ('attack', 'attack@example.test', '$2b$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')",
         "UPDATE economy.coin_accounts SET available_coin = 1",
         "DELETE FROM game.game_sessions",
         "SELECT * FROM economy.coin_account_reconciliation",
@@ -446,9 +475,9 @@ describe("database migrations and roles", { timeout: 120_000 }, () => {
     try {
       await setup.query("BEGIN");
       await setup.query(`
-        INSERT INTO identity.users (id, privy_did) VALUES
-          ('settlement_user_1', 'did:privy:settlement_user_1'),
-          ('settlement_user_2', 'did:privy:settlement_user_2')
+        INSERT INTO identity.users (id, email, password_hash) VALUES
+          ('settlement_user_1', 'settlement-1@example.test', '$2b$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
+          ('settlement_user_2', 'settlement-2@example.test', '$2b$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
       `);
       await setup.query(`
         INSERT INTO economy.coin_accounts (user_id, available_coin, reserved_coin) VALUES
