@@ -87,6 +87,8 @@ describe("game server health", () => {
     assert.match(response.headers.get("content-type") ?? "", /^text\/plain/);
     assert.match(body, /pootown_realtime_rooms_created_total 1/);
     assert.match(body, /pootown_realtime_player_commands_committed_total 2/);
+    assert.match(body, /pootown_realtime_event_loop_lag_p99_milliseconds [0-9.]+/);
+    assert.match(body, /process_resident_memory_bytes [1-9][0-9]*/);
     assert.match(body, /pootown_realtime_room_finalization_failures_total 1/);
     assert.doesNotMatch(body, /game_secret|room_secret|player_secret|ticket_secret|reservation_secret|user_secret/i);
   });

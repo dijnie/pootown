@@ -1,0 +1,12 @@
+{
+  "generatedAt": "2026-08-12T09:06:59Z",
+  "postgresImage": "postgres:17.6-alpine",
+  "cleanCluster": true,
+  "encryptedBackup": true,
+  "encryptedBackupBytes": 140032,
+  "restoreDurationMs": 4311,
+  "sourceAndTargetFingerprintsMatch": true,
+  "ledgerReconciliationMismatches": 0,
+  "runtimeRoleBoundaryRestored": true,
+  "activeRoomReconnect": {"availableCoin":"900","gameId":"57c6987e-040a-4a38-9f4e-3094d91fb636","reservedCoin":"100","restoredStateVersion":12}
+}

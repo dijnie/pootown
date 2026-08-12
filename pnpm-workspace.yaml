@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - packages/*
+  - tests/load
 
 sharedWorkspaceLockfile: true
 linkWorkspacePackages: true
@@ -14,6 +15,7 @@ allowBuilds:
   bigint-buffer: true
   bufferutil: true
   cpu-features: true
+  esbuild: true
   msgpackr-extract: true
   protobufjs: true
   sharp: true

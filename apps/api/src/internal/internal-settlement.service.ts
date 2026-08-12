@@ -258,7 +258,8 @@ export class InternalSettlementService {
       const updated = await client.query(
         `
           UPDATE economy.coin_accounts
-          SET reserved_coin = reserved_coin - $2::numeric, version = version + 1, updated_at = $3
+          SET reserved_coin = reserved_coin - $2::numeric, version = version + 1,
+              updated_at = GREATEST(updated_at, created_at, $3)
           WHERE user_id = $1 AND reserved_coin >= $2::numeric
           RETURNING user_id
         `,
@@ -291,7 +292,8 @@ export class InternalSettlementService {
     await client.query(
       `
         UPDATE economy.coin_accounts
-        SET available_coin = available_coin + $2::numeric, version = version + 1, updated_at = $3
+        SET available_coin = available_coin + $2::numeric, version = version + 1,
+            updated_at = GREATEST(updated_at, created_at, $3)
         WHERE user_id = $1
       `,
       [userId, amount.toString(), now],
@@ -317,7 +319,7 @@ export class InternalSettlementService {
           SET available_coin = available_coin + $2::numeric,
               reserved_coin = reserved_coin - $2::numeric,
               version = version + 1,
-              updated_at = $3
+              updated_at = GREATEST(updated_at, created_at, $3)
           WHERE user_id = $1 AND reserved_coin >= $2::numeric
           RETURNING user_id
         `,

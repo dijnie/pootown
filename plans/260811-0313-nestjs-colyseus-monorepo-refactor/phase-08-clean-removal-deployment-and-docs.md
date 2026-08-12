@@ -1,7 +1,7 @@
 ---
 phase: 8
 title: "Clean Removal Deployment and Docs"
-status: pending
+status: in-progress
 priority: P1
 effort: "1-1.5 weeks"
 dependencies: [7]

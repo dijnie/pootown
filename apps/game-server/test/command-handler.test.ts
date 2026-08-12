@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { parseGameplaySnapshot } from "@pootown/game-core";
-import { RoomCommandSchema, type CommandAcknowledgement } from "@pootown/game-contracts";
+import {
+  DomainEventEnvelopeSchema,
+  GameplayDomainEventEnvelopeSchema,
+  RoomCommandSchema,
+  type CommandAcknowledgement,
+} from "@pootown/game-contracts";
 import { InternalGameplayCommandSchema } from "@pootown/game-contracts/internal";
 
 import type { AuthenticatedRoomPlayer } from "../src/auth/ticket-auth.js";
@@ -87,6 +92,14 @@ function creatorOnlyWaitingState() {
   return createWaitingState({ ...bootstrap, players: [bootstrap.players[0]!] }, new SecureRandomSource(Buffer.alloc(32, 4)));
 }
 
+function committedEventTime(commit: CommandCommit | undefined): number | undefined {
+  const event = commit?.events[0];
+  const lifecycle = DomainEventEnvelopeSchema.safeParse(event);
+  if (lifecycle.success) return lifecycle.data.occurredAtMs;
+  const gameplay = GameplayDomainEventEnvelopeSchema.safeParse(event);
+  return gameplay.success ? gameplay.data.occurredAtMs : undefined;
+}
+
 describe("server-authoritative room command handler", () => {
   it("persists an API-authorized late admission before socket attachment", async () => {
     const store = new FakeStore();
@@ -98,6 +111,21 @@ describe("server-authoritative room command handler", () => {
     assert.equal(store.commits.length, 1);
     assert.equal(RoomCommandSchema.parse(store.commits[0]?.command).type, "joinGame");
     assert.equal(store.commits[0]?.stateVersion, 2);
+  });
+
+  it("floors a delayed admission event at the latest committed room time", async () => {
+    const store = new FakeStore();
+    const committedAtMs = bootstrap.players[1]!.joinedAtMs + 5_000;
+    const handler = new RoomCommandHandler({
+      initialState: creatorOnlyWaitingState(),
+      initialCommittedAtMs: committedAtMs,
+      lease,
+      store,
+    });
+    await handler.ensureAdmittedPlayer(second, bootstrap.players[1]!.joinedAtMs);
+    assert.equal(committedEventTime(store.commits[0]), committedAtMs);
+    const state = handler.currentState();
+    assert.equal("seats" in state && state.seats[1]?.joinedAtMs, bootstrap.players[1]!.joinedAtMs);
   });
 
   it("commits a full started checkpoint before publishing state and events", async () => {
@@ -269,6 +297,72 @@ describe("server-authoritative room command handler", () => {
     assert.equal(store.commits[1]?.playerId, "system_timer");
     assert.equal(InternalGameplayCommandSchema.parse(store.commits[1]?.command).type, "warnTurnThirtySeconds");
     assert.equal(handler.currentState().stateVersion, 3);
+  });
+
+  it("keeps room command time monotonic when the host wall clock moves backward", async () => {
+    const store = new FakeStore();
+    let nowMs = Date.parse("2026-08-11T21:00:01.000Z");
+    const handler = new RoomCommandHandler({ initialState: waitingState(), lease, nowMs: () => nowMs, store });
+    const started = await handler.handle(owner, {
+      requestId: "00000000-0000-4000-8000-000000000214",
+      expectedStateVersion: 1,
+      type: "startGame",
+      payload: {},
+    });
+    assert.equal(started.accepted, true);
+    const startedState = handler.currentState();
+    assert.equal("players" in startedState, true);
+
+    nowMs += 5_000;
+    const trade = await handler.handle(owner, {
+      requestId: "00000000-0000-4000-8000-000000000215",
+      expectedStateVersion: 2,
+      type: "createTrade",
+      payload: {
+        tradeType: "moneyOnly",
+        receiverId: second.playerId,
+        offeredCash: "1",
+        requestedCash: "0",
+      },
+    });
+    assert.equal(trade.accepted, true, JSON.stringify(trade));
+    const committedAtMs = committedEventTime(store.commits.at(-1));
+    nowMs -= 3_000;
+    const cancelled = await handler.handle(owner, {
+      requestId: "00000000-0000-4000-8000-000000000216",
+      expectedStateVersion: 3,
+      type: "cancelTrade",
+      payload: { tradeId: "trade_00000000000040008000000000000215" },
+    });
+    assert.equal(cancelled.accepted, true, JSON.stringify(cancelled));
+    assert.equal(committedEventTime(store.commits.at(-1)), committedAtMs);
+    const cancelledState = handler.currentState();
+    assert.equal("players" in cancelledState && "turn" in cancelledState, true);
+    if ("players" in startedState && "players" in cancelledState && cancelledState.lifecycle === "inProgress") {
+      assert.ok(cancelledState.turn.startedAtMs >= startedState.startedAtMs);
+    }
+  });
+
+  it("does not predate a late admitted seat when the host clock rolls back", async () => {
+    const store = new FakeStore();
+    const joinedAtMs = Date.parse("2026-08-11T21:00:02.000Z");
+    const state = waitingState();
+    const seats = state.seats.map((seat, index) =>
+      index === 1 && seat !== null ? Object.freeze({ ...seat, joinedAtMs }) : seat);
+    const handler = new RoomCommandHandler({
+      initialState: Object.freeze({ ...state, seats: Object.freeze(seats) }),
+      lease,
+      nowMs: () => joinedAtMs - 1_000,
+      store,
+    });
+    const started = await handler.handle(owner, {
+      requestId: "00000000-0000-4000-8000-000000000217",
+      expectedStateVersion: 1,
+      type: "startGame",
+      payload: {},
+    });
+    assert.equal(started.accepted, true, JSON.stringify(started));
+    assert.equal(committedEventTime(store.commits[0]), joinedAtMs);
   });
 
   it("stores terminal proof in the same commit as a finished checkpoint", async () => {

@@ -1,0 +1,22 @@
+{
+  "name": "@pootown/load-tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "tsx pootown-load.ts"
+  },
+  "dependencies": {
+    "@colyseus/sdk": "0.17.43",
+    "jose": "4.15.9",
+    "pg": "8.23.0",
+    "tsx": "4.20.5",
+    "ws": "8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.3.1",
+    "@types/pg": "8.21.0",
+    "@types/ws": "8.18.1",
+    "typescript": "5.9.2"
+  }
+}

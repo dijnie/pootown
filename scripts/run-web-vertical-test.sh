@@ -49,6 +49,10 @@ cleanup() {
     sleep 0.1
   done
   if [[ "${exit_code}" -ne 0 ]]; then
+    curl --silent "http://127.0.0.1:${game_server_port}/metrics" >&2 || true
+    docker exec "${postgres_container}" psql -At -U postgres -d "${database_name}" -c \
+      "SELECT id, game_definition_id, time_limit_ms, lifecycle, state_version FROM game.game_sessions ORDER BY created_at" \
+      >&2 || true
     for log_file in api.log game-server.log web.log; do
       if [[ -f "${task_tmp_dir}/${log_file}" ]]; then
         echo "--- ${log_file} ---" >&2
@@ -94,7 +98,8 @@ docker exec -i "${postgres_container}" psql -v ON_ERROR_STOP=1 -U postgres -d "$
 INSERT INTO game.game_definitions
   (id, policy_version, display_name, maximum_players, entry_coin, time_limit_ms, policy_snapshot, policy_hash)
 VALUES
-  ('classic_100', 1, 'Classic', 4, 100, 3600000, '{"rules":"classic"}', decode(repeat('99', 32), 'hex'));
+  ('classic_100', 1, 'Classic', 4, 100, 3600000, '{"rules":"classic"}', decode(repeat('99', 32), 'hex')),
+  ('short_100', 1, 'Short Match', 4, 100, 3000, '{"rules":"classic"}', decode(repeat('97', 32), 'hex'));
 SQL
 
 setsid env \

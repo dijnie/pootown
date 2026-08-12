@@ -15,6 +15,7 @@ import { GameSessionsModule } from "./game-sessions/game-sessions.module";
 import { HealthModule } from "./health/health.module";
 import { InternalModule } from "./internal/internal.module";
 import { loggerConfig } from "./observability/logger.config";
+import { rateLimitTracker } from "./platform/http/rate-limit-tracker";
 import { ReadModelsModule } from "./read-models/read-models.module";
 
 @Module({
@@ -22,7 +23,10 @@ import { ReadModelsModule } from "./read-models/read-models.module";
     ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true, validate: parseApiEnvironment }),
     LoggerModule.forRoot(loggerConfig),
     ScheduleModule.forRoot(),
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60_000, limit: 120 }],
+      getTracker: (request) => Promise.resolve(rateLimitTracker(request)),
+    }),
     AuthModule,
     DatabaseModule,
     EconomyModule,

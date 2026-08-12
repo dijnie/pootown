@@ -41,6 +41,7 @@ interface TicketRow {
   readonly reservation_id: string;
   readonly player_id: string;
   readonly role: "player";
+  readonly created_at: Date;
   readonly expires_at: Date;
   readonly consumed_at: Date | null;
   readonly consumed_by_room_instance: string | null;
@@ -154,7 +155,7 @@ export class InternalSessionService {
       const ticketResult = await client.query<TicketRow>(
         `
           SELECT user_id, game_session_id, room_id, reservation_id, player_id, role,
-                 expires_at, consumed_at, consumed_by_room_instance
+                 created_at, expires_at, consumed_at, consumed_by_room_instance
           FROM game.realtime_tickets
           WHERE token_hash = $1
           FOR UPDATE
@@ -206,17 +207,27 @@ export class InternalSessionService {
       if (prior !== undefined) {
         throw new Error("Consumed ticket operation has no consumed ticket");
       }
-      const seat = await this.ensureBoundSeat(client, session, ticket, now);
+      const committedAt = new Date(Math.max(now.getTime(), ticket.created_at.getTime()));
+      const seat = await this.ensureBoundSeat(client, session, ticket, committedAt);
       await client.query(
         `
           UPDATE game.realtime_tickets
           SET consumed_at = $2, consumed_by_room_instance = $3
           WHERE token_hash = $1 AND consumed_at IS NULL
         `,
-        [tokenHash, now, request.roomInstanceId],
+        [tokenHash, committedAt, request.roomInstanceId],
       );
       const response = this.ticketResponse(ticket, seat.seat_index, false);
-      await this.insertNoOp(client, randomUUID(), ticket.user_id, "consumeTicket", idempotencyKey, hash, response, now);
+      await this.insertNoOp(
+        client,
+        randomUUID(),
+        ticket.user_id,
+        "consumeTicket",
+        idempotencyKey,
+        hash,
+        response,
+        committedAt,
+      );
       return response;
     });
   }

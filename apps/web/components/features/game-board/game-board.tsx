@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   PropertySpace,
@@ -46,6 +46,7 @@ interface MonopolyBoardProps {
 
 const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
   const [isLoading, setIsLoading] = useState<string | null>(null);
+  const commandInFlight = useRef(false);
   // const [boardRotation, setBoardRotation] = useState<number>(0);
 
   const router = useRouter();
@@ -73,117 +74,49 @@ const GameBoard: React.FC<MonopolyBoardProps> = ({ boardRotation }) => {
     leaveGame,
   } = useGameContext();
 
-  const handleStartGame = async () => {
+  const runCommand = async (kind: string, command: () => Promise<void>) => {
+    if (commandInFlight.current) return;
+    commandInFlight.current = true;
+    setIsLoading(kind);
     try {
-      setIsLoading("startGame");
-      await startGame();
+      await command();
     } catch (error) {
       toast.error(commandErrorMessage(error));
     } finally {
+      commandInFlight.current = false;
       setIsLoading(null);
     }
   };
 
-  const handleBuyProperty = async (position: number) => {
-    setIsLoading("buyProperty");
-    try {
-      await buyProperty(position);
-    } catch (error) {
-      toast.error(commandErrorMessage(error));
-    } finally {
-      setIsLoading(null);
-    }
-  };
+  const handleStartGame = () => runCommand("startGame", startGame);
 
-  const handleSkipProperty = async (position: number) => {
-    setIsLoading("skipProperty");
-    try {
-      await skipProperty(position);
-    } catch (error) {
-      toast.error(commandErrorMessage(error));
-    } finally {
-      setIsLoading(null);
-    }
-  };
+  const handleBuyProperty = (position: number) =>
+    runCommand("buyProperty", () => buyProperty(position));
 
-  const handleEndTurn = async () => {
-    setIsLoading("endTurn");
-    try {
-      await endTurn();
-    } catch (error) {
-      toast.error(commandErrorMessage(error));
-    } finally {
-      setIsLoading(null);
-    }
-  };
+  const handleSkipProperty = (position: number) =>
+    runCommand("skipProperty", () => skipProperty(position));
 
-  const handlePayMevTax = async () => {
-    setIsLoading("tax");
-    try {
-      await payMevTax();
-    } catch (error) {
-      toast.error(commandErrorMessage(error));
-    } finally {
-      setIsLoading(null);
-    }
-  };
+  const handleEndTurn = () => runCommand("endTurn", endTurn);
 
-  const handlePayPriorityFeeTax = async () => {
-    setIsLoading("tax");
-    try {
-      await payPriorityFeeTax();
-    } catch (error) {
-      toast.error(commandErrorMessage(error));
-    } finally {
-      setIsLoading(null);
-    }
-  };
+  const handlePayMevTax = () => runCommand("tax", payMevTax);
 
-  const handlePayJailFine = async () => {
-    setIsLoading("payJailFine");
-    try {
-      await payJailFine();
-    } catch (error) {
-      toast.error(commandErrorMessage(error));
-    } finally {
-      setIsLoading(null);
-    }
-  };
+  const handlePayPriorityFeeTax = () => runCommand("tax", payPriorityFeeTax);
 
-  const handleGetOutOfJailCard = async () => {
-    setIsLoading("getOutOfJailCard");
-    try {
-      await getOutOfJail();
-    } catch (error) {
-      toast.error(commandErrorMessage(error));
-    } finally {
-      setIsLoading(null);
-    }
-  };
+  const handlePayJailFine = () => runCommand("payJailFine", payJailFine);
 
-  const handleCancelGame = async () => {
-    setIsLoading("cancelGame");
-    try {
+  const handleGetOutOfJailCard = () => runCommand("getOutOfJailCard", getOutOfJail);
+
+  const handleCancelGame = () =>
+    runCommand("cancelGame", async () => {
       await cancelGame();
       router.push("/lobby");
-    } catch (error) {
-      toast.error(commandErrorMessage(error));
-    } finally {
-      setIsLoading(null);
-    }
-  };
+    });
 
-  const handleLeaveGame = async () => {
-    setIsLoading("leaveGame");
-    try {
+  const handleLeaveGame = () =>
+    runCommand("leaveGame", async () => {
       await leaveGame();
       router.push("/lobby");
-    } catch (error) {
-      toast.error(commandErrorMessage(error));
-    } finally {
-      setIsLoading(null);
-    }
-  };
+    });
 
   const renderSpace = (space: BoardSpace, properties: PropertyAccount[]) => {
     const position = space.position;

@@ -135,6 +135,32 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
     });
   });
 
+  it("preserves monotonic account timestamps when the application clock moves backward", async () => {
+    const owner = principal("clock-rollback-owner");
+    const accountCreatedAt = new Date(`${SCENARIO_DATE}T13:00:00.000Z`);
+    await economy.provisionPrincipal(owner, new Date(`${SCENARIO_DATE}T12:59:59.000Z`));
+    await pool.query(
+      "UPDATE economy.coin_accounts SET created_at = $2, updated_at = $2 WHERE user_id = $1",
+      [owner.userId, accountCreatedAt],
+    );
+
+    const created = await sessions.createSession(
+      owner,
+      "classic_100",
+      "create:clock-rollback",
+      new Date(`${SCENARIO_DATE}T12:59:59.500Z`),
+    );
+    const account = await pool.query<{ available_coin: string; reserved_coin: string; updated_at: Date }>(
+      `SELECT available_coin::text, reserved_coin::text, updated_at
+       FROM economy.coin_accounts WHERE user_id = $1`,
+      [owner.userId],
+    );
+    assert.equal(created.session.currentPlayers, 1);
+    assert.equal(account.rows[0]?.available_coin, "900");
+    assert.equal(account.rows[0]?.reserved_coin, "100");
+    assert.equal(account.rows[0]?.updated_at.getTime(), accountCreatedAt.getTime());
+  });
+
   it("atomically creates creator reserve, seat, and hash-only ticket with replay rotation", async () => {
     const first = await sessions.createSession(
       principal("creator"),
@@ -183,7 +209,9 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
         (SELECT count(*)::int FROM economy.coin_reservations WHERE game_session_id = $1) AS reservations,
         (SELECT count(*)::int FROM game.session_players WHERE game_session_id = $1) AS players,
         (SELECT count(*)::int FROM game.realtime_tickets WHERE game_session_id = $1) AS tickets,
-        (SELECT count(*)::int FROM economy.coin_operations WHERE operation_scope = 'createSession') AS operations
+        (SELECT count(*)::int FROM economy.coin_operations
+         WHERE operation_scope = 'createSession'
+           AND actor_user_id = (SELECT creator_user_id FROM game.game_sessions WHERE id = $1)) AS operations
     `, [first.session.gameId]);
     assert.deepEqual(state.rows, [{ sessions: 1, reservations: 1, players: 1, tickets: 1, operations: 1 }]);
     const account = await pool.query(`
@@ -757,6 +785,20 @@ describe("game session admission authority", { timeout: 120_000 }, () => {
       "join:consume-player",
       new Date("2026-08-11T20:00:01.000Z"),
     );
+    const creatorConsume = await internalSessions.consumeTicket({
+      contractVersion: 1,
+      ticket: created.admission.ticket,
+      gameId: created.session.gameId,
+      roomId: created.session.roomId,
+      roomInstanceId: "room-instance-clock-floor",
+    }, "consume:creator:clock-floor", new Date("2026-08-11T19:59:59.000Z"));
+    assert.equal(creatorConsume.reused, false);
+    const creatorTicketTimestamp = await pool.query<{ ordered: boolean }>(
+      `SELECT consumed_at >= created_at AS ordered
+       FROM game.realtime_tickets WHERE reservation_id = $1`,
+      [created.admission.reservationId],
+    );
+    assert.equal(creatorTicketTimestamp.rows[0]?.ordered, true);
     const request = {
       contractVersion: 1 as const,
       ticket: joined.admission.ticket,

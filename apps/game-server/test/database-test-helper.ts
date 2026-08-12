@@ -145,8 +145,12 @@ export async function stopTestDatabase(database: TestDatabase): Promise<void> {
 
 export async function seedGameSession(pool: Pool, gameId: string, roomId: string): Promise<void> {
   await pool.query(
-    "INSERT INTO identity.users (id, privy_did) VALUES ($1, $2)",
-    [`user_${gameId}`, `did:privy:${gameId}`],
+    "INSERT INTO identity.users (id, email, password_hash) VALUES ($1, $2, $3)",
+    [
+      `user_${gameId}`,
+      `user-${gameId}@example.test`,
+      "$2b$12$C6UzMDM.H6dfI/f/IKcEe.8lY5fYp6XvFwvMZg4lH8zcQxG6F6I5K",
+    ],
   );
   await pool.query(
     `

@@ -831,7 +831,7 @@ export class GameSessionsService {
           SET available_coin = available_coin - $2::numeric,
               reserved_coin = reserved_coin + $2::numeric,
               version = version + 1,
-              updated_at = $3
+              updated_at = GREATEST(updated_at, created_at, $3)
           WHERE user_id = $1 AND available_coin >= $2::numeric
           RETURNING user_id
         `,
@@ -1077,7 +1077,7 @@ export class GameSessionsService {
           SET available_coin = available_coin + $2::numeric,
               reserved_coin = reserved_coin - $2::numeric,
               version = version + 1,
-              updated_at = $3
+              updated_at = GREATEST(updated_at, created_at, $3)
           WHERE user_id = $1 AND reserved_coin >= $2::numeric
           RETURNING user_id
         `,

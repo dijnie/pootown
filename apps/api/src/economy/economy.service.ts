@@ -314,8 +314,11 @@ export class EconomyService {
         UPDATE economy.coin_accounts
         SET available_coin = available_coin + $2::numeric,
             version = version + 1,
-            updated_at = $3,
-            last_rescue_grant_at = CASE WHEN $4 THEN $3 ELSE last_rescue_grant_at END
+            updated_at = GREATEST(updated_at, created_at, $3),
+            last_rescue_grant_at = CASE
+              WHEN $4 THEN GREATEST(COALESCE(last_rescue_grant_at, $3), $3)
+              ELSE last_rescue_grant_at
+            END
         WHERE user_id = $1
         RETURNING available_coin, reserved_coin, version, last_rescue_grant_at
       `,

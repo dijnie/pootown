@@ -66,6 +66,7 @@ export type RoomCommandHandlingResult =
 
 export interface RoomCommandHandlerOptions {
   readonly initialState: GameState | GameplayAggregateState;
+  readonly initialCommittedAtMs?: number;
   readonly lease: RoomLease;
   readonly nowMs?: () => number;
   readonly onCommitted?: (
@@ -253,12 +254,32 @@ function terminalProof(state: GameState | GameplayAggregateState): CommandCommit
   return { endReason: state.terminal.reason, winnerPlayerId: winner.playerId };
 }
 
+function committedTimestampFloor(state: GameState | GameplayAggregateState): number {
+  if (isGameplayState(state)) {
+    return state.lifecycle === "finished"
+      ? Math.max(state.startedAtMs, state.terminal.endedAtMs)
+      : Math.max(state.startedAtMs, state.turn.startedAtMs);
+  }
+  return Math.max(
+    state.createdAtMs,
+    state.startedAtMs ?? state.createdAtMs,
+    state.cancelledAtMs ?? state.createdAtMs,
+    ...state.seats.flatMap((seat) => seat === null ? [] : [seat.joinedAtMs]),
+  );
+}
+
 export class RoomCommandHandler {
   private state: GameState | GameplayAggregateState;
+  private committedAtMs: number;
   private queue: Promise<void> = Promise.resolve();
 
   public constructor(private readonly options: RoomCommandHandlerOptions) {
     this.state = options.initialState;
+    const initialFloor = options.initialCommittedAtMs ?? committedTimestampFloor(options.initialState);
+    if (!Number.isSafeInteger(initialFloor) || initialFloor < committedTimestampFloor(options.initialState)) {
+      throw new InvalidRoomCommandError("Initial committed timestamp is invalid");
+    }
+    this.committedAtMs = initialFloor;
   }
 
   public handle(
@@ -298,6 +319,14 @@ export class RoomCommandHandler {
     return this.state;
   }
 
+  private commandTimestampMs(): number {
+    const timestamp = this.options.nowMs?.() ?? Date.now();
+    if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
+      throw new InvalidRoomCommandError("Room clock returned an invalid timestamp");
+    }
+    return Math.max(timestamp, committedTimestampFloor(this.state), this.committedAtMs);
+  }
+
   private async ensureAdmittedPlayerSerial(
     authenticated: AuthenticatedRoomPlayer,
     joinedAtMs: number,
@@ -334,6 +363,7 @@ export class RoomCommandHandler {
     if (replay !== null) {
       throw new InvalidRoomCommandError("Admission checkpoint is behind its committed command");
     }
+    const committedAtMs = Math.max(joinedAtMs, this.committedAtMs, committedTimestampFloor(this.state));
     const result = transition(this.state, coreLifecycleCommand(command as LifecycleRoomCommand), {
       actorId: playerId(authenticated.playerId),
       nowMs: joinedAtMs,
@@ -345,7 +375,7 @@ export class RoomCommandHandler {
     if (result.state.seats[authenticated.seatIndex]?.playerId !== authenticated.playerId) {
       throw new InvalidRoomCommandError("Core admission seat does not match API authority");
     }
-    const events = lifecycleEvents(result.events, requestId, result.state.stateVersion, joinedAtMs);
+    const events = lifecycleEvents(result.events, requestId, result.state.stateVersion, committedAtMs);
     const acknowledgement: CommandAcknowledgement = {
       type: "command.ack",
       requestId: command.requestId,
@@ -364,6 +394,7 @@ export class RoomCommandHandler {
       throw new InvalidRoomCommandError("Admission checkpoint did not restore a committed duplicate");
     }
     this.state = result.state;
+    this.committedAtMs = committedAtMs;
     this.options.onCommitted?.(result.state, acknowledgement, events);
     return events;
   }
@@ -375,10 +406,7 @@ export class RoomCommandHandler {
     const parsed = RoomCommandSchema.safeParse(rawCommand);
     if (!parsed.success) return invalidCommand(rawCommand, this.state.stateVersion);
     const command: RoomCommand = parsed.data;
-    const nowMs = this.options.nowMs?.() ?? Date.now();
-    if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
-      throw new InvalidRoomCommandError("Room clock returned an invalid timestamp");
-    }
+    const nowMs = this.commandTimestampMs();
     const now = new Date(nowMs);
     const replay = await this.options.store.findReplay(
       this.options.lease,
@@ -514,6 +542,7 @@ export class RoomCommandHandler {
       return { accepted: true, acknowledgement: committed.acknowledgement, events: [], replayed: true };
     }
     this.state = nextState;
+    this.committedAtMs = nowMs;
     this.options.onCommitted?.(nextState, acknowledgement, events);
     return { accepted: true, acknowledgement, events, replayed: false };
   }
@@ -522,10 +551,7 @@ export class RoomCommandHandler {
     const parsed = InternalGameplayCommandSchema.safeParse(rawCommand);
     if (!parsed.success) return invalidCommand(rawCommand, this.state.stateVersion);
     const command: InternalGameplayCommand = parsed.data;
-    const nowMs = this.options.nowMs?.() ?? Date.now();
-    if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
-      throw new InvalidRoomCommandError("Room clock returned an invalid timestamp");
-    }
+    const nowMs = this.commandTimestampMs();
     const now = new Date(nowMs);
     const systemActorId = "system_timer";
     const replay = await this.options.store.findReplay(this.options.lease, systemActorId, command, now);
@@ -583,6 +609,7 @@ export class RoomCommandHandler {
       return { accepted: true, acknowledgement: committed.acknowledgement, events: [], replayed: true };
     }
     this.state = result.state;
+    this.committedAtMs = nowMs;
     this.options.onCommitted?.(result.state, acknowledgement, events);
     return { accepted: true, acknowledgement, events, replayed: false };
   }

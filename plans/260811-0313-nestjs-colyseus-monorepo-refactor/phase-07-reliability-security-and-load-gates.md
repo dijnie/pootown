@@ -1,7 +1,7 @@
 ---
 phase: 7
 title: "Reliability Security and Load Gates"
-status: in-progress
+status: complete
 priority: P1
 effort: "1-1.5 weeks"
 dependencies: [6]
@@ -69,11 +69,11 @@ Store sanitized machine-readable gate results under the plan's `reports/` direct
 
 ## Success Criteria
 
-- [ ] All functional, negative, contract, visual, concurrency, idempotency, and crash gates pass.
-- [ ] Clean restore proves ledger/checkpoints/roles recover consistently and active room resumes.
-- [ ] Secret/dependency/role/redaction checks pass; exposed Privy key rotation evidence is closed if applicable.
-- [ ] 200-client baseline meets confirmed thresholds with zero correctness breach.
-- [ ] Any capacity limitation is reported honestly; no Redis/queue/multi-replica added without approval.
+- [x] All functional, negative, contract, visual, concurrency, idempotency, and crash gates pass.
+- [x] Clean restore proves row-level ledger/session/checkpoint bindings and roles recover consistently and an active room resumes.
+- [x] Secret/dependency/role/redaction checks pass; the superseded Privy runtime/config is absent and no private key value is tracked.
+- [x] 200-client baseline meets confirmed thresholds with zero correctness breach.
+- [x] Capacity is reported as a measured single-replica baseline; no Redis, queue, or multi-replica scope was added.
 
 ## Risk Assessment
 
@@ -93,4 +93,4 @@ Use synthetic identities/coins, isolated credentials, bounded test traffic, encr
 
 ## Next Steps
 
-Phase 8 starts only after all confirmed gates pass. Unresolved questions: none.
+Phase 8 is in progress after the revised release and 30-minute load gates passed. Machine-readable evidence: [load results](./reports/phase-07-load-results.json) and [restore results](./reports/phase-07-restore-results.json). Unresolved questions: none.

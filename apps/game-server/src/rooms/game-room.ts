@@ -169,6 +169,7 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
       }
       const lease = await dependencies.leases.acquire(bootstrap.roomId, bootstrap.gameId);
       let privateState: GameState | GameplayAggregateState;
+      let checkpointUpdatedAtMs: number | undefined;
       try {
         const refreshedBootstrap = await dependencies.api.bootstrap(options.gameId);
         if (refreshedBootstrap.gameId !== bootstrap.gameId || refreshedBootstrap.roomId !== bootstrap.roomId) {
@@ -178,13 +179,15 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
         const checkpoint = await dependencies.checkpoints.load(lease);
         if (checkpoint === null) {
           const initialState = createWaitingState(bootstrap, new SecureRandomSource());
-          await dependencies.checkpoints.initialize(
+          const initializedCheckpoint = await dependencies.checkpoints.initialize(
             lease,
             initialState.stateVersion,
             serializeSnapshot(initialState),
           );
+          checkpointUpdatedAtMs = initializedCheckpoint.updatedAt.getTime();
           privateState = initialState;
         } else {
+          checkpointUpdatedAtMs = checkpoint.updatedAt.getTime();
           privateState = parseCheckpointState(checkpoint.serializedState);
           if (String(privateState.gameId) !== String(bootstrap.gameId)) {
             throw new CorruptCheckpointError("Room checkpoint belongs to another game");
@@ -212,6 +215,7 @@ export function createGameRoomClass(dependencies: GameRoomDependencies): GameRoo
       this.setState(createGameRoomState(privateState));
       this.commandHandler = new RoomCommandHandler({
         initialState: privateState,
+        initialCommittedAtMs: checkpointUpdatedAtMs,
         lease,
         store: dependencies.commands,
         onCommitted: (state) => {

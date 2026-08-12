@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Headers, Param, Post } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { GameIdSchema, type OperationResponse } from "@pootown/game-contracts";
 import {
   AbortSessionRequestSchema,
@@ -26,6 +27,7 @@ import { requireContractVersion, requireMutationHeaders, type HttpHeaders } from
 import { ZodValidationPipe } from "../platform/http/zod-validation.pipe";
 
 @InternalRoute()
+@Throttle({ default: { limit: 1_000, ttl: 60_000 } })
 @Controller("internal/v1")
 export class InternalController {
   public constructor(
