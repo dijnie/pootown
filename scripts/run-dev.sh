@@ -15,7 +15,7 @@ database_url="$(node -e '
 readonly database_url
 readonly api_port="${POOTOWN_API_PORT:-3001}"
 readonly game_server_port="${POOTOWN_GAME_SERVER_PORT:-2567}"
-readonly web_port="${POOTOWN_WEB_PORT:-3000}"
+readonly web_port="3010"
 readonly web_origin="http://127.0.0.1:${web_port}"
 
 exec 9>"/tmp/pootown-dev.lock"
@@ -40,8 +40,19 @@ cleanup() {
       kill -TERM -- "-${pid}" 2>/dev/null || true
     fi
   done
+  for _ in $(seq 1 50); do
+    local running_process=""
+    for pid in "${web_pid}" "${game_server_pid}" "${api_pid}"; do
+      if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+        running_process="yes"
+      fi
+    done
+    [[ -z "${running_process}" ]] && break
+    sleep 0.1
+  done
   for pid in "${web_pid}" "${game_server_pid}" "${api_pid}"; do
     if [[ -n "${pid}" ]]; then
+      kill -KILL -- "-${pid}" 2>/dev/null || true
       wait "${pid}" 2>/dev/null || true
     fi
   done
@@ -75,6 +86,7 @@ for port in "${api_port}" "${game_server_port}" "${web_port}"; do
     exit 1
   fi
 done
+
 if [[ "${api_port}" == "${game_server_port}" || "${api_port}" == "${web_port}" || \
       "${game_server_port}" == "${web_port}" ]]; then
   echo "API, game server, and web development ports must be unique." >&2
@@ -126,7 +138,7 @@ setsid env \
   INTERNAL_JWT_ISSUER=pootown-local-dev \
   INTERNAL_JWT_AUDIENCE=pootown-internal \
   INTERNAL_JWT_PUBLIC_KEY="$(<"${temporary_directory}/internal-public.pem")" \
-  node apps/api/dist/main.js &
+  node apps/api/dist/main.js 9>&- &
 api_pid=$!
 
 echo "Starting game server on ws://127.0.0.1:${game_server_port}..."
@@ -140,7 +152,7 @@ setsid env \
   INTERNAL_SERVICE_ID=game-server \
   INTERNAL_SERVICE_ISSUER=pootown-local-dev \
   INTERNAL_SERVICE_PRIVATE_KEY="$(<"${temporary_directory}/internal-private.pem")" \
-  node apps/game-server/dist/main.js &
+  node apps/game-server/dist/main.js 9>&- &
 game_server_pid=$!
 
 echo "Starting web on ${web_origin}..."
@@ -148,7 +160,7 @@ setsid env \
   NEXT_PUBLIC_API_URL="http://127.0.0.1:${api_port}" \
   NEXT_PUBLIC_GAME_SERVER_URL="ws://127.0.0.1:${game_server_port}" \
   bash -c 'cd apps/web && exec node node_modules/next/dist/bin/next dev --webpack --hostname "$1" --port "$2"' \
-    _ 127.0.0.1 "${web_port}" &
+    _ 127.0.0.1 "${web_port}" 9>&- &
 web_pid=$!
 
 wait_for_url() {

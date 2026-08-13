@@ -89,12 +89,13 @@ backend packages, and run all three applications with one command:
 pnpm dev
 ```
 
-The web app is available at `http://127.0.0.1:3000`. The command generates
+The web app is available at `http://127.0.0.1:3010`. The command generates
 ephemeral local auth and service credentials, then stops the API, game server,
 and web processes on Ctrl-C. PostgreSQL and its data remain available; run
-`pnpm db:down` when you want to stop the database. Override occupied app ports
-with `POOTOWN_API_PORT`, `POOTOWN_GAME_SERVER_PORT`, and `POOTOWN_WEB_PORT`.
-Development data is isolated in the `pootown_dev` database.
+`pnpm db:down` when you want to stop the database. The API defaults to `3001`,
+the game server to `2567`, and the web port is fixed at `3010`; occupied ports
+fail fast so stale owners can be stopped explicitly. Development data is
+isolated in the `pootown_dev` database.
 
 ## Run built services manually
 
