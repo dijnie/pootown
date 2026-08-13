@@ -80,7 +80,23 @@ Both service URLs must be canonical origins: no credentials, extra path, query, 
 
 The API requires distinct `AUTH_ACCESS_TOKEN_SECRET` and `AUTH_REFRESH_TOKEN_SECRET` values of at least 32 characters, plus its database, CORS, and internal-service settings. Deployment also requires separate migration, `api_runtime`, and `realtime_runtime` PostgreSQL credentials; application containers never receive the migration credential. The API and game server validate private runtime settings at startup. Their exact constraints are defined in `apps/api/src/config/api-config.ts` and `apps/game-server/src/app-config.ts`; secrets belong in the deployment secret manager, not files committed to Git.
 
-## Run built services
+## Local development
+
+Start PostgreSQL, apply migrations, seed the local game definitions, build the
+backend packages, and run all three applications with one command:
+
+```bash
+pnpm dev
+```
+
+The web app is available at `http://127.0.0.1:3000`. The command generates
+ephemeral local auth and service credentials, then stops the API, game server,
+and web processes on Ctrl-C. PostgreSQL and its data remain available; run
+`pnpm db:down` when you want to stop the database. Override occupied app ports
+with `POOTOWN_API_PORT`, `POOTOWN_GAME_SERVER_PORT`, and `POOTOWN_WEB_PORT`.
+Development data is isolated in the `pootown_dev` database.
+
+## Run built services manually
 
 After starting/migrating PostgreSQL and configuring auth secrets, internal service credentials, and allowed browser origins:
 

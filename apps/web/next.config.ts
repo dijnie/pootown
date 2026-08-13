@@ -21,6 +21,7 @@ function isSvgFileRule(rule: unknown): rule is SvgFileRule {
 }
 
 const nextConfig: NextConfig = {
+  agentRules: false,
   output: "standalone",
   webpack(config) {
     // Pure adapters are also compiled as Node ESM tests, so their relative
